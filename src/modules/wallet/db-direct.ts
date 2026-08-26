@@ -53,5 +53,35 @@ function requireDirectDatabaseUrl(): string {
 }
 
 /** MONEY PATH ONLY. Never replace this with the pooled `db` client. */
-export const dbDirect = createDirectDatabase(requireDirectDatabaseUrl());
-export const directSql = dbDirect.$client;
+let directDatabase: DirectDatabase | undefined;
+
+export function getDirectDatabase(): DirectDatabase {
+  directDatabase ??= createDirectDatabase(requireDirectDatabaseUrl());
+  return directDatabase;
+}
+
+export function getDirectSql(): DirectSqlClient {
+  return getDirectDatabase().$client;
+}
+
+function boundMember<T extends object>(value: T, property: string | symbol): unknown {
+  const member = Reflect.get(value, property, value);
+  return typeof member === "function" ? member.bind(value) : member;
+}
+
+export const dbDirect = new Proxy({} as DirectDatabase, {
+  get(_target, property) {
+    return boundMember(getDirectDatabase(), property);
+  },
+});
+
+const directSqlTarget = (() => undefined) as unknown as DirectSqlClient;
+
+export const directSql = new Proxy(directSqlTarget, {
+  apply(_target, thisArg, argumentsList) {
+    return Reflect.apply(getDirectSql(), thisArg, argumentsList);
+  },
+  get(_target, property) {
+    return boundMember(getDirectSql(), property);
+  },
+});

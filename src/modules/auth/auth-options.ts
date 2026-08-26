@@ -29,7 +29,9 @@ function requiredAuthSecret(): string {
 }
 
 export const authOptions: NextAuthOptions = {
-  secret: requiredAuthSecret(),
+  get secret() {
+    return requiredAuthSecret();
+  },
   session: {
     strategy: "jwt",
     maxAge: 8 * 60 * 60,

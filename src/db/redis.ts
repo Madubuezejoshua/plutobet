@@ -14,14 +14,26 @@ import Redis from "ioredis";
  * handshake on requests that never touch Redis.
  */
 
-const redisUrl = process.env.REDIS_URL;
+let redisClient: Redis | undefined;
 
-if (!redisUrl) {
-  throw new Error("REDIS_URL is required");
+export function getRedisClient(): Redis {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    throw new Error("REDIS_URL is required");
+  }
+
+  redisClient ??= new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    lazyConnect: true,
+    enableAutoPipelining: true,
+  });
+  return redisClient;
 }
 
-export const redis = new Redis(redisUrl, {
-  maxRetriesPerRequest: null,
-  lazyConnect: true,
-  enableAutoPipelining: true,
+export const redis = new Proxy({} as Redis, {
+  get(_target, property) {
+    const client = getRedisClient();
+    const member = Reflect.get(client, property, client);
+    return typeof member === "function" ? member.bind(client) : member;
+  },
 });
