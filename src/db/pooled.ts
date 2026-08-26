@@ -4,9 +4,9 @@ import postgres from "postgres";
 type PooledSql = ReturnType<typeof postgres>;
 
 function requireDatabaseUrl(): string {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = process.env.POSTGRES_URL?.trim() || process.env.DATABASE_URL?.trim();
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required for the pooled database client");
+    throw new Error("DATABASE_URL or POSTGRES_URL is required for the pooled database client");
   }
   return databaseUrl;
 }

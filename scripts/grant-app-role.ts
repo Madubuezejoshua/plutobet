@@ -4,9 +4,16 @@ import postgres from "postgres";
 const rolePattern = /^[a-z_][a-z0-9_]{0,62}$/;
 
 async function main(): Promise<void> {
-  const ownerUrl = process.env.MIGRATION_DATABASE_URL;
+  const ownerUrl =
+    process.env.MIGRATION_DATABASE_URL?.trim() ||
+    process.env.DATABASE_URL_UNPOOLED?.trim() ||
+    process.env.POSTGRES_URL_NON_POOLING?.trim();
   const runtimeRole = process.env.APP_DATABASE_ROLE;
-  if (!ownerUrl) throw new Error("MIGRATION_DATABASE_URL is required");
+  if (!ownerUrl) {
+    throw new Error(
+      "MIGRATION_DATABASE_URL, DATABASE_URL_UNPOOLED, or POSTGRES_URL_NON_POOLING is required",
+    );
+  }
   if (!runtimeRole || !rolePattern.test(runtimeRole)) {
     throw new Error("APP_DATABASE_ROLE must be a valid unquoted PostgreSQL role name");
   }

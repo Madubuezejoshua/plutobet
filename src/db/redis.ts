@@ -17,9 +17,9 @@ import Redis from "ioredis";
 let redisClient: Redis | undefined;
 
 export function getRedisClient(): Redis {
-  const redisUrl = process.env.REDIS_URL;
+  const redisUrl = process.env.KV_URL?.trim() || process.env.REDIS_URL?.trim();
   if (!redisUrl) {
-    throw new Error("REDIS_URL is required");
+    throw new Error("REDIS_URL or KV_URL is required");
   }
 
   redisClient ??= new Redis(redisUrl, {

@@ -1,10 +1,16 @@
 import "dotenv/config";
 import { defineConfig } from "drizzle-kit";
 
-const url = process.env.MIGRATION_DATABASE_URL ?? process.env.DIRECT_DATABASE_URL;
+const url =
+  process.env.MIGRATION_DATABASE_URL?.trim() ||
+  process.env.DATABASE_URL_UNPOOLED?.trim() ||
+  process.env.POSTGRES_URL_NON_POOLING?.trim() ||
+  process.env.DIRECT_DATABASE_URL?.trim();
 
 if (!url) {
-  throw new Error("MIGRATION_DATABASE_URL or DIRECT_DATABASE_URL is required");
+  throw new Error(
+    "MIGRATION_DATABASE_URL, DATABASE_URL_UNPOOLED, POSTGRES_URL_NON_POOLING, or DIRECT_DATABASE_URL is required",
+  );
 }
 
 export default defineConfig({

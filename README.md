@@ -18,8 +18,8 @@ intentionally not mixed into this money foundation.
   transaction-scoped PostgreSQL advisory locks. An exact replay returns the
   original result; reusing a key for a different operation raises a typed
   conflict instead of falsely reporting that the new operation succeeded.
-- Money code uses only the unpooled `DIRECT_DATABASE_URL`; ordinary reads and
-  Auth.js use `DATABASE_URL`.
+- Money code uses only an unpooled database URL; ordinary reads and Auth.js use
+  a pooled URL. Vercel's generated Postgres and Neon aliases are supported.
 - Daily Inngest reconciliation replays each wallet independently and emits a
   critical Sentry event for any drift.
 
@@ -44,6 +44,12 @@ The Docker credentials are local-only. Production must use three concerns:
 - `DATABASE_URL`: pooled Neon URL for ordinary reads.
 - `DIRECT_DATABASE_URL`: unpooled Neon URL for wallet transactions.
 - `MIGRATION_DATABASE_URL`: table-owner URL used only by migrations.
+
+Vercel integrations are also supported without renaming their generated
+variables: `POSTGRES_URL` for pooled reads,
+`DATABASE_URL_UNPOOLED`/`POSTGRES_URL_NON_POOLING` for direct and owner work,
+and `KV_URL` as an alternative to `REDIS_URL`. Generated integration aliases
+take precedence over the local-development names when both are present.
 
 The two runtime logins must be non-owners and members of `app_role`. Set
 `APP_DATABASE_ROLE` and run `npm run db:grant-role` when provisioning a new

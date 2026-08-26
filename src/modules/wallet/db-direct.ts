@@ -45,9 +45,14 @@ export function createDirectDatabase(input: string | DirectSqlClient) {
 export type DirectDatabase = ReturnType<typeof createDirectDatabase>;
 
 function requireDirectDatabaseUrl(): string {
-  const value = process.env.DIRECT_DATABASE_URL;
+  const value =
+    process.env.DATABASE_URL_UNPOOLED?.trim() ||
+    process.env.POSTGRES_URL_NON_POOLING?.trim() ||
+    process.env.DIRECT_DATABASE_URL?.trim();
   if (!value) {
-    throw new Error("DIRECT_DATABASE_URL is required for the wallet money path");
+    throw new Error(
+      "DIRECT_DATABASE_URL, DATABASE_URL_UNPOOLED, or POSTGRES_URL_NON_POOLING is required for the wallet money path",
+    );
   }
   return value;
 }

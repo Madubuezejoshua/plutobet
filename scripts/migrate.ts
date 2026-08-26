@@ -4,12 +4,20 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
 function migrationUrl(): string {
-  if (process.env.NODE_ENV === "production" && !process.env.MIGRATION_DATABASE_URL) {
-    throw new Error("MIGRATION_DATABASE_URL is required in production; runtime roles must not own ledger tables");
+  const ownerUrl =
+    process.env.MIGRATION_DATABASE_URL?.trim() ||
+    process.env.DATABASE_URL_UNPOOLED?.trim() ||
+    process.env.POSTGRES_URL_NON_POOLING?.trim();
+  if (process.env.NODE_ENV === "production" && !ownerUrl) {
+    throw new Error(
+      "MIGRATION_DATABASE_URL or a Vercel unpooled database URL is required in production; runtime roles must not own ledger tables",
+    );
   }
-  const value = process.env.MIGRATION_DATABASE_URL ?? process.env.DIRECT_DATABASE_URL;
+  const value = ownerUrl || process.env.DIRECT_DATABASE_URL?.trim();
   if (!value) {
-    throw new Error("MIGRATION_DATABASE_URL or DIRECT_DATABASE_URL is required");
+    throw new Error(
+      "MIGRATION_DATABASE_URL, DATABASE_URL_UNPOOLED, POSTGRES_URL_NON_POOLING, or DIRECT_DATABASE_URL is required",
+    );
   }
   return value;
 }
