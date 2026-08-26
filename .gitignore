@@ -1,0 +1,14 @@
+node_modules/
+.node_modules-incomplete-*/
+dist/
+.next/
+.vercel/
+.env
+.env.local
+*.log
+probe.txt
+.pgdata-test/
+.pgdata-dev/
+coverage/
+*.tsbuildinfo
+.pgdata-test-*/

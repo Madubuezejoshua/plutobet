@@ -1,0 +1,55 @@
+{
+  "name": "bet-platform",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "node --require ./scripts/node-userinfo-fallback.cjs ./node_modules/drizzle-kit/bin.cjs generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:grant-role": "tsx scripts/grant-app-role.ts",
+    "db:seed-admin": "tsx scripts/seed-admin.ts",
+    "dev:stack": "tsx scripts/dev-stack.ts",
+    "db:seed-demo": "tsx scripts/seed-demo.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1116.0",
+    "@aws-sdk/s3-request-presigner": "^3.1116.0",
+    "@sentry/nextjs": "10.70.0",
+    "argon2": "0.45.1",
+    "dotenv": "17.2.2",
+    "drizzle-orm": "0.45.2",
+    "inngest": "4.18.1",
+    "ioredis": "^5.11.1",
+    "next": "16.3.2",
+    "next-auth": "4.24.15",
+    "postgres": "3.4.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.1.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.14",
+    "@types/node": "24.5.2",
+    "@types/react": "19.1.16",
+    "@types/react-dom": "19.1.9",
+    "drizzle-kit": "0.31.10",
+    "embedded-postgres": "16.14.0-beta.17",
+    "eslint": "9.36.0",
+    "eslint-config-next": "16.3.2",
+    "fast-check": "4.9.0",
+    "redis-memory-server": "^0.17.1",
+    "tailwindcss": "4.1.14",
+    "tsx": "4.20.5",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
