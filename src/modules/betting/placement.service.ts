@@ -32,7 +32,22 @@ import { betLegs, bets } from "./schema";
  * which is one more thing to explain to a lab. Live betting is
  * rejection-heavy under REJECT — flip this per-product, not per-request.
  */
-export type OddsDriftPolicy = "REJECT" | "ACCEPT_IF_BETTER";
+export type OddsDriftPolicy = "REJECT" | "ACCEPT_IF_BETTER" | "ACCEPT_ANY";
+
+/*
+ * The policy may now be supplied PER CALL, overriding the product default.
+ *
+ * The note above argues for per-product rather than per-request, and its
+ * reasoning still holds for anything the CLIENT could choose. This override is
+ * different: it is read from the customer's stored preference on the server,
+ * never from the request body. A client that could name its own policy could
+ * send ACCEPT_ANY and have a drifted price accepted on the customer's behalf —
+ * which harms them, and which they never agreed to.
+ *
+ * Auditability survives because the preference is a stored fact with a
+ * timestamp: "why did this bet take a moved price" is answerable from the
+ * account's settings at the time.
+ */
 
 export interface PlacementConfig {
   driftPolicy: OddsDriftPolicy;
@@ -79,6 +94,13 @@ export interface PlaceBetRequest {
    * second bet.
    */
   idempotencyKey: string;
+  /**
+   * The customer's stored odds-change preference, resolved SERVER-SIDE.
+   *
+   * Never taken from the request body — see the note on OddsDriftPolicy.
+   * Omitted falls back to the product default, which is REJECT.
+   */
+  driftPolicy?: OddsDriftPolicy;
 }
 
 export interface PlacedBet {
@@ -159,7 +181,11 @@ export class PlacementService {
         // before the market work so a limited player is refused cheaply.
         await this.responsible.assertStakeWithinLimits(tx, request.userId, request.stakeMinor);
         const locked = await this.lockAndLoadSelections(tx, [...seen]);
-        const legOddsScaled = this.resolvePrices(request.legs, locked);
+        const legOddsScaled = this.resolvePrices(
+          request.legs,
+          locked,
+          request.driftPolicy ?? this.config.driftPolicy,
+        );
 
         const pricing = priceBet(legOddsScaled, request.stakeMinor);
 
@@ -435,7 +461,11 @@ export class PlacementService {
    * Compares the submitted price against the locked live price and returns
    * the odds the bet will actually carry.
    */
-  private resolvePrices(legs: SlipLeg[], locked: LockedSelection[]): bigint[] {
+  private resolvePrices(
+    legs: SlipLeg[],
+    locked: LockedSelection[],
+    policy: OddsDriftPolicy,
+  ): bigint[] {
     return legs.map((leg) => {
       const row = locked.find((candidate) => candidate.selection_id === leg.selectionId)!;
       const submitted = parseOddsToScaled(leg.odds);
@@ -443,7 +473,13 @@ export class PlacementService {
 
       if (submitted === current) return submitted;
 
-      if (this.config.driftPolicy === "ACCEPT_IF_BETTER" && current > submitted) {
+      if (policy === "ACCEPT_ANY") {
+        // The customer chose to accept whatever the price is on arrival. Their
+        // bet carries the LIVE price, not the stale one they submitted.
+        return current;
+      }
+
+      if (policy === "ACCEPT_IF_BETTER" && current > submitted) {
         // Strictly better for the user. Honour the improved price rather than
         // the stale one, so the bet reflects the live book.
         return current;

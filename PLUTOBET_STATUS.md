@@ -23,7 +23,7 @@ scope**, whose stated differentiator — **Pluto AI** — currently has
 
 | | |
 |---|---|
-| **Estimated completion against PlutoBet's 24 phases** | **~38%** (was ~23% at audit) |
+| **Estimated completion against PlutoBet's 24 phases** | **~40%** (was ~23% at audit) |
 | Phases at or above 70% | 5 of 24 (UI Foundation, Accounts, Admin/RBAC, Wallet/Ledger, Betting Engine) |
 | Phases at 0% | 7 of 24 (Virtuals, Fantasy/Jackpot, Referrals, all 4 AI phases, Social) |
 | Product areas with a working UI | 5 of 17 (Sports, My Bets, Wallet, Account, Home) |
@@ -85,7 +85,7 @@ src/
 ├─ modules/                15 domain modules  ← the real substance
 └─ types/
 docs/                      FSGRN-technical-topography.md (regulatory)
-drizzle/                   14 hand-authored SQL migrations
+drizzle/                   15 hand-authored SQL migrations
 legacy/                    abandoned NestJS/Prisma implementation (dead code)
 scripts/                   migrate · seed · dev-stack · probe-odds
 ```
@@ -136,7 +136,7 @@ future audit and every new contributor.
 | 4 | **Wallet + Immutable Ledger** | **100%** ✅ | Cash/bonus/locked segregation as wallet rows, DB-enforced cash-only withdrawal, bucket transfers reconcile |
 | 5 | Payments, Deposits, Withdrawals | **85%** ✅ | Paystack adapter, payout worker, transfer webhooks, finance admin screens. Still needs live keys + a real end-to-end transfer |
 | 6 | Sports Data Foundation | **80%** ✅ | Sport/Competition/Team entities, conservative name canonicalisation + alias table, head-to-head, sport & competition browsing |
-| 7 | Odds Engine + Betslip | **45%** | Odds + betslip work. No booking codes, odds-change settings, or odds formats |
+| 7 | Odds Engine + Betslip | **85%** ✅ | Booking codes, decimal/fractional/American formats applied live, per-customer odds-change policy read server-side |
 | 8 | **Sportsbook Betting Engine** | **70%** | **Strong.** Singles + accumulators, locked odds, exposure caps. No system bets, bankers, bet builder |
 | 9 | Live Betting + Cashout + Settlement | **40%** | Settlement + cashout good. **No live feed, no realtime layer**, no resettlement, no edit bet |
 | 10 | Livescore + Results + Statistics | **5%** | Scores ingested for settlement only. No user-facing anything |
@@ -155,7 +155,7 @@ future audit and every new contributor.
 | 23 | Analytics + Admin AI + Monitoring | **20%** | Reporting service + Sentry. No health monitoring, no alerts, no admin AI |
 | 24 | Security, Reconciliation, QA, Production | **45%** | Reconciliation + 245 tests + rate limits. No security review, backups, or DR |
 
-**Unweighted mean: ~38%** (was ~23% at audit)
+**Unweighted mean: ~40%** (was ~23% at audit)
 
 ---
 

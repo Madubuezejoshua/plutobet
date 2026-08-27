@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
   oddsFormat: z.enum(["DECIMAL", "FRACTIONAL", "AMERICAN"]).optional(),
+  oddsChangePolicy: z.enum(["ASK", "HIGHER_ONLY", "ANY"]).optional(),
   emailNotifications: z.boolean().optional(),
   smsNotifications: z.boolean().optional(),
   pushNotifications: z.boolean().optional(),

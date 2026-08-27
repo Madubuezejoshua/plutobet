@@ -4,6 +4,8 @@ import { ApiError, authedRoute, money, type AuthedRouteContext } from "@/lib/api
 import { RATE_RULES } from "@/lib/api/rate-limit";
 import { placementService } from "@/modules/betting/placement.service";
 import { walletForUser } from "@/modules/wallet/lookup";
+import { profileService, type OddsChangePolicy } from "@/modules/users/profile.service";
+import type { OddsDriftPolicy } from "@/modules/betting/placement.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +44,20 @@ export const POST = authedRoute(
     const walletId = await walletForUser(userId);
     if (!walletId) throw new ApiError(409, "NO_WALLET", "this account has no NGN wallet");
 
+    /*
+     * The odds-change policy is read from the account's stored preference on
+     * the SERVER. It is deliberately absent from the request schema: a client
+     * that could name its own policy could send "accept anything" and have a
+     * drifted price accepted on the customer's behalf, which harms them and
+     * which they never agreed to.
+     *
+     * A failure to read preferences falls back to the strictest behaviour
+     * (reject on any drift) rather than the most permissive.
+     */
+    const preferences = await profileService
+      .preferences(userId)
+      .catch(() => null);
+
     const placed = await placementService.placeBet({
       userId,
       walletId,
@@ -49,6 +65,7 @@ export const POST = authedRoute(
       stakeMinor: body.stakeMinor,
       legs: body.legs,
       idempotencyKey: body.idempotencyKey,
+      driftPolicy: toDriftPolicy(preferences?.oddsChangePolicy),
     });
 
     return NextResponse.json(
@@ -63,3 +80,26 @@ export const POST = authedRoute(
     );
   },
 );
+
+/**
+ * Customer-facing preference to the engine's policy.
+ *
+ * "ASK" maps to REJECT: the server refuses, the client shows both prices, and
+ * the customer decides. There is no server-side "ask" — asking is what a
+ * rejection MEANS at this boundary.
+ *
+ * Anything unrecognised, including a missing preference, resolves to the
+ * strictest option. Failing safe here means the customer is asked, not that a
+ * worse price is taken silently.
+ */
+function toDriftPolicy(policy: OddsChangePolicy | undefined): OddsDriftPolicy {
+  switch (policy) {
+    case "ANY":
+      return "ACCEPT_ANY";
+    case "HIGHER_ONLY":
+      return "ACCEPT_IF_BETTER";
+    case "ASK":
+    default:
+      return "REJECT";
+  }
+}

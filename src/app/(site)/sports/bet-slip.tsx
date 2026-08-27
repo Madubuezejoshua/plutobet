@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import type { EventView } from "@/modules/odds/odds.service";
 import { parseNairaToKobo } from "@/lib/money";
+import { formatOdds } from "@/modules/odds/format";
+import type { OddsFormat } from "@/modules/users/schema";
 
 /**
  * The odds board and bet slip.
@@ -56,7 +58,22 @@ function priceSlip(picks: Picked[], stakeMinor: bigint) {
   };
 }
 
-export function BetSlip({ events }: { events: EventView[] }) {
+export function BetSlip({
+  events,
+  oddsFormat = "DECIMAL",
+}: {
+  events: EventView[];
+  /*
+   * The customer's stored preference, resolved on the server.
+   *
+   * Display ONLY. Every calculation below — combined odds, potential return,
+   * the price submitted with the bet — uses the decimal value, because both
+   * alternative formats are lossy and a bet settles against the exact decimal
+   * the customer accepted. Converting for display and back would introduce a
+   * rounding error into a price somebody is owed money on.
+   */
+  oddsFormat?: OddsFormat;
+}) {
   const [picks, setPicks] = useState<Picked[]>([]);
   const [stakeNaira, setStakeNaira] = useState("100");
   const [status, setStatus] = useState<{ kind: "idle" | "busy" | "ok" | "error"; message?: string }>(
@@ -167,7 +184,7 @@ export function BetSlip({ events }: { events: EventView[] }) {
                         }
                       >
                         <span className="odd-label">{selection.label}</span>
-                        <span className="odd-price">{selection.price.toFixed(2)}</span>
+                        <span className="odd-price">{formatOdds(selection.price, oddsFormat)}</span>
                       </button>
                     );
                   })}
@@ -195,7 +212,7 @@ export function BetSlip({ events }: { events: EventView[] }) {
                     <span className="muted small"> {pick.fixture}</span>
                   </div>
                   <div className="pick-right">
-                    <span>{Number(pick.odds).toFixed(2)}</span>
+                    <span>{formatOdds(Number(pick.odds), oddsFormat)}</span>
                     <button type="button" onClick={() => toggle(pick)} aria-label="Remove">
                       ×
                     </button>

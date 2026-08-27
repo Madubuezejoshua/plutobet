@@ -3,11 +3,38 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PreferencesView } from "@/modules/users/profile.service";
+import { formatOdds } from "@/modules/odds/format";
 
 const ODDS_FORMATS = [
-  { value: "DECIMAL", label: "Decimal", example: "2.50" },
-  { value: "FRACTIONAL", label: "Fractional", example: "3/2" },
-  { value: "AMERICAN", label: "American", example: "+150" },
+  { value: "DECIMAL", label: "Decimal" },
+  { value: "FRACTIONAL", label: "Fractional" },
+  { value: "AMERICAN", label: "American" },
+] as const;
+
+/*
+ * The example is rendered by the SAME function the odds board uses, rather
+ * than being a hard-coded string. A hard-coded "3/2" would keep claiming to be
+ * right after a change to the conversion, which is precisely when a customer
+ * would need it to be honest.
+ */
+const EXAMPLE_DECIMAL = 2.5;
+
+const ODDS_CHANGE_POLICIES = [
+  {
+    value: "ASK",
+    label: "Ask me every time",
+    hint: "We stop and show you the old and new price before placing.",
+  },
+  {
+    value: "HIGHER_ONLY",
+    label: "Accept higher odds only",
+    hint: "A price that moves in your favour is accepted; a worse one still asks.",
+  },
+  {
+    value: "ANY",
+    label: "Accept any change",
+    hint: "Your bet is placed at whatever the price is when it reaches us.",
+  },
 ] as const;
 
 /**
@@ -17,9 +44,8 @@ const ODDS_FORMATS = [
  * low-stakes toggles, and a form that silently discards a toggle because
  * someone navigated away is worse than an extra request.
  *
- * Odds format is stored but NOT yet applied to the odds board: the display
- * layer still renders decimals everywhere. That is stated on the page rather
- * than left for the user to discover.
+ * Both odds settings are live: the format is applied across the board and the
+ * slip, and the change policy is read at placement. Neither is cosmetic.
  */
 export function PreferencesForm({ initial }: { initial: PreferencesView }) {
   const router = useRouter();
@@ -73,14 +99,49 @@ export function PreferencesForm({ initial }: { initial: PreferencesView }) {
           >
             {ODDS_FORMATS.map((format) => (
               <option key={format.value} value={format.value}>
-                {format.label} — {format.example}
+                {format.label} — {formatOdds(EXAMPLE_DECIMAL, format.value)}
               </option>
             ))}
           </select>
         </label>
-        <p className="notice warn">
-          Saved, but not applied yet: the odds board still shows decimal prices everywhere. Format
-          conversion arrives with the odds engine work in phase 7.
+        <p className="muted small">
+          Applied across the odds board and your bet slip. Prices are calculated in decimal
+          internally whichever format you choose — the other two are lossy, and a bet settles
+          against the exact price you accepted.
+        </p>
+      </section>
+
+      <section className="card form-card">
+        <h2>If the price changes</h2>
+        <p className="muted small">
+          Odds move between building a slip and confirming it. This decides what happens then.
+        </p>
+
+        {ODDS_CHANGE_POLICIES.map((policy) => (
+          <label
+            key={policy.value}
+            className="field"
+            style={{ display: "flex", alignItems: "flex-start", gap: 11, marginBottom: 14 }}
+          >
+            <input
+              type="radio"
+              name="oddsChangePolicy"
+              checked={prefs.oddsChangePolicy === policy.value}
+              disabled={busy}
+              style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }}
+              onChange={() => save({ oddsChangePolicy: policy.value })}
+            />
+            <span>
+              <span style={{ color: "var(--ink)", fontWeight: 600 }}>{policy.label}</span>
+              <br />
+              <span className="hint">{policy.hint}</span>
+            </span>
+          </label>
+        ))}
+
+        <p className="muted small legal">
+          A drifted price is never accepted on your behalf unless you chose one of the last two
+          options here.
         </p>
       </section>
 

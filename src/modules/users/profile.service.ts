@@ -56,8 +56,12 @@ export interface ProfileView {
   createdAt: Date;
 }
 
+export type OddsChangePolicy = "ASK" | "HIGHER_ONLY" | "ANY";
+
 export interface PreferencesView {
   oddsFormat: OddsFormat;
+  /** What to do when a price moves between building a slip and confirming. */
+  oddsChangePolicy: OddsChangePolicy;
   emailNotifications: boolean;
   smsNotifications: boolean;
   pushNotifications: boolean;
@@ -309,13 +313,16 @@ export class ProfileService {
 
       const [row] = await tx.execute<{
         odds_format: OddsFormat;
+        odds_change_policy: OddsChangePolicy;
         email_notifications: boolean;
         sms_notifications: boolean;
         push_notifications: boolean;
         marketing_emails: boolean;
         timezone: string;
       }>(sql`
-        SELECT odds_format::text AS odds_format, email_notifications, sms_notifications,
+        SELECT odds_format::text AS odds_format,
+               odds_change_policy::text AS odds_change_policy,
+               email_notifications, sms_notifications,
                push_notifications, marketing_emails, timezone
         FROM user_preferences WHERE user_id = ${userId}::uuid
       `);
@@ -323,6 +330,7 @@ export class ProfileService {
 
       return {
         oddsFormat: row.odds_format,
+        oddsChangePolicy: row.odds_change_policy,
         emailNotifications: row.email_notifications,
         smsNotifications: row.sms_notifications,
         pushNotifications: row.push_notifications,
@@ -345,6 +353,7 @@ export class ProfileService {
       await tx.execute(sql`
         UPDATE user_preferences SET
           odds_format         = COALESCE(${patch.oddsFormat ?? null}::odds_format, odds_format),
+          odds_change_policy  = COALESCE(${patch.oddsChangePolicy ?? null}::odds_change_policy, odds_change_policy),
           email_notifications = COALESCE(${patch.emailNotifications ?? null}, email_notifications),
           sms_notifications   = COALESCE(${patch.smsNotifications ?? null}, sms_notifications),
           push_notifications  = COALESCE(${patch.pushNotifications ?? null}, push_notifications),

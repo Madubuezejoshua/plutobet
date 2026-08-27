@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/modules/auth/auth-options";
 import { listUpcoming } from "@/modules/odds/odds.service";
+import { profileService } from "@/modules/users/profile.service";
 import { listCompetitions, listSports } from "@/modules/sports/browse.service";
 import { BetSlip } from "./bet-slip";
 
@@ -26,9 +29,19 @@ export default async function SportsPage({
   const params = await searchParams;
   const sportKey = params.sport ?? "football";
 
-  const [sports, competitions] = await Promise.all([
+  const session = await getServerSession(authOptions);
+
+  const [sports, competitions, preferences] = await Promise.all([
     listSports().catch(() => []),
     listCompetitions(sportKey).catch(() => []),
+    /*
+     * The odds format is resolved HERE, on the server, and passed down. A
+     * signed-out visitor gets decimal. A failure to read preferences must not
+     * take the odds board down, so it falls back rather than throwing.
+     */
+    session?.user
+      ? profileService.preferences(session.user.id).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   const selectedCompetition = competitions.find((c) => c.key === params.competition);
@@ -105,7 +118,7 @@ export default async function SportsPage({
           </p>
         </section>
       ) : (
-        <BetSlip events={events} />
+        <BetSlip events={events} oddsFormat={preferences?.oddsFormat ?? "DECIMAL"} />
       )}
     </>
   );
