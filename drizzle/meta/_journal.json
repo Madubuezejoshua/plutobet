@@ -120,6 +120,34 @@
       "when": 1788829793227,
       "tag": "0016_phase9_resettlement",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788916193227,
+      "tag": "0017_phase11_casino_catalogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789002593227,
+      "tag": "0018_phase12_virtuals",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789088993227,
+      "tag": "0019_phase13_jackpot",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789175393227,
+      "tag": "0020_phase14_promotions",
+      "breakpoints": true
     }
   ]
 }

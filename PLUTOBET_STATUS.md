@@ -23,7 +23,7 @@ scope**, whose stated differentiator — **Pluto AI** — currently has
 
 | | |
 |---|---|
-| **Estimated completion against PlutoBet's 24 phases** | **~42%** (was ~23% at audit) |
+| **Estimated completion against PlutoBet's 24 phases** | **~54%** (was ~23% at audit) |
 | Phases at or above 70% | 5 of 24 (UI Foundation, Accounts, Admin/RBAC, Wallet/Ledger, Betting Engine) |
 | Phases at 0% | 7 of 24 (Virtuals, Fantasy/Jackpot, Referrals, all 4 AI phases, Social) |
 | Product areas with a working UI | 5 of 17 (Sports, My Bets, Wallet, Account, Home) |
@@ -85,7 +85,7 @@ src/
 ├─ modules/                15 domain modules  ← the real substance
 └─ types/
 docs/                      FSGRN-technical-topography.md (regulatory)
-drizzle/                   17 hand-authored SQL migrations
+drizzle/                   21 hand-authored SQL migrations
 legacy/                    abandoned NestJS/Prisma implementation (dead code)
 scripts/                   migrate · seed · dev-stack · probe-odds
 ```
@@ -138,12 +138,12 @@ future audit and every new contributor.
 | 6 | Sports Data Foundation | **80%** ✅ | Sport/Competition/Team entities, conservative name canonicalisation + alias table, head-to-head, sport & competition browsing |
 | 7 | Odds Engine + Betslip | **85%** ✅ | Booking codes, decimal/fractional/American formats applied live, per-customer odds-change policy read server-side |
 | 8 | **Sportsbook Betting Engine** | **90%** ✅ | Singles, accumulators, **system bets and bankers**, bet slips, partial statuses. Bet builder outstanding |
-| 9 | Live Betting + Cashout + Settlement | **60%** | Settlement, cashout and **resettlement with compensating entries**. Still **no live feed and no realtime transport**; partial cashout and edit-bet outstanding |
-| 10 | Livescore + Results + Statistics | **5%** | Scores ingested for settlement only. No user-facing anything |
-| 11 | Casino + Live Casino | **15%** | Callback handler exists. **No aggregator, no lobby, no games, no UI** |
-| 12 | Virtuals + Instant Games | **0%** | Not started |
-| 13 | Fantasy + Jackpot + Draw | **0%** | Not started |
-| 14 | Promotions + Bonuses + Loyalty | **3%** | `BONUS` ledger type + `BONUS_LIABILITY` account exist as hooks only |
+| 9 | Live Betting + Cashout + Settlement | **80%** | Resettlement, partial cash-out, live board on a conditional-poll transport. Edit-bet and a real in-play feed outstanding |
+| 10 | Livescore + Results + Statistics | **75%** ✅ | Livescore, results with competition filter, team form and head-to-head |
+| 11 | Casino + Live Casino | **65%** | Provider interface, sandbox adapter, catalogue, lobby. **Awaiting a real aggregator contract** |
+| 12 | Virtuals + Instant Games | **55%** | Rounds modelled as sportsbook events, so pricing/placement/settlement are reused. Awaiting a provider |
+| 13 | Fantasy + Jackpot + Draw | **40%** | Jackpot complete: slate, entries, scoring, pool split proven exact. Fantasy and draw games not started |
+| 14 | Promotions + Bonuses + Loyalty | **70%** ✅ | Promotions, bonuses with wagering, bonus→cash conversion, expiry clawback, derived loyalty tiers |
 | 15 | Referrals + Affiliates | **0%** | Not started |
 | 16 | **Pluto AI Foundation** | **0%** | **Not started — no dependency, no code, no schema** |
 | 17 | Pluto AI Betting + Financial Actions | **0%** | Not started |
@@ -155,7 +155,7 @@ future audit and every new contributor.
 | 23 | Analytics + Admin AI + Monitoring | **20%** | Reporting service + Sentry. No health monitoring, no alerts, no admin AI |
 | 24 | Security, Reconciliation, QA, Production | **45%** | Reconciliation + 245 tests + rate limits. No security review, backups, or DR |
 
-**Unweighted mean: ~42%** (was ~23% at audit)
+**Unweighted mean: ~54%** (was ~23% at audit)
 
 ---
 

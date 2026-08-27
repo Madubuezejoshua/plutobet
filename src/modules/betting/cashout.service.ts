@@ -158,6 +158,168 @@ export class CashOutService {
     });
   }
 
+  /**
+   * Takes PART of a bet's value now, leaving the rest running.
+   *
+   * Modelled as a reduction of the stake still at risk rather than as a split
+   * into two bets. Splitting would double the rows on every partial and make
+   * a customer's history unreadable; reducing the live stake keeps one bet
+   * that is simply smaller than it was.
+   *
+   * The remaining stake settles normally. A bet half cashed out pays half.
+   */
+  async cashOutPartial(params: {
+    betId: string;
+    userId: string;
+    ip: string;
+    /** How much of the ORIGINAL stake to buy back. */
+    stakePortionMinor: bigint;
+    expectedOfferMinor?: bigint;
+  }): Promise<CashOutResult & { remainingStakeMinor: bigint }> {
+    if (params.stakePortionMinor <= 0n) {
+      throw new RangeError("the portion to cash out must be positive");
+    }
+
+    return this.wallet.withMoneyTransaction(async ({ tx, credit }) => {
+      const bet = await this.loadBet(tx, params.betId, true);
+
+      if (bet.userId !== params.userId) {
+        throw new CashOutUnavailableError("BET_NOT_PENDING", "this bet does not belong to you");
+      }
+      if (bet.status !== "PENDING") {
+        throw new CashOutUnavailableError(
+          "BET_NOT_PENDING",
+          `this bet is already ${bet.status.toLowerCase()}`,
+        );
+      }
+
+      const [state] = await tx.execute<{ cashed_out: string }>(sql`
+        SELECT cashed_out_stake_minor::text AS cashed_out FROM bets WHERE id = ${params.betId}::uuid
+      `);
+      const alreadyOut = BigInt(state?.cashed_out ?? "0");
+      const liveStake = bet.stakeMinor - alreadyOut;
+
+      if (params.stakePortionMinor > liveStake) {
+        throw new CashOutUnavailableError(
+          "VALUE_TOO_SMALL",
+          "that is more than the stake still running on this bet",
+        );
+      }
+
+      /*
+       * Price the WHOLE remaining position, then take the requested fraction.
+       *
+       * Quoting the fraction directly would round differently from the full
+       * cash-out of the same bet, so two customers taking the same value by
+       * different routes would be paid different amounts. Scaling one quote
+       * keeps them consistent.
+       */
+      const quote = quoteCashOut(
+        liveStake,
+        bet.legs,
+        this.config.marginBasisPoints,
+        this.config.minimumOfferMinor,
+      );
+      // Integer arithmetic throughout; the division truncates, which favours
+      // the book by at most one kobo and never overpays.
+      const offerMinor = (quote.offerMinor * params.stakePortionMinor) / liveStake;
+
+      if (offerMinor <= 0n) {
+        throw new CashOutUnavailableError(
+          "VALUE_TOO_SMALL",
+          "that portion is worth less than one kobo",
+        );
+      }
+      if (params.expectedOfferMinor !== undefined && offerMinor < params.expectedOfferMinor) {
+        throw new CashOutUnavailableError(
+          "VALUE_TOO_SMALL",
+          "the price moved and this portion is now worth less than the offer you accepted",
+        );
+      }
+
+      const remainingStake = liveStake - params.stakePortionMinor;
+      const takingEverything = remainingStake === 0n;
+
+      // Release only the liability being bought back, in proportion to the
+      // stake retired. Releasing all of it would understate what the book
+      // still stands to pay on the part still running.
+      await tx.execute(sql`
+        UPDATE exposure e
+        SET total_liability_minor = GREATEST(
+              0,
+              e.total_liability_minor
+                - ((b.potential_return_minor - b.stake_minor) * ${params.stakePortionMinor})
+                  / b.stake_minor
+            ),
+            updated_at = now()
+        FROM bets b
+        WHERE b.id = ${params.betId}::uuid
+          AND e.market_id IN (
+            SELECT DISTINCT s.market_id
+            FROM bet_legs bl
+            JOIN selections s ON s.id = bl.selection_id
+            WHERE bl.bet_id = ${params.betId}::uuid
+          )
+      `);
+
+      const paid = await credit({
+        walletId: bet.walletId,
+        amountMinor: offerMinor,
+        type: "PAYOUT",
+        /*
+         * Keyed on the bet AND the cumulative portion.
+         *
+         * Keying on the bet alone would make a second partial look like a
+         * replay of the first and silently pay nothing -- the same trap the
+         * casino module avoids by keying on "round plus operation".
+         */
+        idempotencyKey: `cashout:${params.betId}:${alreadyOut + params.stakePortionMinor}`,
+        actor: { type: "USER", id: params.userId, ip: params.ip },
+        metadata: {
+          kind: "BET_CASHOUT_PARTIAL",
+          betId: params.betId,
+          stakePortionMinor: params.stakePortionMinor.toString(),
+        },
+      });
+
+      await tx.execute(sql`
+        INSERT INTO bet_cashouts (bet_id, stake_portion_minor, paid_minor, txn_id)
+        VALUES (
+          ${params.betId}::uuid, ${params.stakePortionMinor}, ${offerMinor},
+          ${paid.transactionId}::uuid
+        )
+      `);
+
+      if (takingEverything) {
+        // The last portion closes the bet, so a full cash-out reached in
+        // instalments ends in the same state as one taken in a single step.
+        await tx.execute(sql`
+          UPDATE bets
+          SET cashed_out_stake_minor = stake_minor,
+              status = 'CASHED_OUT',
+              settled_at = now(),
+              cashout_txn_id = ${paid.transactionId}::uuid,
+              cashout_value_minor = COALESCE(cashout_value_minor, 0) + ${offerMinor}
+          WHERE id = ${params.betId}::uuid
+        `);
+      } else {
+        await tx.execute(sql`
+          UPDATE bets
+          SET cashed_out_stake_minor = cashed_out_stake_minor + ${params.stakePortionMinor},
+              cashout_value_minor = COALESCE(cashout_value_minor, 0) + ${offerMinor}
+          WHERE id = ${params.betId}::uuid
+        `);
+      }
+
+      return {
+        betId: params.betId,
+        offerMinor,
+        balanceAfterMinor: paid.balanceAfterMinor,
+        remainingStakeMinor: remainingStake,
+      };
+    });
+  }
+
   private async loadBet(tx: WalletTransaction, betId: string, lock: boolean) {
     const [row] = await tx.execute<{
       id: string;

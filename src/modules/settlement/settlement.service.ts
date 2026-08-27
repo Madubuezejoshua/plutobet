@@ -127,9 +127,11 @@ export class SettlementService {
         user_id: string;
         status: string;
         stake_minor: string;
+        cashed_out_stake_minor: string;
         wallet_id: string | null;
       }>(sql`
         SELECT b.id, b.user_id, b.status::text AS status, b.stake_minor::text AS stake_minor,
+               b.cashed_out_stake_minor::text AS cashed_out_stake_minor,
                w.id AS wallet_id
         FROM bets b
         LEFT JOIN wallets w ON w.user_id = b.user_id AND w.kind = 'USER'
@@ -189,7 +191,19 @@ export class SettlementService {
       }
 
       const resolution = resolveBet(resolved);
-      const stakeMinor = BigInt(locked.stake_minor);
+
+      /*
+       * Settlement pays on the stake STILL AT RISK, not the original.
+       *
+       * A partial cash-out buys back part of the stake and pays for it there
+       * and then. Settling the full original stake afterwards would pay twice
+       * for the portion already taken -- a straightforward overpayment, and
+       * one that would look like a correct settlement in every log.
+       *
+       * A fully cashed-out bet never reaches here: it is no longer PENDING.
+       */
+      const cashedOutMinor = BigInt(locked.cashed_out_stake_minor ?? "0");
+      const stakeMinor = BigInt(locked.stake_minor) - cashedOutMinor;
       const payoutMinor = settlementPayoutMinor(stakeMinor, resolution);
       const settledAt = new Date();
 

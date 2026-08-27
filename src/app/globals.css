@@ -622,6 +622,21 @@ section.card h2 { margin: 0 0 8px; font-size: 16px; }
 .statement .credit { color: var(--accent); font-weight: 700; }
 .statement .debit { color: var(--ink); font-weight: 700; }
 
+/* --- progress ------------------------------------------------------------ */
+.progress-track {
+  height: 6px;
+  margin-top: 8px;
+  overflow: hidden;
+  background: var(--surface-3);
+  border-radius: var(--r-pill);
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width .3s ease;
+}
+@media (prefers-reduced-motion: reduce) { .progress-fill { transition: none; } }
+
 /* --- skeleton ------------------------------------------------------------ */
 .skeleton {
   background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
