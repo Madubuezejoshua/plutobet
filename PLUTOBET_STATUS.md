@@ -1,244 +1,213 @@
-# PlutoBet — Project Status & Implementation Assessment
+# PlutoBet — Project Status
 
-**Audit date:** 2026-08-27
-**Auditor:** Claude (lead architect role, per Master Build Prompt)
-**Repository:** `c:\Users\MXT\Documents\projects\bet` (package name `bet-platform`)
-**Branch:** `main` · 5 commits · working tree clean at audit start
+**Last updated:** 2026-08-27
+**Repository:** `github.com/plutobet-ai/plutobet_ai` (also `Madubuezejoshua/plutobet`)
+**Branch:** `main` · 12 commits · working tree clean
+
+> This document is organised around **what is left**, not what is done.
+> Section 1 is the answer to "what's remaining". Everything after it is evidence.
 
 ---
 
-## 0. Executive summary
+## 0. Where the build stands
 
-This repository is **not an empty project**, and it is **not a PlutoBet project either**.
-
-What exists is a **deep, narrow vertical**: a rigorously engineered money core —
-double-entry ledger, wallet concurrency, bet placement, settlement, payments
-scaffolding, KYC and responsible gambling — built to a *different, smaller
-specification* (an 8-phase Nigerian FSGRN-licensing brief, see
-`docs/FSGRN-technical-topography.md`).
-
-The PlutoBet Master Build Prompt describes a platform roughly **3× larger in
-scope**, whose stated differentiator — **Pluto AI** — currently has
-**zero implementation, zero dependencies, and zero database presence**.
-
-| | |
+| Check | Result |
 |---|---|
-| **Estimated completion against PlutoBet's 24 phases** | **~72%** (was ~23% at audit) |
-| Phases at or above 70% | 5 of 24 (UI Foundation, Accounts, Admin/RBAC, Wallet/Ledger, Betting Engine) |
-| Phases at 0% | 7 of 24 (Virtuals, Fantasy/Jackpot, Referrals, all 4 AI phases, Social) |
-| Product areas with a working UI | 5 of 17 (Sports, My Bets, Wallet, Account, Home) |
+| Tests | ✅ **549 passing across 42 suites** |
+| Typecheck (`tsc --noEmit`) | ✅ Clean |
+| Production build (`next build`) | ✅ Clean |
+| Migrations | ✅ **24 of 24 applied to Neon** · 60 tables |
+| Both git remotes | ✅ Pushed, identical HEAD |
 
-**The important nuance:** the 23% that exists is the *hardest and least
-forgiving* 23%. Financial ledgers, concurrency safety and settlement
-correctness are where betting platforms fail catastrophically and silently.
-That work appears sound and is backed by 272 passing tests across 28 suites,
-including concurrency, property-based, chaos and load tests.
+**All 24 phases of the Master Build Prompt have implementation.**
+Unweighted mean across the phase table (§4): **~74%**, up from ~23% at audit.
 
-The remaining 77% is broader but individually less treacherous — with the
-exception of the AI layer, which is entirely greenfield and carries its own
-novel safety burden (Rules 12–16).
+**Treat that number sceptically.** It averages "email verification UI missing"
+against "no casino provider exists", which are not comparable units of work. The
+honest version is §1: three of the remaining items are *blocking*, five need a
+signed contract, and the rest is a normal backlog.
 
 ---
 
-## 1. Confirmed technology stack
+## 1. WHAT IS LEFT
 
-| Layer | Technology | Version | Notes |
+Four groups, ordered by what actually unblocks them.
+
+### 🔴 A — Blocking. The platform cannot serve a real customer.
+
+| # | Item | Consequence today | To close |
 |---|---|---|---|
-| Framework | Next.js (App Router) | 16.3.2 | Server components used heavily and deliberately |
-| Runtime | React / React DOM | 19.2.8 | |
-| Language | TypeScript | 5.9.3 | `strict`; `tsc --noEmit` passes clean |
-| ORM | Drizzle ORM | 0.45.2 | Schemas in TS; **constraints/triggers hand-written in raw SQL** |
-| Driver | postgres-js | 3.4.5 | |
-| Database | PostgreSQL (Neon, serverless) | — | Pooled + unpooled URLs, deliberately separated |
-| Cache / limits | Redis (Upstash) via `ioredis` | 5.11.1 | TCP protocol, **not** the REST API |
-| Background jobs | Inngest | 4.18.1 | 8 registered functions |
-| Auth | NextAuth (Auth.js) | 4.24.15 | Credentials provider, JWT sessions |
-| Password hashing | argon2 (argon2id) | 0.45.1 | |
-| Validation | Zod | 4.1.5 | |
-| Object storage | AWS SDK S3 → **Backblaze B2** | 3.1116 | Spec said R2; B2 chosen, interface identical |
-| Errors | Sentry | 10.70.0 | Wired, **DSN not configured** |
-| Styling | Tailwind CSS | 4.1.14 | Plus ~204 lines of hand-written page CSS |
-| Testing | Vitest + fast-check | 3.2.7 | Real embedded Postgres + Redis, not mocks |
+| A1 | **`PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY`** | No deposits, no withdrawals. The money loop is inert | Paystack dashboard → live keys |
+| A2 | **One real low-value Paystack transfer, end to end** | The adapter is written against published docs and exercised only by fixtures. It has never moved a real naira | Send ₦100 to a real account, confirm the webhook settles it |
+| A3 | **`TERMII_API_KEY` + `RESEND_API_KEY`** | OTP codes print to the server console. **Nobody can register or reset a password** | Buy both; ~₦ trivial |
+| A4 | **Verify a database restore** | Neon has point-in-time restore. Nothing here has ever restored from it — *an untested backup is not a backup* | Restore to a scratch branch, confirm the ledger reconciles |
+| A5 | **Rotate the credentials pasted into chat** | Neon, Upstash, Backblaze, Inngest, odds-api.io are all compromised | Rotate each. **`IDENTITY_PEPPER` cannot be rotated** — every stored identity digest derives from it. Move it to managed secret storage instead |
 
-**No AI dependencies are installed.** No `@anthropic-ai/sdk`, no OpenAI SDK, no
-vector store, no embeddings library, no RAG tooling.
+A4 is the one that gets skipped, and the one that matters on the worst day.
 
-**No realtime transport is installed.** No WebSocket server, no SSE
-implementation, no Pusher/Ably. Live betting (Phase 9) and live odds cannot
-function without one.
+### 🟠 B — Needs a commercial contract. No amount of code closes these.
 
----
+| Phase | Item | What exists now |
+|---|---|---|
+| 9 | **Real in-play feed** | Live betting is **display-only**. Prices show; placement is refused. A tappable price the server would reject is worse than no price |
+| 11 | **Casino aggregator** | Provider interface, sandbox adapter, catalogue, lobby — the lobby says it isn't connected rather than showing fake tiles |
+| 12 | **Virtuals provider** | Rounds are modelled as sportsbook events, so pricing/placement/settlement are already reused |
+| 8 | **Bet-builder pricing** | Not implemented. It needs a provider that prices *correlated* legs — naively multiplying odds on the same match is how a book gets arbitraged |
+| 13 | **Fantasy + Lucky Numbers** | Not started. Jackpot (the same phase) is complete |
+| 16 | **AI model key** | Pluto AI runs a **keyword router**, not a language model. The registry, guardrails and draft flow are built and tested, so this is an adapter swap |
 
-## 2. Folder structure
+Each of these has its integration built and its UI honestly stating it is not
+connected. None is a rewrite — they are waiting on a signature, not a sprint.
 
-```
-src/
-├─ app/                    Next.js App Router — 12 pages, 13 API routes
-│  ├─ admin/               overview · reports · kyc review
-│  ├─ api/                 auth · bets · odds · wallet · withdrawals
-│  │                       kyc · admin/kyc · webhooks/paystack · inngest
-│  ├─ sports/ bets/ wallet/ deposit/ withdraw/ responsible/ register/ kyc/
-│  └─ globals.css          204 lines, ad-hoc — NOT a design system
-├─ db/                     pooled client · redis client
-├─ inngest/                client + 4 function files (8 functions)
-├─ lib/api/                route wrappers (public/authed/admin) · rate limiting
-├─ modules/                15 domain modules  ← the real substance
-└─ types/
-docs/                      FSGRN-technical-topography.md (regulatory)
-drizzle/                   24 hand-authored SQL migrations
-legacy/                    abandoned NestJS/Prisma implementation (dead code)
-scripts/                   migrate · seed · dev-stack · probe-odds
-```
+### 🟡 C — Buildable now. No external dependency. This is the real backlog.
 
-**155 TypeScript/TSX source files. 28 test suites.**
-
-### `legacy/` is dead weight
-Seven directories of an abandoned NestJS + Prisma implementation
-(`nest-prisma`, `nestjs-odds`, `nestjs-wallet`, `prisma-schema`, …). It is not
-imported by anything. It should be deleted or archived — it will confuse every
-future audit and every new contributor.
-
----
-
-## 3. Domain modules — what actually exists
-
-| Module | Files | Tests | Assessment |
+| # | Item | Phase | Why it matters |
 |---|---|---|---|
-| `wallet` | 10 | 6 suites | **Strongest.** Double-entry, append-only, DB-trigger-enforced |
-| `betting` | 8 | 5 suites | Placement, pricing, cashout, exposure caps |
-| `settlement` | 5 | 4 suites | Poll → resolve → settle, idempotent, chaos-tested |
-| `odds` | 9 | 3 suites | Provider adapter, canonical selection, budget limiter |
-| `payments` | 6 | 3 suites | Deposits, withdrawals, state machine, Paystack webhook |
-| `responsible` | 4 | 1 suite | Limits, cool-off, self-exclusion |
-| `kyc` | 4 | 1 suite | Identity hashing, B2 storage, review workflow |
-| `notifications` | 7 | 2 suites | OTP, phone normalisation, Termii/Resend adapters |
-| `casino` | 4 | 1 suite | Callback handling only — **no provider, no UI** |
-| `reporting` | 2 | 1 suite | Daily turnover, GGR, large transactions |
-| `users` | 8 | 2 suites | Registration, age gate, profile, sessions, password reset, referral codes |
-| `auth` | 5 | — | Session, admin, password, email |
-| `risk` | 1 | — | Exposure + heuristic signals |
-| `reconciliation` | 1 | — | Financial reconciliation |
-| `audit` | 2 | — | Append-only audit log with DB-enforced reason on admin actions |
+| C1 | **Odds provider contract test** | 6 | ⚠️ **Highest-consequence gap here.** Settlement reads `scores.periods.ft` from odds-api.io. Validated *once*, by a manual probe (`probe.txt`). If the provider changes that shape, bets settle wrongly and money moves wrongly — with no test to catch it |
+| C2 | Email verification UI | 2 | The service exists; the screen does not |
+| C3 | Edit bet | 9 | Cash-out and resettlement are done; edit-bet is the remaining leg |
+| C4 | Backfill dates of birth | 20 | Accounts predating the age gate are *flagged* on their account page but not *blocked* |
+| C5 | Cache `liveVersion` in Redis | 9 | The live feed polls conditionally (304 on no change) but still runs a query per poll. Fine now, wrong at scale |
+| C6 | Personalisation | 19 | RAG corpus is built; per-user tailoring is not started |
+| C7 | Admin AI | 23 | Revenue/customer/alert reporting is built; the AI layer over it is not |
+| C8 | **Delete `legacy/`** | — | An entire abandoned NestJS/Prisma codebase, imported by nothing. It will confuse every future audit |
+| C9 | Load-test the untested paths | 24 | Covered: bet placement under contention. **Not covered:** homepage, casino callbacks, live-feed polling at scale, Pluto AI concurrency |
+| C10 | `SENTRY_DSN` | 24 | Wired but unconfigured — currently flying blind on production errors |
+
+### ⚪ D — Operational, one-time
+
+- **`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`** then `npm run seed:admin` — there is no admin account yet.
+- Decide the acceptable data-loss window and confirm Neon PITR actually meets it.
+- Write the restore runbook: who restores, from where, what they check.
 
 ---
 
-## 4. Phase-by-phase assessment against the PlutoBet Master Build Prompt
+## 2. What genuinely works
 
-> **Note on numbering:** the existing code was built to a *different* 8-phase
-> brief. Those phase numbers do **not** map onto PlutoBet's 24. This table is
-> the authoritative mapping from here on.
+Verified by passing tests, not assumed — several confirmed by driving the running app.
 
-| # | Phase | % | Status |
-|---|---|---|---|
-| 1 | Project Audit + UI Foundation | **100%** ✅ | Audit (this doc), dark design system, navigation registry, 17 product areas, homepage, mobile bottom bar + drawer |
-| 2 | Authentication + User Account | **90%** ✅ | Age gate, full user model, 6 statuses, password reset, revocable device sessions, profile, preferences. Email verification UI outstanding |
-| 3 | Admin Platform Foundation | **85%** ✅ | 8 roles, 31 permissions, server-held step-up reauth, audited grants, permission-filtered sidebar, 8 admin screens |
-| 4 | **Wallet + Immutable Ledger** | **100%** ✅ | Cash/bonus/locked segregation as wallet rows, DB-enforced cash-only withdrawal, bucket transfers reconcile |
-| 5 | Payments, Deposits, Withdrawals | **85%** ✅ | Paystack adapter, payout worker, transfer webhooks, finance admin screens. Still needs live keys + a real end-to-end transfer |
-| 6 | Sports Data Foundation | **80%** ✅ | Sport/Competition/Team entities, conservative name canonicalisation + alias table, head-to-head, sport & competition browsing |
-| 7 | Odds Engine + Betslip | **85%** ✅ | Booking codes, decimal/fractional/American formats applied live, per-customer odds-change policy read server-side |
-| 8 | **Sportsbook Betting Engine** | **90%** ✅ | Singles, accumulators, **system bets and bankers**, bet slips, partial statuses. Bet builder outstanding |
-| 9 | Live Betting + Cashout + Settlement | **80%** | Resettlement, partial cash-out, live board on a conditional-poll transport. Edit-bet and a real in-play feed outstanding |
-| 10 | Livescore + Results + Statistics | **75%** ✅ | Livescore, results with competition filter, team form and head-to-head |
-| 11 | Casino + Live Casino | **65%** | Provider interface, sandbox adapter, catalogue, lobby. **Awaiting a real aggregator contract** |
-| 12 | Virtuals + Instant Games | **55%** | Rounds modelled as sportsbook events, so pricing/placement/settlement are reused. Awaiting a provider |
-| 13 | Fantasy + Jackpot + Draw | **40%** | Jackpot complete: slate, entries, scoring, pool split proven exact. Fantasy and draw games not started |
-| 14 | Promotions + Bonuses + Loyalty | **70%** ✅ | Promotions, bonuses with wagering, bonus→cash conversion, expiry clawback, derived loyalty tiers |
-| 15 | Referrals + Affiliates | **70%** | Qualification-gated referrals, affiliate schema, anti-abuse via verified-identity match |
-| 16 | **Pluto AI Foundation** | **75%** | Tool registry, guardrails, chat UI. Rules-based fallback; model adapter is a drop-in |
-| 17 | Pluto AI Betting + Financial Actions | **70%** | Draft-only bets and withdrawals, confirmation + step-up enforced in code |
-| 18 | AI Match Analysis + Prediction | **70%** | Probabilities from arithmetic, not the LLM. Always sum to 1, always state confidence |
-| 19 | AI RAG + Personalization | **60%** | Curated corpus that declines rather than near-missing. Personalisation not started |
-| 20 | KYC + Risk + Fraud + Responsible Gaming | **85%** | Age gate, KYC, RG limits, fraud signals with innocent explanations, reality checks |
-| 21 | Notifications + Support | **65%** | Tickets, disputes tied to verified-owned entities, immutable messages, in-app notifications |
-| 22 | Social + Community | **50%** | Profiles, follows, shared slips (selections only), moderation. Schema-level privacy |
-| 23 | Analytics + Admin AI + Monitoring | **60%** | Revenue by product, customer metrics, operational alerts. Admin AI not started |
-| 24 | Security, Reconciliation, QA, Production | **70%** | Security review documented, cross-product reconciliation nightly. **Backups still unverified** |
-
-**Unweighted mean: ~72%** (was ~23% at audit)
-
----
-
-## 5. What genuinely works today
-
-These are verified, not assumed — each is covered by passing tests, and several
-were confirmed by driving the running application manually.
-
-- **Money is never wrong.** Integer kobo (`BIGINT`) end to end. No floats anywhere in a money path.
-- **The ledger cannot be corrupted from application code.** Deferred PostgreSQL triggers reject unbalanced, empty, malformed or cache-divergent commits. Database role separation means the runtime role *cannot* own or alter ledger tables.
-- **Concurrency is safe.** `SELECT … FOR UPDATE` on wallet rows; transfers lock both wallets in UUID order to avoid deadlock. Proven by a concurrency suite that races real transactions.
-- **Idempotency is real.** Keys carry a SHA-256 request fingerprint, so replaying a key with *different* parameters raises a typed conflict rather than silently succeeding.
+- **Money is never wrong.** Integer kobo (`BIGINT`) end to end. No float in any money path.
+- **The ledger cannot be corrupted from application code.** Deferred PostgreSQL triggers reject unbalanced, empty, malformed or cache-divergent commits. The runtime database role *cannot* own or alter ledger tables.
+- **Concurrency is safe.** `SELECT … FOR UPDATE` on wallet rows; transfers lock both wallets in UUID order to avoid deadlock. Proven by a suite that races real transactions.
+- **Idempotency is real.** Keys carry a SHA-256 request fingerprint, so replaying a key with *different* parameters raises a typed conflict instead of silently succeeding.
 - **Odds are locked at placement.** Settlement reads `bet_legs.locked_odds_decimal`, never the current price.
 - **Self-exclusion survives re-registration.** Keyed to an HMAC digest of BVN/NIN under a server-held pepper, not to an email address.
-- **RG limits are asymmetric.** Lowering a limit applies immediately; raising one waits 24 hours. Verified live.
+- **RG limits are asymmetric.** Lowering applies immediately; raising waits 24 hours.
 - **Unverified accounts cannot withdraw.** Tier 0 → ₦0 daily cap, enforced in the service and reflected in the UI.
-- **Bet placement is atomic and idempotent.** A double-tap returns the original bet rather than placing a second one or erroring.
+- **Resettlement never edits history.** It posts compensating entries, and clawback records a *shortfall* rather than inventing a negative balance.
+- **Bonus credit cannot be withdrawn.** A database trigger refuses it — not a service check that a future code path could bypass.
+- **AI cannot move money.** Draft-only, confirmation plus server-held step-up re-auth. User-scoped tools take **no user id parameter**, asserted by a test that walks the registry.
 
 ---
 
-## 6. What is broken, missing, or dangerous
+## 3. Hazards worth re-reading before you touch the code
 
-### 🔴 Blockers — the platform cannot operate
+### 🟡 Wallet lookups must always name a bucket
 
-| Issue | Consequence |
-|---|---|
-| **No Paystack keys** | No deposits, no withdrawals. The entire money loop is inert |
-| ~~No age verification~~ | ✅ **Fixed in Phase 2.** `date_of_birth` is collected at registration and enforced by both the service and a database trigger. Accounts predating it are flagged on their account page |
-| **No realtime layer** | Live betting, live odds, and live scores (Phases 9, 10) cannot be built until this exists |
-| **Migration 0009 not applied** | KYC review workflow is written and typechecks, but the database does not have it yet — this environment cannot reach Neon (see §9) |
+Phase 4 gave each account three wallet rows (CASH / BONUS / LOCKED). Any query
+resolving "the user's wallet" by `(user_id, kind, currency)` now matches **three
+rows** and takes whichever the planner returns first.
 
-### 🟠 Serious gaps
+Six such queries existed — deposits, settlement payouts, casino payouts, casino
+balance, withdrawal refunds, cash-out — and every one was crediting an arbitrary
+bucket. This was not a crash: the ledger stayed balanced, the money just landed
+where the customer could not spend it. Fixed and pinned by a regression test.
 
-- ~~**No RBAC.**~~ ✅ **Fixed in Phase 3.** 8 roles with enforced separation of duties; a support agent is read-only and cannot touch money or account status.
-- ~~**No bonus wallet.**~~ ✅ **Fixed in Phase 4.** Cash, bonus and locked are separate wallet rows, so every existing ledger invariant covers them unchanged. Wagering-requirement logic still belongs to phase 14.
-- ~~**Withdrawals never actually pay out.**~~ ✅ **Fixed in Phase 5.** Paystack adapter, a payout worker that submits approved withdrawals, and transfer webhooks that settle them. Needs live keys and one real low-value transfer to verify.
-- ~~**Sports hierarchy is flat.**~~ ✅ **Fixed in Phase 6.** Sport → Competition → Event with Team entities and an alias table. Head-to-head is now queryable, which is what phase 18's analysis needs.
-- **Casino is a callback handler with nothing attached.** No aggregator adapter, no game catalogue, no lobby.
-- **Notification providers unconfigured.** Termii and Resend adapters exist but are **unverified against live traffic** and have no credentials — OTP codes currently print to the server console. Nobody can actually receive a code.
-- **`legacy/` contains an entire abandoned codebase.**
+**Any new query against `wallets` must include `bucket = 'CASH'`.**
 
-### 🟡 Correctness risk worth naming
+### 🟡 The odds parse is the single highest-consequence unguarded line
 
-**Wallet lookups must always name a bucket.** Phase 4 gave each account three
-wallet rows (CASH/BONUS/LOCKED). Any query resolving "the user's wallet" by
-`(user_id, kind, currency)` now matches three rows and takes whichever the
-planner returns first. Six such queries existed — deposits, settlement payouts,
-casino payouts, casino balance, withdrawal refunds and cash-out — and all were
-crediting an arbitrary bucket. Fixed in Phase 5 and pinned by a regression test,
-but any NEW query against `wallets` must include `bucket = 'CASH'`.
+See C1. It decides whether bets won or lost.
 
-### 🟡 Correctness risk worth naming
+### 🟢 Two deliberate exemptions, documented in-file
 
-**The odds provider adapter has been validated exactly once, by a manual probe.**
-`probe.txt` confirms the live odds-api.io response contains `scores.periods.ft`,
-which is what settlement reads to decide match outcomes. That is the single
-highest-consequence parse in the system — if the provider changes that shape,
-bets settle wrongly and money moves wrongly. There is **no automated contract
-test** guarding it.
+- **`lookup.ts` is exempt from the `dbDirect` rule.** Every function there is a single read taking no lock, and the wallet service re-locks before moving anything. Routing them through the unpooled pool would exhaust it on the header balance alone. *Re-review if anything there ever writes.*
+- **The sandbox payment provider refuses to boot in production**, because it cannot verify webhook signatures — it has no secret to verify against. Failing to start beats starting with an open door to the ledger. The **AI's rules-based fallback is the opposite case**: a keyword router cannot invent a fixture or be prompt-injected, so it degrades rather than refusing to start.
 
 ---
 
-## 7. Compliance with the Master Build Prompt's own rules
+## 4. Phase-by-phase
 
-| Rule | Status |
-|---|---|
-| 7 — Security before convenience | ✅ All authoritative decisions server-side |
-| 8 — No floating-point money | ✅ Integer kobo throughout |
-| 9 — Database transactions | ✅ Atomic, with rollback, DB-enforced |
-| 10 — Idempotency | ✅ With fingerprinting, exceeds the requirement |
-| 11 — Provider abstraction | 🟡 Odds/payments/casino/SMS abstracted; sports data not |
-| 12–16 — AI rules | ⬜ Not applicable yet — no AI exists |
-| **Prohibited: fake wallet balance** | ✅ Never |
-| **Prohibited: trust frontend payment** | ✅ Webhook-verified with signature |
-| **Prohibited: negative balance race** | ✅ Structurally prevented |
-| **Prohibited: plain-text passwords** | ✅ argon2id |
-| **Prohibited: duplicate webhooks** | ✅ Idempotent |
-| **Prohibited: support = super admin** | ✅ Fixed in Phase 3 — enforced and tested |
-| **Prohibited: unmarked mock data** | ✅ Console providers clearly labelled as fallbacks |
+| # | Phase | % | Remaining |
+|---|---|---|---|
+| 1 | Project Audit + UI Foundation | **100%** ✅ | — |
+| 2 | Authentication + User Account | **90%** ✅ | Email verification UI (C2) |
+| 3 | Admin Platform Foundation | **85%** ✅ | First admin account (D) |
+| 4 | **Wallet + Immutable Ledger** | **100%** ✅ | — |
+| 5 | Payments, Deposits, Withdrawals | **85%** ✅ | Live keys + one real transfer (A1, A2) |
+| 6 | Sports Data Foundation | **80%** ✅ | Provider contract test (C1) |
+| 7 | Odds Engine + Betslip | **85%** ✅ | — |
+| 8 | **Sportsbook Betting Engine** | **90%** ✅ | Bet builder — needs correlated pricing (B) |
+| 9 | Live Betting + Cashout + Settlement | **80%** | Real in-play feed (B), edit bet (C3), cache (C5) |
+| 10 | Livescore + Results + Statistics | **75%** ✅ | — |
+| 11 | Casino + Live Casino | **65%** | Aggregator contract (B) |
+| 12 | Virtuals + Instant Games | **55%** | Provider contract (B) |
+| 13 | Fantasy + Jackpot + Draw | **40%** | Jackpot done. Fantasy + Lucky Numbers not started (B) |
+| 14 | Promotions + Bonuses + Loyalty | **70%** ✅ | — |
+| 15 | Referrals + Affiliates | **70%** | — |
+| 16 | **Pluto AI Foundation** | **75%** | Model API key (B) |
+| 17 | Pluto AI Betting + Financial Actions | **70%** | — |
+| 18 | AI Match Analysis + Prediction | **70%** | — |
+| 19 | AI RAG + Personalization | **60%** | Personalisation (C6) |
+| 20 | KYC + Risk + Fraud + Responsible Gaming | **85%** | DOB backfill (C4) |
+| 21 | Notifications + Support | **65%** | Termii/Resend keys (A3) |
+| 22 | Social + Community | **50%** | — |
+| 23 | Analytics + Admin AI + Monitoring | **60%** | Admin AI (C7), Sentry DSN (C10) |
+| 24 | Security, Reconciliation, QA, Production | **70%** | **Verified restore (A4)**, load tests (C9) |
+
+Detail on 24 is in [`docs/security-review.md`](docs/security-review.md).
 
 ---
 
-## 8. Environment variables
+## 5. Product areas
+
+**14 live:** Home · Sports · Live · Jackpot · Casino · Virtuals · Livescore ·
+Results · Promotions · Rewards · Pluto AI · My Bets · Wallet · Account
+
+**3 planned, and the UI says so:** Live Casino · Fantasy · Lucky Numbers
+
+`src/lib/navigation.ts` is the single source of truth. Its `status` flag drives
+the placeholders, so an unfinished area cannot silently look finished — and
+Pluto AI navigates by key, never by inventing a URL.
+
+---
+
+## 6. Stack
+
+| Layer | Technology | Version |
+|---|---|---|
+| Framework | Next.js (App Router) | 16.3.2 |
+| Runtime | React / React DOM | 19.2.8 |
+| Language | TypeScript (`strict`) | 5.9.3 |
+| ORM | Drizzle ORM | 0.45.2 |
+| Driver | postgres-js | 3.4.5 |
+| Database | PostgreSQL (Neon) — pooled + unpooled, deliberately separated | — |
+| Cache / limits | Redis (Upstash) via `ioredis` — TCP, **not** REST | 5.11.1 |
+| Background jobs | Inngest — 13 registered functions | 4.18.1 |
+| Auth | NextAuth (Auth.js), JWT sessions | 4.24.15 |
+| Password hashing | argon2id | 0.45.1 |
+| Validation | Zod | 4.1.5 |
+| Object storage | AWS SDK S3 → Backblaze B2 | 3.1116 |
+| Errors | Sentry (**DSN unset**) | 10.70.0 |
+| Styling | Tailwind CSS | 4.1.14 |
+| Testing | Vitest + fast-check, real embedded Postgres + Redis | 3.2.7 |
+
+**246 source files · 42 test suites · 36 pages · 24 API routes · 23 modules · 24 migrations**
+
+### Two decisions worth knowing
+
+**Realtime is a conditional-poll transport, not SSE or WebSockets.** On Vercel
+every open stream holds a serverless invocation for its whole lifetime. The live
+board polls with ETags and costs a 304 when nothing has changed.
+
+**No AI SDK is installed.** Pluto AI's registry, guardrails, prediction
+arithmetic and draft flow are complete and tested. The model itself is an
+adapter behind an interface — deliberately, so the safety layer is not
+entangled with a vendor.
+
+---
+
+## 7. Environment variables
 
 **Configured:** `DATABASE_URL` · `DIRECT_DATABASE_URL` · `MIGRATION_DATABASE_URL` ·
 `APP_DATABASE_ROLE` · `REDIS_URL` · `AUTH_SECRET` · `NEXTAUTH_URL` ·
@@ -248,71 +217,58 @@ test** guarding it.
 
 **Still required:**
 
-| Variable | Blocks |
-|---|---|
-| `PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY` | **All deposits and withdrawals** |
-| `TERMII_API_KEY` / `TERMII_SENDER_ID` | Real SMS OTP delivery |
-| `RESEND_API_KEY` / `RESEND_FROM` | Real email delivery |
-| `SENTRY_DSN` | Production error visibility |
-| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | First admin account (self-chosen) |
-
-**Not yet needed, but required by later phases:** casino aggregator credentials
-(Phase 11), virtuals provider (12), fantasy/jackpot provider (13), an AI model
-API key (16), a realtime transport (9).
+| Variable | Blocks | Group |
+|---|---|---|
+| `PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY` | **All deposits and withdrawals** | A1 |
+| `TERMII_API_KEY` / `TERMII_SENDER_ID` | SMS OTP delivery | A3 |
+| `RESEND_API_KEY` / `RESEND_FROM` | Email delivery | A3 |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | First admin account | D |
+| `SENTRY_DSN` | Production error visibility | C10 |
+| Casino / virtuals / fantasy provider credentials | Phases 11, 12, 13 | B |
+| AI model API key | Phase 16 | B |
 
 ### ⚠️ Credential hygiene
-Neon, Upstash, Backblaze, Inngest and odds-api.io credentials were pasted into
-a chat transcript during setup. **They should be rotated before real user data
-exists.** The `IDENTITY_PEPPER` is the exception — it *cannot* be rotated, since
-every stored identity digest derives from it; it must be moved to managed
-secret storage instead.
+
+Neon, Upstash, Backblaze, Inngest and odds-api.io credentials were pasted into a
+chat transcript during setup. **Rotate them before real user data exists.**
+
+`IDENTITY_PEPPER` is the exception — it *cannot* be rotated, because every stored
+identity digest derives from it. Rotating it would silently break self-exclusion
+enforcement for every existing account. Move it to managed secret storage instead.
 
 ---
 
-## 9. Current environment limitation
+## 8. Compliance with the Master Build Prompt's rules
 
-This session **cannot reach the network** for database or git traffic. DNS
-resolves and `Test-NetConnection` to Neon:5432 and github.com:443 both succeed,
-but every actual Postgres connection and every `git fetch`/`push` times out —
-across Bash and PowerShell, sandboxed and unsandboxed, pooled and direct.
-
-**Consequences:**
-- Migration `0009_kyc_review.sql` is written and typechecks but **is not applied**
-- Nothing has been pushed to `github.com/Madubuezejoshua/plutobet.git`
-
-Both need to be run from a normal terminal:
-```bash
-npm run db:migrate
-git push origin main
-```
-
----
-
-## 10. Recommended sequence
-
-The Master Build Prompt's phase order is sound, with **three deviations I would
-argue for**:
-
-1. ~~Add date-of-birth and age verification immediately.~~ ✅ **Done in Phase 2.**
-
-2. ~~Bring the bonus/locked/pending wallet split forward into Phase 4.~~ ✅ **Done in Phase 4.**
-
-3. ~~Build the sports hierarchy before the AI phases.~~ ✅ **Done in Phase 6.**
-
-**Immediate next step per the Master Build Prompt: Phase 1 — UI Foundation.**
-The current interface is four functional pages sharing 204 lines of ad-hoc CSS.
-PlutoBet specifies 17 product areas, a mobile-first bottom navigation, and a
-consistent design system. That work has effectively not begun.
+| Rule | Status |
+|---|---|
+| 7 — Security before convenience | ✅ All authoritative decisions server-side |
+| 8 — No floating-point money | ✅ Integer kobo throughout |
+| 9 — Database transactions | ✅ Atomic, with rollback, DB-enforced |
+| 10 — Idempotency | ✅ With fingerprinting — exceeds the requirement |
+| 11 — Provider abstraction | ✅ Odds, payments, casino, virtuals, SMS, email, AI |
+| 12–16 — AI rules | ✅ Registry, no dynamic dispatch, draft-only money actions, arithmetic probabilities |
+| **Prohibited: fake wallet balance** | ✅ Never |
+| **Prohibited: trust frontend payment** | ✅ Webhook-verified, HMAC over the raw body |
+| **Prohibited: negative balance race** | ✅ Structurally prevented |
+| **Prohibited: plain-text passwords** | ✅ argon2id |
+| **Prohibited: duplicate webhooks** | ✅ Idempotent |
+| **Prohibited: support = super admin** | ✅ Enforced and tested |
+| **Prohibited: unmarked mock data** | ✅ Sandbox providers labelled, and refuse to boot in production |
 
 ---
 
-## 11. Honest bottom line
+## 9. Bottom line
 
-You have an unusually good **foundation** and an unusually small **product**.
+The parts that are **hard to fix later** — money integrity, concurrency,
+settlement, audit trail, AI permission boundaries — are done, and done properly.
 
-The parts that are hard to fix later — money integrity, concurrency, settlement,
-audit trail — are done, and done properly. The parts that are visible to users
-— navigation, homepage, casino, virtuals, promotions, and the entire Pluto AI
-layer that is meant to be the differentiator — are largely absent.
+What remains is mostly **not engineering risk**. Group A is five errands. Group B
+is six signatures. Group C is a normal backlog, of which only C1 carries real
+consequence.
 
-Nothing built so far needs to be thrown away. The gap is breadth, not quality.
+Nothing built so far needs to be thrown away.
+
+**If you do only three things: A1 (Paystack keys), A3 (Termii + Resend), A4
+(verify a restore).** The first two turn the platform from a demo into a
+business; the third is what you will wish you had done.
