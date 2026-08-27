@@ -2,6 +2,7 @@ import { serve } from "inngest/next";
 import { inngest } from "@/inngest/client";
 import { syncFixtures, syncLiveOdds, syncOddsDelta } from "@/inngest/functions/odds-sync";
 import { dailyReconciliation } from "@/inngest/functions/reconciliation";
+import { nightlyProductReconciliation } from "@/inngest/functions/product-reconciliation";
 import {
   alertStalePayouts,
   scheduleApprovedPayouts,
@@ -28,5 +29,6 @@ export const { GET, POST, PUT } = serve({
     scheduleApprovedPayouts,
     submitPayout,
     alertStalePayouts,
+    nightlyProductReconciliation,
   ],
 });

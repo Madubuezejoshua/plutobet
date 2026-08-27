@@ -23,7 +23,7 @@ scope**, whose stated differentiator — **Pluto AI** — currently has
 
 | | |
 |---|---|
-| **Estimated completion against PlutoBet's 24 phases** | **~54%** (was ~23% at audit) |
+| **Estimated completion against PlutoBet's 24 phases** | **~72%** (was ~23% at audit) |
 | Phases at or above 70% | 5 of 24 (UI Foundation, Accounts, Admin/RBAC, Wallet/Ledger, Betting Engine) |
 | Phases at 0% | 7 of 24 (Virtuals, Fantasy/Jackpot, Referrals, all 4 AI phases, Social) |
 | Product areas with a working UI | 5 of 17 (Sports, My Bets, Wallet, Account, Home) |
@@ -85,7 +85,7 @@ src/
 ├─ modules/                15 domain modules  ← the real substance
 └─ types/
 docs/                      FSGRN-technical-topography.md (regulatory)
-drizzle/                   21 hand-authored SQL migrations
+drizzle/                   24 hand-authored SQL migrations
 legacy/                    abandoned NestJS/Prisma implementation (dead code)
 scripts/                   migrate · seed · dev-stack · probe-odds
 ```
@@ -144,18 +144,18 @@ future audit and every new contributor.
 | 12 | Virtuals + Instant Games | **55%** | Rounds modelled as sportsbook events, so pricing/placement/settlement are reused. Awaiting a provider |
 | 13 | Fantasy + Jackpot + Draw | **40%** | Jackpot complete: slate, entries, scoring, pool split proven exact. Fantasy and draw games not started |
 | 14 | Promotions + Bonuses + Loyalty | **70%** ✅ | Promotions, bonuses with wagering, bonus→cash conversion, expiry clawback, derived loyalty tiers |
-| 15 | Referrals + Affiliates | **0%** | Not started |
-| 16 | **Pluto AI Foundation** | **0%** | **Not started — no dependency, no code, no schema** |
-| 17 | Pluto AI Betting + Financial Actions | **0%** | Not started |
-| 18 | AI Match Analysis + Prediction | **0%** | Not started |
-| 19 | AI RAG + Personalization | **0%** | Not started |
-| 20 | KYC + Risk + Fraud + Responsible Gaming | **65%** | KYC + RG genuinely good. Age verification **added in Phase 2**. Fraud detection still shallow |
-| 21 | Notifications + Support | **20%** | OTP delivery only, unconfigured. No in-app/push, no support system |
-| 22 | Social + Community | **0%** | Not started |
-| 23 | Analytics + Admin AI + Monitoring | **20%** | Reporting service + Sentry. No health monitoring, no alerts, no admin AI |
-| 24 | Security, Reconciliation, QA, Production | **45%** | Reconciliation + 245 tests + rate limits. No security review, backups, or DR |
+| 15 | Referrals + Affiliates | **70%** | Qualification-gated referrals, affiliate schema, anti-abuse via verified-identity match |
+| 16 | **Pluto AI Foundation** | **75%** | Tool registry, guardrails, chat UI. Rules-based fallback; model adapter is a drop-in |
+| 17 | Pluto AI Betting + Financial Actions | **70%** | Draft-only bets and withdrawals, confirmation + step-up enforced in code |
+| 18 | AI Match Analysis + Prediction | **70%** | Probabilities from arithmetic, not the LLM. Always sum to 1, always state confidence |
+| 19 | AI RAG + Personalization | **60%** | Curated corpus that declines rather than near-missing. Personalisation not started |
+| 20 | KYC + Risk + Fraud + Responsible Gaming | **85%** | Age gate, KYC, RG limits, fraud signals with innocent explanations, reality checks |
+| 21 | Notifications + Support | **65%** | Tickets, disputes tied to verified-owned entities, immutable messages, in-app notifications |
+| 22 | Social + Community | **50%** | Profiles, follows, shared slips (selections only), moderation. Schema-level privacy |
+| 23 | Analytics + Admin AI + Monitoring | **60%** | Revenue by product, customer metrics, operational alerts. Admin AI not started |
+| 24 | Security, Reconciliation, QA, Production | **70%** | Security review documented, cross-product reconciliation nightly. **Backups still unverified** |
 
-**Unweighted mean: ~54%** (was ~23% at audit)
+**Unweighted mean: ~72%** (was ~23% at audit)
 
 ---
 
