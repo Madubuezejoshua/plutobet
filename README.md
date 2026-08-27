@@ -51,6 +51,9 @@ variables: `POSTGRES_URL` for pooled reads,
 and `KV_URL` as an alternative to `REDIS_URL`. Generated integration aliases
 take precedence over the local-development names when both are present.
 
+Production Vercel builds apply pending Drizzle migrations before compiling the
+application. Preview and local builds never migrate a database automatically.
+
 The two runtime logins must be non-owners and members of `app_role`. Set
 `APP_DATABASE_ROLE` and run `npm run db:grant-role` when provisioning a new
 runtime login.
