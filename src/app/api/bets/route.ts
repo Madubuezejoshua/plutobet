@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ApiError, authedRoute, money, type AuthedRouteContext } from "@/lib/api/handler";
 import { RATE_RULES } from "@/lib/api/rate-limit";
-import { placementService } from "@/modules/betting/placement.service";
+import { SlipError, slipService } from "@/modules/betting/slip.service";
 import { walletForUser } from "@/modules/wallet/lookup";
 import { profileService, type OddsChangePolicy } from "@/modules/users/profile.service";
 import type { OddsDriftPolicy } from "@/modules/betting/placement.service";
@@ -32,6 +32,17 @@ const placeSchema = z.object({
     .max(20, "too many legs on one slip"),
   /** Stable per-slip key from the client; a double-tapped submit replays. */
   idempotencyKey: z.string().min(8).max(200),
+
+  /*
+   * System bets. Both optional, so an ordinary single or accumulator posts
+   * exactly the body it always did.
+   *
+   * `stakeMinor` is the stake PER COMBINATION when a system is requested. A
+   * "100 naira 2/3" therefore costs 300 naira, and the response says so
+   * explicitly rather than leaving the customer to work it out.
+   */
+  systemSize: z.number().int().min(1).max(20).optional(),
+  bankerIndices: z.array(z.number().int().min(0).max(19)).max(19).optional(),
 });
 
 /** Places a single or accumulator. */
@@ -58,19 +69,45 @@ export const POST = authedRoute(
       .preferences(userId)
       .catch(() => null);
 
-    const placed = await placementService.placeBet({
-      userId,
-      walletId,
-      ip,
-      stakeMinor: body.stakeMinor,
-      legs: body.legs,
-      idempotencyKey: body.idempotencyKey,
-      driftPolicy: toDriftPolicy(preferences?.oddsChangePolicy),
-    });
+    let slip;
+    try {
+      slip = await slipService.placeSlip({
+        userId,
+        walletId,
+        ip,
+        legs: body.legs,
+        unitStakeMinor: body.stakeMinor,
+        systemSize: body.systemSize,
+        bankerIndices: body.bankerIndices,
+        idempotencyKey: body.idempotencyKey,
+        driftPolicy: toDriftPolicy(preferences?.oddsChangePolicy),
+      });
+    } catch (error) {
+      if (error instanceof SlipError) {
+        throw new ApiError(
+          error.code === "INVALID_SLIP" ? 422 : 409,
+          error.code,
+          error.message,
+        );
+      }
+      throw error;
+    }
+
+    // The first combination doubles as "the bet" for a single or accumulator,
+    // so an existing client keeps reading the same fields it always did.
+    const placed = slip.placed[0]!;
 
     return NextResponse.json(
       {
         betId: placed.betId,
+        slipId: slip.slipId,
+        kind: slip.kind,
+        combinationCount: slip.combinationCount,
+        placedCount: slip.placed.length,
+        // What was actually CHARGED. A partially placed system costs only what
+        // landed, and saying so here is what stops a support ticket.
+        totalStakeMinor: money(slip.totalStakeMinor),
+        rejected: slip.rejected,
         stakeMinor: money(placed.stakeMinor),
         totalOddsDecimal: placed.totalOddsDecimal,
         potentialReturnMinor: money(placed.potentialReturnMinor),

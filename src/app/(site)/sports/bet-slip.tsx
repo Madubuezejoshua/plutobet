@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { EventView } from "@/modules/odds/odds.service";
 import { parseNairaToKobo } from "@/lib/money";
 import { formatOdds } from "@/modules/odds/format";
+import { namedSystems, systemTotalStake } from "@/modules/betting/system-bet";
 import type { OddsFormat } from "@/modules/users/schema";
 
 /**
@@ -76,6 +77,11 @@ export function BetSlip({
 }) {
   const [picks, setPicks] = useState<Picked[]>([]);
   const [stakeNaira, setStakeNaira] = useState("100");
+  /*
+   * null means a straight single or accumulator. A number is the combination
+   * size of a system, and the stake box then means stake PER COMBINATION.
+   */
+  const [systemSize, setSystemSize] = useState<number | null>(null);
   const [status, setStatus] = useState<{ kind: "idle" | "busy" | "ok" | "error"; message?: string }>(
     { kind: "idle" },
   );
@@ -96,6 +102,22 @@ export function BetSlip({
   const stakeMinor = parseNairaToKobo(stakeNaira) ?? 0n;
 
   const pricing = useMemo(() => priceSlip(picks, stakeMinor), [picks, stakeMinor]);
+
+  // Offered options depend only on how many selections are on the slip.
+  const systemOptions = useMemo(() => namedSystems(picks.length), [picks.length]);
+
+  /*
+   * The chosen system is DERIVED against the current options rather than kept
+   * in sync with an effect.
+   *
+   * Removing a selection can leave a stored size the slip can no longer
+   * support -- a 3/4 with only two picks left. Deriving it means that state
+   * simply stops being active on the next render, instead of being submitted
+   * and bounced by the server. Same reason the mobile drawer derives its open
+   * state from the pathname.
+   */
+  const activeSystem = systemOptions.find((option) => option.systemSize === systemSize) ?? null;
+  const effectiveSystemSize = activeSystem?.systemSize ?? null;
 
   function toggle(pick: Picked) {
     setStatus({ kind: "idle" });
@@ -122,6 +144,7 @@ export function BetSlip({
           // Stable for this slip: a double-tapped submit replays the original
           // placement rather than placing a second bet.
           idempotencyKey: `slip:${crypto.randomUUID()}`,
+          ...(effectiveSystemSize === null ? {} : { systemSize: effectiveSystemSize }),
         }),
       });
 
@@ -230,15 +253,52 @@ export function BetSlip({
               />
             </label>
 
+            {systemOptions.length > 1 ? (
+              <label className="field">
+                Bet type
+                <select
+                  value={effectiveSystemSize ?? ""}
+                  onChange={(e) =>
+                    setSystemSize(e.target.value === "" ? null : Number(e.target.value))
+                  }
+                >
+                  <option value="">
+                    {picks.length === 1 ? "Single" : `Accumulator (${picks.length} folds)`}
+                  </option>
+                  {systemOptions
+                    .filter((option) => option.systemSize < picks.length)
+                    .map((option) => (
+                      <option key={option.systemSize} value={option.systemSize}>
+                        {option.label} — {option.combinations} bets
+                      </option>
+                    ))}
+                </select>
+                {activeSystem ? (
+                  <span className="hint">
+                    {activeSystem.combinations} separate bets. One losing leg still leaves winners.
+                  </span>
+                ) : null}
+              </label>
+            ) : null}
+
             <dl className="totals">
               <div>
                 <dt>{picks.length === 1 ? "Odds" : `${picks.length} legs`}</dt>
                 <dd>{pricing.totalOdds}</dd>
               </div>
-              <div>
-                <dt>Returns</dt>
-                <dd>{formatNaira(pricing.potentialReturn)}</dd>
-              </div>
+              {activeSystem ? (
+                <div>
+                  {/* The number people misread about system bets. Shown
+                      explicitly so nobody discovers it from their balance. */}
+                  <dt>Total cost</dt>
+                  <dd>{formatNaira(systemTotalStake(stakeMinor, activeSystem.combinations))}</dd>
+                </div>
+              ) : (
+                <div>
+                  <dt>Returns</dt>
+                  <dd>{formatNaira(pricing.potentialReturn)}</dd>
+                </div>
+              )}
             </dl>
 
             <button

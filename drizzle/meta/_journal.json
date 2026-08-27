@@ -106,6 +106,13 @@
       "when": 1788656993227,
       "tag": "0014_phase7_booking_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1788743393227,
+      "tag": "0015_phase8_bet_slips",
+      "breakpoints": true
     }
   ]
 }
