@@ -148,6 +148,20 @@
       "when": 1789175393227,
       "tag": "0020_phase14_promotions",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789261793227,
+      "tag": "0021_phase15_referrals",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789348193227,
+      "tag": "0022_phase21_support",
+      "breakpoints": true
     }
   ]
 }

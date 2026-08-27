@@ -622,6 +622,22 @@ section.card h2 { margin: 0 0 8px; font-size: 16px; }
 .statement .credit { color: var(--accent); font-weight: 700; }
 .statement .debit { color: var(--ink); font-weight: 700; }
 
+/* --- chat --------------------------------------------------------------- */
+.chat-turn {
+  padding: 11px 13px;
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  font-size: 14px;
+}
+.chat-turn.user { background: var(--accent-wash); }
+.chat-role {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
 /* --- progress ------------------------------------------------------------ */
 .progress-track {
   height: 6px;

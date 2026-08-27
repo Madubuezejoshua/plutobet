@@ -83,6 +83,10 @@ export const RATE_RULES = {
   // to mass-create accounts for bonus abuse.
   otp: { limit: 10, windowSeconds: 60 * 15 },
   register: { limit: 5, windowSeconds: 60 * 15 },
+  // The assistant is cheap per call today and will not be once a model is
+  // wired in. Bounded now so the limit is not first considered on the day it
+  // starts costing money per token.
+  ai: { limit: 30, windowSeconds: 60 },
   // Identity submission and document upload: infrequent by nature, tight
   // enough to blunt scripted probing of the uniqueness/exclusion checks.
   kyc: { limit: 8, windowSeconds: 60 * 15 },

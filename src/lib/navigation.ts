@@ -189,7 +189,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: "Pluto AI",
     href: "/pluto",
     icon: "✨",
-    status: "PLANNED",
+    status: "LIVE",
     phase: 16,
     blurb: "Ask for fixtures, analysis, or your balance in plain language.",
     group: "INFO",
