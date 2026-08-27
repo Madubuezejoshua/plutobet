@@ -64,6 +64,41 @@
       "when": 1788138593227,
       "tag": "0008_notifications_otp",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788224993227,
+      "tag": "0009_kyc_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788311393227,
+      "tag": "0010_phase2_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788397793227,
+      "tag": "0011_phase3_rbac",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788484193227,
+      "tag": "0012_phase4_wallet_buckets",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788570593227,
+      "tag": "0013_phase6_sports_taxonomy",
+      "breakpoints": true
     }
   ]
 }

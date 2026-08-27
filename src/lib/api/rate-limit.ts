@@ -83,4 +83,10 @@ export const RATE_RULES = {
   // to mass-create accounts for bonus abuse.
   otp: { limit: 10, windowSeconds: 60 * 15 },
   register: { limit: 5, windowSeconds: 60 * 15 },
+  // Identity submission and document upload: infrequent by nature, tight
+  // enough to blunt scripted probing of the uniqueness/exclusion checks.
+  kyc: { limit: 8, windowSeconds: 60 * 15 },
+  admin: { limit: 60, windowSeconds: 60 },
+  // Password change and reset reuse the `otp` budget: both verify a secret,
+  // which makes either one an oracle for guessing it if called freely.
 } as const satisfies Record<string, RateLimitRule>;

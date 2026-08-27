@@ -5,11 +5,14 @@ import { rateLimiter, RATE_RULES } from "@/lib/api/rate-limit";
 import { depositService, UnattributableDepositError } from "@/modules/payments/deposit.service";
 import type { DepositWebhookEvent } from "@/modules/payments/provider";
 import { verifyPaystackSignature } from "@/modules/payments/provider";
+import { mapTransferStatus } from "@/modules/payments/paystack";
+import { withdrawalService } from "@/modules/payments/withdrawal.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const PROVIDER = "paystack";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Paystack deposit webhook.
@@ -59,9 +62,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  /*
+   * Transfer events settle a withdrawal.
+   *
+   * These used to fall through to the "not an event we act on" branch below,
+   * which meant a payout could be submitted and never settled: the customer's
+   * money sat in PROCESSING indefinitely, neither paid nor returned. Handling
+   * them is what makes the withdrawal state machine terminate.
+   */
+  const eventName = typeof payload.event === "string" ? payload.event : "";
+  if (eventName.startsWith("transfer.")) {
+    return handleTransferEvent(payload);
+  }
+
   const event = toDepositEvent(payload);
   if (!event) {
-    // Authentic, but not an event we act on (transfer updates, disputes, ...).
+    // Authentic, but not an event we act on (disputes, customer updates, ...).
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
@@ -79,6 +95,56 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // A real failure — database down, ledger constraint violated. Return 5xx
     // so Paystack retries; the deposit path is idempotent, so a retry is safe.
     console.error("[paystack] webhook failed", error);
+    return NextResponse.json({ error: "INTERNAL" }, { status: 500 });
+  }
+}
+
+/**
+ * Settles a withdrawal from a transfer webhook.
+ *
+ * PROCESSING updates are acknowledged and ignored — Paystack emits several on
+ * the way to a terminal state, and acting on each would be noise. Only
+ * success and failure change anything.
+ *
+ * `reconcile` is idempotent: PAID is terminal and the database trigger refuses
+ * a second transition into it, so a replayed webhook cannot pay twice.
+ */
+async function handleTransferEvent(payload: Record<string, unknown>): Promise<NextResponse> {
+  const data = (payload.data ?? {}) as Record<string, unknown>;
+  const eventName = typeof payload.event === "string" ? payload.event : "";
+  const status = typeof data.status === "string" ? data.status : "";
+
+  // Our withdrawal id, echoed back as the reference we set when transferring.
+  const withdrawalId = String(data.reference ?? "");
+  if (!UUID_PATTERN.test(withdrawalId)) {
+    console.error("[paystack] transfer event with unrecognised reference", { withdrawalId });
+    // Acknowledged: retrying will not make the reference recognisable.
+    return NextResponse.json({ received: true, matched: false }, { status: 200 });
+  }
+
+  const outcome = mapTransferStatus(status);
+  if (outcome === "PROCESSING") {
+    return NextResponse.json({ received: true, settled: false }, { status: 200 });
+  }
+
+  try {
+    const result = await withdrawalService.reconcile(withdrawalId, {
+      status: outcome,
+      failureReason:
+        outcome === "FAILED"
+          ? // A reversal is money that left and came back — the bank accepted
+            // then rejected it. Worth distinguishing in the record from a
+            // transfer that never left.
+            eventName === "transfer.reversed"
+            ? "reversed by the receiving bank"
+            : (typeof data.reason === "string" ? data.reason : "transfer failed").slice(0, 300)
+          : undefined,
+    });
+    return NextResponse.json({ received: true, duplicate: result.duplicate }, { status: 200 });
+  } catch (error) {
+    console.error("[paystack] transfer settlement failed", { withdrawalId, error });
+    // 5xx so Paystack retries. Settlement is idempotent, so a retry is safe —
+    // and leaving a payout unsettled is worse than a duplicate delivery.
     return NextResponse.json({ error: "INTERNAL" }, { status: 500 });
   }
 }

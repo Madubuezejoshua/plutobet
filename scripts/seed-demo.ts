@@ -43,11 +43,19 @@ async function main(): Promise<void> {
       RETURNING id
     `);
 
+    // All three buckets. The cash one is what the rest of the seed credits.
+    await tx.execute(sql`
+      INSERT INTO wallets (kind, user_id, currency, bucket, cached_balance_minor)
+      SELECT 'USER', ${user!.id}::uuid, 'NGN', bucket_kind, 0
+      FROM (VALUES ('CASH'::wallet_bucket), ('BONUS'::wallet_bucket), ('LOCKED'::wallet_bucket))
+        AS b(bucket_kind)
+      ON CONFLICT DO NOTHING
+    `);
+
     const [wallet] = await tx.execute<{ id: string }>(sql`
-      INSERT INTO wallets (kind, user_id, currency, cached_balance_minor)
-      VALUES ('USER', ${user!.id}::uuid, 'NGN', 0)
-      ON CONFLICT (user_id, currency) WHERE kind = 'USER' DO UPDATE SET updated_at = now()
-      RETURNING id
+      SELECT id FROM wallets
+      WHERE user_id = ${user!.id}::uuid AND kind = 'USER'
+        AND currency = 'NGN' AND bucket = 'CASH'
     `);
 
     await tx.execute(sql`

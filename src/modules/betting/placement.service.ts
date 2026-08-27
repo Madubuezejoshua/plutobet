@@ -304,6 +304,7 @@ export class PlacementService {
       FROM bets b
       JOIN wallets w
         ON w.user_id = b.user_id AND w.kind = 'USER' AND w.currency = 'NGN'
+        AND w.bucket = 'CASH'
       WHERE b.stake_txn_id = ${stakeTxnId}::uuid
     `);
     if (!row) return null;

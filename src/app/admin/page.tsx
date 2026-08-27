@@ -1,156 +1,205 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AdminRequiredError, requireAdmin } from "@/modules/auth/admin";
-import { exposureService } from "@/modules/risk/exposure.service";
-import { reportingService } from "@/modules/reporting/reporting.service";
+import {
+  AdminRequiredError,
+  PermissionDeniedError,
+  requirePermission,
+} from "@/modules/admin/guard";
+import { dashboardService, type HealthState } from "@/modules/admin/dashboard.service";
+import { naira, nairaCompact } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-function formatNaira(minor: bigint): string {
-  const sign = minor < 0n ? "-" : "";
-  const abs = minor < 0n ? -minor : minor;
-  const naira = (abs / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${sign}₦${naira}.${(abs % 100n).toString().padStart(2, "0")}`;
-}
+const HEALTH_PILL: Record<HealthState, string> = {
+  OK: "pill ok",
+  DEGRADED: "pill warning",
+  DOWN: "pill critical",
+  UNKNOWN: "pill",
+};
 
 /**
- * Trading and compliance overview.
+ * Admin dashboard.
  *
- * Read-only by design. Everything that moves money lives behind its own
- * action with re-authentication and a mandatory reason (§3.14), so a
- * dashboard left open on an unlocked screen exposes information, not funds.
+ * Read-only by design. Everything that moves money or grants authority lives
+ * behind its own action with a mandatory reason and, for the sensitive ones,
+ * step-up re-authentication — so a dashboard left open on an unlocked screen
+ * exposes information, not funds.
+ *
+ * Tiles are filtered by permission: a support agent sees the user counts and
+ * not the money.
  */
-export default async function AdminPage() {
+export default async function AdminDashboardPage() {
+  let identity;
   try {
-    await requireAdmin();
+    identity = await requirePermission("dashboard.read");
   } catch (error) {
     if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof PermissionDeniedError) {
+      return (
+        <>
+          <header className="page-head">
+            <h1>Dashboard</h1>
+          </header>
+          <p className="notice error">{error.message}</p>
+        </>
+      );
+    }
     throw error;
   }
 
-  const now = new Date();
-  const from = new Date(now.getTime() - 7 * 24 * 60 * 60_000);
+  const can = (permission: Parameters<typeof identity.permissions.has>[0]) =>
+    identity.permissions.has(permission);
 
-  const [alerts, topMarkets, openLiability, turnover, signals] = await Promise.all([
-    exposureService.alerts(),
-    exposureService.topExposedMarkets(10),
-    exposureService.totalOpenLiabilityMinor(),
-    reportingService.dailyTurnover({ from, to: now }),
-    exposureService.allSignals(),
+  const [metrics, health] = await Promise.all([
+    dashboardService.metrics().catch((error: unknown) => {
+      console.error("[admin] metrics unavailable", error);
+      return null;
+    }),
+    dashboardService.health(),
   ]);
 
-  const week = turnover.reduce(
-    (total, day) => total + BigInt(day.grossGamingRevenueMinor),
-    0n,
-  );
-
   return (
-    <main className="shell">
-      <nav className="nav" aria-label="Primary navigation">
-        <div className="brand">Bet Platform · Admin</div>
-        <div className="nav-links">
-          <a href="/admin">Overview</a>
-          <a href="/admin/reports">Reports</a>
-          <a href="/sports">Site</a>
-        </div>
-      </nav>
-
+    <>
       <header className="page-head">
-        <h1>Trading overview</h1>
-        <p className="muted">Live liability, exposure alerts, and risk signals.</p>
+        <h1>Dashboard</h1>
+        <p className="muted">Figures are read from the ledger, not a metrics table.</p>
       </header>
 
-      <section className="metrics">
-        <div className="card metric">
-          <span className="metric-label">Open liability</span>
-          <strong className="metric-value">{formatNaira(openLiability)}</strong>
-          <span className="muted small">Across all open markets</span>
-        </div>
-        <div className="card metric">
-          <span className="metric-label">GGR · 7 days</span>
-          <strong className="metric-value">{formatNaira(week)}</strong>
-          <span className="muted small">Stakes less payouts and refunds</span>
-        </div>
-        <div className="card metric">
-          <span className="metric-label">Exposure alerts</span>
-          <strong className="metric-value">{alerts.length}</strong>
-          <span className="muted small">Markets above 80% of ceiling</span>
-        </div>
-        <div className="card metric">
-          <span className="metric-label">Risk signals</span>
-          <strong className="metric-value">{signals.length}</strong>
-          <span className="muted small">For review — no automatic action</span>
-        </div>
-      </section>
-
-      <section className="card">
-        <h2>Exposure</h2>
-        {topMarkets.length === 0 ? (
-          <p className="muted small">No market is carrying liability yet.</p>
-        ) : (
-          <table className="statement">
-            <thead>
-              <tr>
-                <th scope="col">Fixture</th>
-                <th scope="col">Market</th>
-                <th scope="col" className="right">Liability</th>
-                <th scope="col" className="right">Ceiling</th>
-                <th scope="col" className="right">Used</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topMarkets.map((market) => {
-                const alert = alerts.find((a) => a.marketId === market.marketId);
-                return (
-                  <tr key={market.marketId}>
-                    <td>{market.fixture}</td>
-                    <td className="muted">{market.marketKey}</td>
-                    <td className="right">{formatNaira(market.totalLiabilityMinor)}</td>
-                    <td className="right muted">{formatNaira(market.ceilingMinor)}</td>
-                    <td className="right">
-                      <span
-                        className={
-                          alert?.severity === "CRITICAL"
-                            ? "pill critical"
-                            : alert
-                              ? "pill warning"
-                              : "pill"
-                        }
-                      >
-                        {market.utilisationPercent.toFixed(1)}%
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      <section className="card">
-        <h2>Risk signals</h2>
-        <p className="muted small">
-          Heuristics only. Shared addresses and staking bursts have innocent explanations —
-          these are for a human to judge, never grounds for automatic suspension.
+      {metrics === null ? (
+        <p className="notice error">
+          Metrics are unavailable — the database did not respond. See system health below.
         </p>
-        {signals.length === 0 ? (
-          <p className="muted small">Nothing flagged.</p>
-        ) : (
-          <ul className="signals">
-            {signals.map((signal, index) => (
-              <li key={`${signal.kind}-${index}`}>
-                <span className={`pill ${signal.severity === "HIGH" ? "critical" : "warning"}`}>
-                  {signal.severity}
-                </span>
-                <span>{signal.detail}</span>
-                <span className="muted small">
-                  {signal.userIds.length} account{signal.userIds.length === 1 ? "" : "s"}
-                </span>
+      ) : (
+        <>
+          <section className="metrics">
+            {can("users.read") ? (
+              <>
+                <div className="card metric">
+                  <span className="metric-label">Users</span>
+                  <strong className="metric-value">{metrics.users.total.toLocaleString()}</strong>
+                  <span className="muted small">{metrics.users.newToday} new today</span>
+                </div>
+                <div className="card metric">
+                  <span className="metric-label">Not active</span>
+                  <strong className="metric-value">{metrics.users.suspended}</strong>
+                  <span className="muted small">Suspended, restricted or closed</span>
+                </div>
+              </>
+            ) : null}
+
+            {can("deposits.read") ? (
+              <div className="card metric">
+                <span className="metric-label">Deposits today</span>
+                <strong className="metric-value">
+                  {nairaCompact(metrics.money.depositsTodayMinor)}
+                </strong>
+                <span className="muted small">{naira(metrics.money.depositsTodayMinor)}</span>
+              </div>
+            ) : null}
+
+            {can("withdrawals.read") ? (
+              <div className="card metric">
+                <span className="metric-label">Withdrawals today</span>
+                <strong className="metric-value">
+                  {nairaCompact(metrics.money.withdrawalsTodayMinor)}
+                </strong>
+                <span className="muted small">{naira(metrics.money.withdrawalsTodayMinor)}</span>
+              </div>
+            ) : null}
+
+            {can("bets.read") ? (
+              <>
+                <div className="card metric">
+                  <span className="metric-label">Stakes today</span>
+                  <strong className="metric-value">
+                    {nairaCompact(metrics.money.stakesTodayMinor)}
+                  </strong>
+                  <span className="muted small">Turnover</span>
+                </div>
+                <div className="card metric">
+                  <span className="metric-label">Payouts today</span>
+                  <strong className="metric-value">
+                    {nairaCompact(metrics.money.payoutsTodayMinor)}
+                  </strong>
+                  <span className="muted small">
+                    GGR {nairaCompact(metrics.money.stakesTodayMinor - metrics.money.payoutsTodayMinor)}
+                  </span>
+                </div>
+              </>
+            ) : null}
+          </section>
+
+          <section className="section">
+            <div className="section-head">
+              <h2>Needs attention</h2>
+            </div>
+            <div className="metrics">
+              {can("withdrawals.read") ? (
+                <div className="card metric">
+                  <span className="metric-label">Pending withdrawals</span>
+                  <strong className="metric-value">
+                    <span className={metrics.queues.pendingWithdrawals > 0 ? "" : "muted"}>
+                      {metrics.queues.pendingWithdrawals}
+                    </span>
+                  </strong>
+                  <span className="muted small">Requested or approved, not yet paid</span>
+                </div>
+              ) : null}
+
+              {can("kyc.read") ? (
+                <div className="card metric">
+                  <span className="metric-label">Pending KYC</span>
+                  <strong className="metric-value">{metrics.queues.pendingKyc}</strong>
+                  {can("kyc.review") && metrics.queues.pendingKyc > 0 ? (
+                    <Link href="/admin/kyc" className="muted small">
+                      Review →
+                    </Link>
+                  ) : (
+                    <span className="muted small">Documents awaiting a decision</span>
+                  )}
+                </div>
+              ) : null}
+
+              {can("reconciliation.read") ? (
+                <div className="card metric">
+                  <span className="metric-label">Flagged wallets</span>
+                  <strong className="metric-value">
+                    {metrics.queues.flaggedWallets > 0 ? (
+                      <span className="pill critical">{metrics.queues.flaggedWallets}</span>
+                    ) : (
+                      0
+                    )}
+                  </strong>
+                  <span className="muted small">Cached balance diverged from the ledger</span>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </>
+      )}
+
+      {can("system.read") ? (
+        <section className="card">
+          <h2>System health</h2>
+          <p className="muted small">
+            Only the database and cache are actually probed. Everything else reports
+            <strong> unknown</strong> rather than a green tick it has not earned — a dashboard
+            that reassures you about something it never checked is worse than one that admits it.
+          </p>
+          <ul className="health-list">
+            {health.map((check) => (
+              <li key={check.component}>
+                <span className={HEALTH_PILL[check.state]}>{check.state}</span>
+                <span className="component">{check.component}</span>
+                <span className="detail">{check.detail}</span>
+                {check.latencyMs !== null ? (
+                  <span className="muted small">{check.latencyMs}ms</span>
+                ) : null}
               </li>
             ))}
           </ul>
-        )}
-      </section>
-    </main>
+        </section>
+      ) : null}
+    </>
   );
 }

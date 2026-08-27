@@ -5,8 +5,16 @@ import { AccountNotEligibleError, BetRejectedError } from "@/modules/betting/err
 import { CasinoError } from "@/modules/casino/errors";
 import { RgViolationError } from "@/modules/responsible/errors";
 import { ActiveSessionRequiredError, requireActiveSession } from "@/modules/auth/session";
+import {
+  AdminRequiredError,
+  PermissionDeniedError,
+  ReauthRequiredError,
+  requireAdminIdentity,
+} from "@/modules/admin/guard";
 import { InsufficientFundsError } from "@/modules/wallet/errors";
 import { WithdrawalRejectedError } from "@/modules/payments/errors";
+import { KycRejectedError, KycReviewError } from "@/modules/kyc/kyc.service";
+import { DocumentRejectedError } from "@/modules/kyc/storage";
 import { rateLimiter, type RateLimitRule } from "./rate-limit";
 
 /**
@@ -49,6 +57,21 @@ function toResponse(error: unknown): NextResponse {
   if (error instanceof ActiveSessionRequiredError) {
     return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
   }
+  if (error instanceof AdminRequiredError) {
+    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  }
+  if (error instanceof PermissionDeniedError) {
+    // Names the missing permission: an operator who hits this needs to be able
+    // to tell their administrator what to grant, and it reveals nothing an
+    // authenticated admin could not infer from their own navigation.
+    return NextResponse.json({ error: "FORBIDDEN", message: error.message }, { status: 403 });
+  }
+  if (error instanceof ReauthRequiredError) {
+    return NextResponse.json(
+      { error: "REAUTH_REQUIRED", message: "Confirm your password to continue." },
+      { status: 401 },
+    );
+  }
   if (error instanceof ZodError) {
     return NextResponse.json(
       { error: "INVALID_REQUEST", issues: error.issues.map((i) => ({ path: i.path, message: i.message })) },
@@ -81,6 +104,15 @@ function toResponse(error: unknown): NextResponse {
   }
   if (error instanceof CasinoError) {
     return NextResponse.json({ error: error.code, message: error.message }, { status: 409 });
+  }
+  if (error instanceof KycRejectedError) {
+    return NextResponse.json({ error: error.reason, message: error.message }, { status: 409 });
+  }
+  if (error instanceof KycReviewError) {
+    return NextResponse.json({ error: error.reason, message: error.message }, { status: 409 });
+  }
+  if (error instanceof DocumentRejectedError) {
+    return NextResponse.json({ error: error.reason, message: error.message }, { status: 422 });
   }
 
   // Anything unrecognised is a bug. Log it server-side, tell the client
@@ -148,6 +180,38 @@ export function authedRoute(
         );
       }
       return await handler({ request, ip, userId });
+    } catch (error) {
+      return toResponse(error);
+    }
+  };
+}
+
+export interface AdminRouteContext extends RouteContext {
+  adminUserId: string;
+}
+
+/** Wraps a route that only an administrator may call. */
+export function adminRoute(
+  bucket: string,
+  rule: RateLimitRule,
+  handler: (context: AdminRouteContext) => Promise<NextResponse>,
+) {
+  return async (request: NextRequest): Promise<NextResponse> => {
+    try {
+      // Establishes only that the caller is an administrator. WHAT they may do
+      // is a separate question — each route calls `requirePermission` for the
+      // specific authority it needs. Being in the admin area is not authority.
+      const identity = await requireAdminIdentity();
+      const ip = clientIp(request);
+
+      const outcome = await rateLimiter.consume(bucket, identity.userId, rule);
+      if (!outcome.allowed) {
+        return NextResponse.json(
+          { error: "RATE_LIMITED" },
+          { status: 429, headers: { "retry-after": String(outcome.retryAfterSeconds) } },
+        );
+      }
+      return await handler({ request, ip, adminUserId: identity.userId });
     } catch (error) {
       return toResponse(error);
     }

@@ -3,7 +3,10 @@ import { hashPassword } from "../auth/password";
 import { hashBvn, hashNin } from "../kyc/identity";
 import { normalizePhone } from "../notifications/phone";
 import { walletService, WalletService } from "../wallet/wallet.service";
+import { bucketService } from "../wallet/buckets.service";
 import type { WalletTransaction } from "../wallet/types";
+import { assertOldEnough } from "./age";
+import { generateReferralCode, isValidReferralCode, normalizeReferralCode } from "./referral-code";
 
 /**
  * Account registration.
@@ -16,7 +19,12 @@ import type { WalletTransaction } from "../wallet/types";
 
 export class RegistrationError extends Error {
   constructor(
-    readonly code: "EMAIL_TAKEN" | "PHONE_TAKEN" | "WEAK_PASSWORD" | "IDENTITY_EXCLUDED",
+    readonly code:
+      | "EMAIL_TAKEN"
+      | "PHONE_TAKEN"
+      | "USERNAME_TAKEN"
+      | "WEAK_PASSWORD"
+      | "IDENTITY_EXCLUDED",
     message: string,
   ) {
     super(message);
@@ -36,6 +44,15 @@ export interface RegisterParams {
   email: string;
   password: string;
   phoneNumber: string;
+  /** YYYY-MM-DD. Required: an account with no proven age cannot legally bet. */
+  dateOfBirth: string;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  /** ISO 3166-1 alpha-2. Defaults to NG. */
+  country?: string;
+  /** Someone else's referral code, as typed. Ignored if unrecognised. */
+  referredByCode?: string;
   /** Set once the phone OTP has been verified. */
   phoneVerified?: boolean;
 }
@@ -43,6 +60,7 @@ export interface RegisterParams {
 export interface RegisteredUser {
   userId: string;
   walletId: string;
+  referralCode: string;
 }
 
 export class RegistrationService {
@@ -52,6 +70,19 @@ export class RegistrationService {
     const email = params.email.trim().toLowerCase();
     // Throws on a malformed number before anything is written.
     const phoneNumber = normalizePhone(params.phoneNumber);
+    // Throws UnderageError / InvalidDateOfBirthError. Checked FIRST, before any
+    // work is done on behalf of someone who must not have an account at all.
+    const dateOfBirth = assertOldEnough(params.dateOfBirth);
+
+    const username = params.username?.trim().toLowerCase() || null;
+    if (username !== null && !/^[a-z0-9_]{3,20}$/.test(username)) {
+      throw new RangeError("username must be 3-20 characters of a-z, 0-9 or underscore");
+    }
+
+    const country = (params.country ?? "NG").trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(country)) {
+      throw new RangeError("country must be an ISO 3166-1 alpha-2 code");
+    }
 
     if (
       params.password.length < MIN_PASSWORD_LENGTH ||
@@ -67,26 +98,73 @@ export class RegistrationService {
     // holding a database transaction open for the duration would pin a
     // connection for hundreds of milliseconds per signup.
     const passwordHash = await hashPassword(params.password);
+    const referralCode = generateReferralCode();
 
     return this.wallet.withMoneyTransaction(async ({ tx }) => {
-      await this.assertContactAvailable(tx, email, phoneNumber);
+      await this.assertContactAvailable(tx, email, phoneNumber, username);
+      const referrerId = await this.resolveReferrer(tx, params.referredByCode);
 
       const [user] = await tx.execute<{ id: string }>(sql`
-        INSERT INTO users (email, phone_number, password_hash, status, kyc_level)
-        VALUES (${email}, ${phoneNumber}, ${passwordHash}, 'ACTIVE', 0)
+        INSERT INTO users (
+          email, phone_number, password_hash, status, kyc_level,
+          first_name, last_name, username, date_of_birth, country,
+          referral_code, referred_by, phone_verified_at
+        )
+        VALUES (
+          ${email}, ${phoneNumber}, ${passwordHash}, 'ACTIVE', 0,
+          ${params.firstName?.trim() || null}, ${params.lastName?.trim() || null},
+          ${username}, ${dateOfBirth}::date, ${country},
+          ${referralCode}, ${referrerId}::uuid,
+          ${params.phoneVerified ? sql`now()` : sql`NULL`}
+        )
         RETURNING id
       `);
       if (!user) throw new Error("user insert returned no row");
 
-      const [wallet] = await tx.execute<{ id: string }>(sql`
-        INSERT INTO wallets (kind, user_id, currency, cached_balance_minor)
-        VALUES ('USER', ${user.id}::uuid, 'NGN', 0)
-        RETURNING id
-      `);
-      if (!wallet) throw new Error("wallet insert returned no row");
+      // All three balance buckets, created together with the account. Lazy
+      // creation would mean two concurrent credits could both find no row and
+      // both insert, which the unique index turns into a failed deposit.
+      await bucketService.ensureBuckets(tx, user.id);
 
-      return { userId: user.id, walletId: wallet.id };
+      const [wallet] = await tx.execute<{ id: string }>(sql`
+        SELECT id FROM wallets
+        WHERE user_id = ${user.id}::uuid AND kind = 'USER'
+          AND currency = 'NGN' AND bucket = 'CASH'
+      `);
+      if (!wallet) throw new Error("cash wallet was not created");
+
+      // Preferences are created here rather than lazily so every account has a
+      // row from the moment it exists — a missing row and a row of defaults
+      // read the same to the product, and one of them needs a null check at
+      // every call site.
+      await tx.execute(sql`
+        INSERT INTO user_preferences (user_id) VALUES (${user.id}::uuid)
+        ON CONFLICT (user_id) DO NOTHING
+      `);
+
+      return { userId: user.id, walletId: wallet.id, referralCode };
     });
+  }
+
+  /**
+   * Looks up who referred this signup.
+   *
+   * An unrecognised code is deliberately NOT an error: the person signing up
+   * did nothing wrong, and failing their registration because a friend read a
+   * character out wrong would be a poor trade. It simply records no referrer.
+   */
+  private async resolveReferrer(
+    tx: WalletTransaction,
+    code: string | undefined,
+  ): Promise<string | null> {
+    if (!code) return null;
+    const normalized = normalizeReferralCode(code);
+    if (!isValidReferralCode(normalized)) return null;
+
+    const [row] = await tx.execute<{ id: string }>(sql`
+      SELECT id FROM users WHERE referral_code = ${normalized}
+    `);
+    return row?.id ?? null;
   }
 
   /**
@@ -100,13 +178,21 @@ export class RegistrationService {
     tx: WalletTransaction,
     email: string,
     phoneNumber: string,
+    username: string | null,
   ): Promise<void> {
-    const [taken] = await tx.execute<{ by_email: boolean; by_phone: boolean }>(sql`
+    const [taken] = await tx.execute<{
+      by_email: boolean;
+      by_phone: boolean;
+      by_username: boolean;
+    }>(sql`
       SELECT
-        bool_or(email = ${email})        AS by_email,
-        bool_or(phone_number = ${phoneNumber}) AS by_phone
+        bool_or(email = ${email})              AS by_email,
+        bool_or(phone_number = ${phoneNumber}) AS by_phone,
+        bool_or(${username}::text IS NOT NULL AND username = ${username}) AS by_username
       FROM users
-      WHERE email = ${email} OR phone_number = ${phoneNumber}
+      WHERE email = ${email}
+         OR phone_number = ${phoneNumber}
+         OR (${username}::text IS NOT NULL AND username = ${username})
     `);
 
     if (taken?.by_email) {
@@ -117,6 +203,9 @@ export class RegistrationService {
       // destination and a contact point for self-exclusion, so sharing one
       // across accounts undermines both.
       throw new RegistrationError("PHONE_TAKEN", "an account with this phone number already exists");
+    }
+    if (taken?.by_username) {
+      throw new RegistrationError("USERNAME_TAKEN", "that username is taken");
     }
   }
 

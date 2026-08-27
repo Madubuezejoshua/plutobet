@@ -71,6 +71,8 @@ export async function getEventOdds(providerEventId: string): Promise<OddsSnapsho
  */
 export async function listUpcoming(opts?: {
   sport?: string;
+  /** Filter to one competition, by `competitions.id`. */
+  competitionId?: string;
   limit?: number;
 }): Promise<EventView[]> {
   const limit = opts?.limit ?? 50;
@@ -81,6 +83,7 @@ export async function listUpcoming(opts?: {
     .where(
       and(
         opts?.sport ? eq(events.sport, opts.sport) : undefined,
+        opts?.competitionId ? eq(events.competitionId, opts.competitionId) : undefined,
         inArray(events.status, ["PENDING", "LIVE"]),
         gte(events.startsAt, new Date()),
       ),

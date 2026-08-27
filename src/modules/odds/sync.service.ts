@@ -1,5 +1,6 @@
 import { and, asc, eq, gte, inArray, lt, lte } from "drizzle-orm";
 import { db } from "@/db/pooled";
+import { taxonomyService } from "@/modules/sports/taxonomy.service";
 import { OutOfBudgetError } from "./budget";
 import { events, markets, oddsSnapshots, selections } from "./schema";
 import type { BookmakerOdds, OddsProvider, OddsSnapshot } from "./provider";
@@ -39,8 +40,10 @@ export class OddsSyncService {
     return this.guard("fixtures", async () => {
       const found = await this.provider.listEvents(this.config.sport);
 
+      let classified = 0;
+
       for (const e of found) {
-        await db
+        const [row] = await db
           .insert(events)
           .values({
             provider: this.provider.name,
@@ -60,10 +63,37 @@ export class OddsSyncService {
               league: e.league,
               updatedAt: new Date(),
             },
-          });
+          })
+          .returning({ id: events.id });
+
+        /*
+         * Resolve the fixture onto the sports hierarchy.
+         *
+         * Deliberately best-effort and never fatal: an unclassified fixture is
+         * still a real match that people should be able to bet on, and
+         * refusing to ingest it because a competition label changed shape
+         * would take the whole board down over a formatting change. Failures
+         * are logged and the row can be backfilled.
+         */
+        if (row) {
+          try {
+            const resolved = await taxonomyService.resolveFixture({
+              sport: e.sport,
+              league: e.league,
+              home: e.home,
+              away: e.away,
+            });
+            if (resolved) {
+              await taxonomyService.classifyEvent(row.id, resolved);
+              classified += 1;
+            }
+          } catch (error) {
+            console.error("[odds-sync] could not classify fixture", e.eventId, error);
+          }
+        }
       }
 
-      return { upserted: found.length };
+      return { upserted: found.length, classified };
     });
   }
 

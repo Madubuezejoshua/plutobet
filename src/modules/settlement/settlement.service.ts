@@ -132,7 +132,8 @@ export class SettlementService {
         SELECT b.id, b.user_id, b.status::text AS status, b.stake_minor::text AS stake_minor,
                w.id AS wallet_id
         FROM bets b
-        LEFT JOIN wallets w ON w.user_id = b.user_id AND w.kind = 'USER' AND w.currency = 'NGN'
+        LEFT JOIN wallets w ON w.user_id = b.user_id AND w.kind = 'USER'
+                            AND w.currency = 'NGN' AND w.bucket = 'CASH'
         WHERE b.id = ${betId}::uuid
         FOR UPDATE OF b
       `);

@@ -384,6 +384,7 @@ export class WithdrawalService {
     const [row] = await tx.execute<{ id: string }>(sql`
       SELECT id FROM wallets
       WHERE user_id = ${userId}::uuid AND kind = 'USER' AND currency = 'NGN'
+        AND bucket = 'CASH'
     `);
     if (!row) throw new Error(`no NGN wallet for user ${userId}`);
     return row.id;

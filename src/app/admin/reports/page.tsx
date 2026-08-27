@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
-import { AdminRequiredError, requireAdmin } from "@/modules/auth/admin";
+import {
+  AdminRequiredError,
+  PermissionDeniedError,
+  requirePermission,
+} from "@/modules/admin/guard";
 import { reportingService } from "@/modules/reporting/reporting.service";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +27,19 @@ export default async function ReportsPage({
   searchParams: Promise<{ days?: string }>;
 }) {
   try {
-    await requireAdmin();
+    await requirePermission("reports.read");
   } catch (error) {
     if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof PermissionDeniedError) {
+      return (
+        <>
+          <header className="page-head">
+            <h1>Reporting</h1>
+          </header>
+          <p className="notice error">{error.message}</p>
+        </>
+      );
+    }
     throw error;
   }
 
@@ -51,16 +65,7 @@ export default async function ReportsPage({
   );
 
   return (
-    <main className="shell">
-      <nav className="nav" aria-label="Primary navigation">
-        <div className="brand">Bet Platform · Admin</div>
-        <div className="nav-links">
-          <a href="/admin">Overview</a>
-          <a href="/admin/reports">Reports</a>
-          <a href="/sports">Site</a>
-        </div>
-      </nav>
-
+    <>
       <header className="page-head">
         <h1>Reporting</h1>
         <p className="muted">Last {days} days · derived from the ledger</p>
@@ -165,6 +170,6 @@ export default async function ReportsPage({
           </div>
         )}
       </section>
-    </main>
+    </>
   );
 }

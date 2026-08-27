@@ -336,6 +336,7 @@ export class CasinoService {
       SELECT cached_balance_minor::text AS cached_balance_minor
       FROM wallets
       WHERE user_id = ${userId}::uuid AND kind = 'USER' AND currency = 'NGN'
+        AND bucket = 'CASH'
     `);
     if (!row) throw new Error(`no NGN wallet for user ${userId}`);
     return BigInt(row.cached_balance_minor);
@@ -345,6 +346,7 @@ export class CasinoService {
     const [row] = await tx.execute<{ id: string }>(sql`
       SELECT id FROM wallets
       WHERE user_id = ${userId}::uuid AND kind = 'USER' AND currency = 'NGN'
+        AND bucket = 'CASH'
     `);
     if (!row) throw new Error(`no NGN wallet for user ${userId}`);
     return row.id;

@@ -5,6 +5,16 @@
  * re-exported. Other modules move money only through this service contract.
  */
 export { WalletService, walletService } from "./wallet.service";
+export { BucketService, bucketService, BucketError } from "./buckets.service";
+export {
+  balancesForUser,
+  walletForUser,
+  walletForUserBucket,
+  walletsForUser,
+} from "./lookup";
+export type { AccountBalances, WalletBucketRow } from "./lookup";
+export { WALLET_BUCKETS } from "./schema";
+export type { WalletBucket } from "./schema";
 export {
   AdminAuthorizationError,
   IdempotencyConflictError,

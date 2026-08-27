@@ -37,6 +37,17 @@ export const events = pgTable(
     providerEventId: text("provider_event_id").notNull(),
     sport: text("sport").notNull(),
     league: text("league").notNull(),
+    /*
+     * Resolved entities from the sports hierarchy (phase 6). Nullable because
+     * classification is best-effort — an unclassified fixture must still be
+     * bettable. The TEXT columns above are what the provider SAID; these are
+     * what we resolved it to, and keeping both makes a bad resolution
+     * traceable.
+     */
+    sportId: uuid("sport_id"),
+    competitionId: uuid("competition_id"),
+    homeTeamId: uuid("home_team_id"),
+    awayTeamId: uuid("away_team_id"),
     home: text("home").notNull(),
     away: text("away").notNull(),
     startsAt: timestamp("starts_at", { withTimezone: true, precision: 6 }).notNull(),

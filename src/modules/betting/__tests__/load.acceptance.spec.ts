@@ -106,12 +106,41 @@ describe("placement under load", () => {
     expect(accepted + refused).toBe(total);
     expect(accepted).toBeGreaterThan(0);
 
+    /*
+     * The invariant queries below are SCOPED to the wallets this test created.
+     *
+     * They used to scan every USER wallet in the database. That coupled this
+     * test to every other file in the suite — and one of them
+     * (wallet/reconciliation.acceptance.spec.ts) deliberately corrupts a
+     * wallet's cached balance to prove the reconciler detects drift, and
+     * leaves it corrupted. Whenever file ordering put that test first, this
+     * one failed on damage it did not cause and was not testing for.
+     *
+     * Scoping loses nothing: the invariants worth asserting here are about
+     * the money THIS test moved.
+     */
+    // `sql.join` rather than an array parameter: Drizzle's template does not
+    // bind a JS array to `= ANY($1::uuid[])`. This is the pattern used
+    // elsewhere in the codebase for the same reason.
+    const walletIdList = sql.join(
+      accounts.map((account) => sql`${account.walletId}::uuid`),
+      sql`, `,
+    );
+    const userIdList = sql.join(
+      accounts.map((account) => sql`${account.userId}::uuid`),
+      sql`, `,
+    );
+
     // ---- INVARIANT 1: every ledger transaction balances ----
     const unbalanced = await setup.database.execute<{ n: number }>(sql`
       SELECT count(*)::int AS n FROM (
         SELECT lt.id
         FROM ledger_transactions lt
         JOIN ledger_entries le ON le.txn_id = lt.id
+        WHERE lt.id IN (
+          SELECT txn_id FROM ledger_entries
+          WHERE wallet_id IN (${walletIdList})
+        )
         GROUP BY lt.id
         HAVING COALESCE(SUM(le.amount_minor) FILTER (WHERE le.direction = 'DEBIT'), 0)
             <> COALESCE(SUM(le.amount_minor) FILTER (WHERE le.direction = 'CREDIT'), 0)
@@ -125,7 +154,7 @@ describe("placement under load", () => {
         SELECT w.id
         FROM wallets w
         LEFT JOIN ledger_entries le ON le.wallet_id = w.id
-        WHERE w.kind = 'USER'
+        WHERE w.kind = 'USER' AND w.id IN (${walletIdList})
         GROUP BY w.id, w.cached_balance_minor
         HAVING w.cached_balance_minor <> COALESCE(SUM(
           CASE WHEN le.direction = 'CREDIT' THEN le.amount_minor ELSE -le.amount_minor END
@@ -152,6 +181,7 @@ describe("placement under load", () => {
       FROM bets b
       LEFT JOIN ledger_transactions lt ON lt.id = b.stake_txn_id
       WHERE lt.id IS NULL
+        AND b.user_id IN (${userIdList})
     `);
     expect(Number(orphans[0]!.n)).toBe(0);
 

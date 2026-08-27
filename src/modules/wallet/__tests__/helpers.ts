@@ -99,7 +99,15 @@ export async function createZeroBalanceWalletWithOwner(
 
     const [wallet] = await tx
       .insert(wallets)
-      .values({ kind: "USER", userId: user.id, currency: "NGN", cachedBalanceMinor: 0n })
+      // `bucket` is required on USER wallets and must be NULL on SYSTEM ones,
+      // so it cannot have a blanket column default — every USER insert names it.
+      .values({
+        kind: "USER",
+        userId: user.id,
+        currency: "NGN",
+        bucket: "CASH",
+        cachedBalanceMinor: 0n,
+      })
       .returning({ id: wallets.id });
     if (!wallet) throw new Error("test wallet insert returned no id");
     return { userId: user.id, walletId: wallet.id };

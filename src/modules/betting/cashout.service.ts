@@ -173,6 +173,7 @@ export class CashOutService {
             FROM bets b
             LEFT JOIN wallets w
               ON w.user_id = b.user_id AND w.kind = 'USER' AND w.currency = 'NGN'
+              AND w.bucket = 'CASH'
             WHERE b.id = ${betId}::uuid
             FOR UPDATE OF b
           `
@@ -182,6 +183,7 @@ export class CashOutService {
             FROM bets b
             LEFT JOIN wallets w
               ON w.user_id = b.user_id AND w.kind = 'USER' AND w.currency = 'NGN'
+              AND w.bucket = 'CASH'
             WHERE b.id = ${betId}::uuid
           `,
     );

@@ -16,6 +16,25 @@ import { users } from "../users/schema";
 
 export const walletCurrencyEnum = pgEnum("wallet_currency", ["NGN"]);
 export const walletKindEnum = pgEnum("wallet_kind", ["USER", "SYSTEM"]);
+
+/**
+ * Balance segregation.
+ *
+ * A bucket is a WALLET ROW, not a column, so every ledger invariant applies to
+ * it unchanged — see drizzle/0012_phase4_wallet_buckets.sql for why a second
+ * balance column would have been silently unprotected.
+ *
+ *   CASH   — the customer's own money. The only bucket that may be withdrawn,
+ *            enforced by a database trigger, not by convention.
+ *   BONUS  — promotional credit with wagering conditions still attached. Not
+ *            the customer's money until those are met.
+ *   LOCKED — funds held: a withdrawal under review, or a disputed amount.
+ *            Visible to the customer so their balance never appears to have
+ *            silently shrunk.
+ */
+export const WALLET_BUCKETS = ["CASH", "BONUS", "LOCKED"] as const;
+export type WalletBucket = (typeof WALLET_BUCKETS)[number];
+export const walletBucketEnum = pgEnum("wallet_bucket", WALLET_BUCKETS);
 export const systemAccountEnum = pgEnum("system_account", [
   "CASH_IN",
   "CASH_OUT",
@@ -51,6 +70,8 @@ export const wallets = pgTable(
     }),
     systemAccount: systemAccountEnum("system_account"),
     currency: walletCurrencyEnum("currency").default("NGN").notNull(),
+    /** USER wallets only; NULL on SYSTEM contra accounts. */
+    bucket: walletBucketEnum("bucket"),
 
     // Only user wallets have a cached spendable balance. System wallets are
     // contra accounts and are always reconstructed from their ledger legs.
@@ -80,8 +101,8 @@ export const wallets = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("wallets_user_currency_unique")
-      .on(table.userId, table.currency)
+    uniqueIndex("wallets_user_currency_bucket_unique")
+      .on(table.userId, table.currency, table.bucket)
       .where(sql`${table.kind} = 'USER'`),
     uniqueIndex("wallets_system_currency_unique")
       .on(table.systemAccount, table.currency)
@@ -99,6 +120,11 @@ export const wallets = pgTable(
         AND ${table.systemAccount} IS NOT NULL
         AND ${table.cachedBalanceMinor} IS NULL
       )`,
+    ),
+    check(
+      "wallets_bucket_matches_kind",
+      sql`(${table.kind} = 'USER' AND ${table.bucket} IS NOT NULL)
+          OR (${table.kind} = 'SYSTEM' AND ${table.bucket} IS NULL)`,
     ),
     check(
       "wallets_cached_balance_nonnegative",

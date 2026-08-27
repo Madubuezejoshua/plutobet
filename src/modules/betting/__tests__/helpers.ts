@@ -45,10 +45,17 @@ export async function createFundedUser(
       })
       .returning({ id: users.id });
 
+    await tx.execute(sql`
+      INSERT INTO wallets (kind, user_id, currency, bucket, cached_balance_minor)
+      SELECT 'USER', ${user!.id}::uuid, 'NGN', bucket_kind, 0
+      FROM (VALUES ('CASH'::wallet_bucket), ('BONUS'::wallet_bucket), ('LOCKED'::wallet_bucket))
+        AS b(bucket_kind)
+    `);
+
     const [row] = await tx.execute<{ id: string }>(sql`
-      INSERT INTO wallets (kind, user_id, currency, cached_balance_minor)
-      VALUES ('USER', ${user!.id}::uuid, 'NGN', 0)
-      RETURNING id
+      SELECT id FROM wallets
+      WHERE user_id = ${user!.id}::uuid AND kind = 'USER'
+        AND currency = 'NGN' AND bucket = 'CASH'
     `);
     return { userId: user!.id, walletId: row!.id };
   });

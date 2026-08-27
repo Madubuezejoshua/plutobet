@@ -29,6 +29,23 @@ export class KycRejectedError extends Error {
   }
 }
 
+export class KycReviewError extends Error {
+  constructor(
+    readonly reason: "NOT_FOUND" | "ALREADY_REVIEWED",
+    message: string,
+  ) {
+    super(message);
+    this.name = "KycReviewError";
+  }
+}
+
+export interface PendingKycReview {
+  id: string;
+  userId: string;
+  email: string;
+  createdAt: Date;
+}
+
 export interface VerifyIdentityParams {
   userId: string;
   bvn?: string;
@@ -70,7 +87,7 @@ export class KycService {
       await this.assertIdentityUnused(tx, params.userId, bvnHash, ninHash);
 
       const [record] = await tx.execute<{ id: string }>(sql`
-        INSERT INTO kyc_records (user_id, level, bvn_hash, nin_hash, provider, provider_ref, verified_at)
+        INSERT INTO kyc_records (user_id, level, bvn_hash, nin_hash, provider, provider_ref, verified_at, status)
         VALUES (
           ${params.userId}::uuid,
           ${params.level},
@@ -78,7 +95,8 @@ export class KycService {
           ${ninHash},
           ${params.provider}::kyc_provider,
           ${params.providerRef ?? null},
-          now()
+          now(),
+          'APPROVED'
         )
         RETURNING id
       `);
@@ -112,12 +130,85 @@ export class KycService {
 
     await this.wallet.withMoneyTransaction(async ({ tx }) => {
       await tx.execute(sql`
-        INSERT INTO kyc_records (user_id, level, document_key, provider)
-        VALUES (${params.userId}::uuid, 0, ${stored.key}, 'MANUAL'::kyc_provider)
+        INSERT INTO kyc_records (user_id, level, document_key, provider, status)
+        VALUES (${params.userId}::uuid, 0, ${stored.key}, 'MANUAL'::kyc_provider, 'PENDING')
       `);
     });
 
     return { documentKey: stored.key };
+  }
+
+  /** Uploaded documents nobody has reviewed yet, oldest first. */
+  async listPendingReviews(): Promise<PendingKycReview[]> {
+    return this.wallet.withMoneyTransaction(async ({ tx }) => {
+      const rows = await tx.execute<{
+        id: string;
+        user_id: string;
+        email: string;
+        created_at: Date;
+      }>(sql`
+        SELECT r.id, r.user_id, u.email, r.created_at
+        FROM kyc_records r
+        JOIN users u ON u.id = r.user_id
+        WHERE r.status = 'PENDING' AND r.document_key IS NOT NULL
+        ORDER BY r.created_at ASC
+      `);
+      return rows.map((row) => ({
+        id: row.id,
+        userId: row.user_id,
+        email: row.email,
+        createdAt: new Date(row.created_at),
+      }));
+    });
+  }
+
+  /**
+   * Admin decision on one uploaded document.
+   *
+   * Approving raises the account to `level` (never demotes, same as
+   * verifyIdentity). Rejecting leaves the tier untouched — the account stays
+   * at whatever it already had. Either way the update is guarded by
+   * `status = 'PENDING'` so a review can only happen once; the trigger on
+   * kyc_records makes a second attempt fail loudly instead of silently
+   * overwriting the first reviewer's decision.
+   */
+  async reviewDocument(params: {
+    kycRecordId: string;
+    reviewerId: string;
+    decision: "APPROVE" | "REJECT";
+    level?: KycTier;
+    note?: string;
+  }): Promise<{ userId: string }> {
+    return this.wallet.withMoneyTransaction(async ({ tx }) => {
+      const status = params.decision === "APPROVE" ? "APPROVED" : "REJECTED";
+      const [row] = await tx.execute<{ user_id: string }>(sql`
+        UPDATE kyc_records
+        SET status = ${status}::kyc_review_status,
+            reviewed_by = ${params.reviewerId}::uuid,
+            reviewer_note = ${params.note ?? null},
+            verified_at = CASE WHEN ${status} = 'APPROVED' THEN now() ELSE verified_at END
+        WHERE id = ${params.kycRecordId}::uuid AND status = 'PENDING'
+        RETURNING user_id
+      `);
+      if (!row) {
+        const [existing] = await tx.execute<{ id: string }>(sql`
+          SELECT id FROM kyc_records WHERE id = ${params.kycRecordId}::uuid
+        `);
+        throw existing
+          ? new KycReviewError("ALREADY_REVIEWED", "this document has already been reviewed")
+          : new KycReviewError("NOT_FOUND", "no such kyc record");
+      }
+
+      if (params.decision === "APPROVE") {
+        const level = params.level ?? 2;
+        await tx.execute(sql`
+          UPDATE users SET kyc_level = GREATEST(kyc_level, ${level}), updated_at = now()
+          WHERE id = ${row.user_id}::uuid
+        `);
+      }
+
+      return { userId: row.user_id };
+    });
   }
 
   /**
@@ -144,6 +235,35 @@ export class KycService {
         SELECT kyc_level FROM users WHERE id = ${userId}::uuid
       `);
       return (row?.kyc_level ?? 0) as KycTier;
+    });
+  }
+
+  /** Everything the player-facing verification page needs in one read. */
+  async statusFor(userId: string): Promise<{
+    tier: KycTier;
+    hasIdentity: boolean;
+    document: { status: "PENDING" | "REJECTED"; note: string | null } | null;
+  }> {
+    return this.wallet.withMoneyTransaction(async ({ tx }) => {
+      const [account] = await tx.execute<{ kyc_level: number }>(sql`
+        SELECT kyc_level FROM users WHERE id = ${userId}::uuid
+      `);
+      const [identity] = await tx.execute<{ n: number }>(sql`
+        SELECT count(*)::int AS n FROM kyc_records
+        WHERE user_id = ${userId}::uuid AND (bvn_hash IS NOT NULL OR nin_hash IS NOT NULL)
+      `);
+      // Most recent document only: an old rejection should not keep blocking
+      // the page once a new one has been submitted.
+      const [document] = await tx.execute<{ status: "PENDING" | "REJECTED"; note: string | null }>(sql`
+        SELECT status, reviewer_note AS note FROM kyc_records
+        WHERE user_id = ${userId}::uuid AND document_key IS NOT NULL AND status <> 'APPROVED'
+        ORDER BY created_at DESC LIMIT 1
+      `);
+      return {
+        tier: (account?.kyc_level ?? 0) as KycTier,
+        hasIdentity: Number(identity?.n ?? 0) > 0,
+        document: document ?? null,
+      };
     });
   }
 

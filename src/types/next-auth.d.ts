@@ -8,6 +8,8 @@ declare module "next-auth" {
       role: UserRole;
       status: UserStatus;
       mustChangePassword: boolean;
+      /** Device-session id; null for tokens issued before sessions existed. */
+      sessionId: string | null;
     } & DefaultSession["user"];
   }
 
@@ -15,6 +17,7 @@ declare module "next-auth" {
     role: UserRole;
     status: UserStatus;
     mustChangePassword: boolean;
+    sessionId?: string | null;
   }
 }
 
@@ -24,8 +27,9 @@ declare module "next-auth/jwt" {
     role: UserRole;
     status: UserStatus;
     mustChangePassword: boolean;
+    /** Row in user_sessions. Its absence or revocation invalidates this token. */
+    sid?: string | null;
   }
 }
 
 export {};
-
