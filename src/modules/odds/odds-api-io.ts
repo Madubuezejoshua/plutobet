@@ -25,11 +25,17 @@ function isProviderRecord(value: unknown): value is ProviderRecord {
 /**
  * NOTE ON RESPONSE SHAPES
  * -----------------------
- * The exact JSON field names below are best-effort from the public docs.
- * Before building on top of this, run `scripts/probe-odds.ts` against a real
- * key, dump one /odds response, and correct `normaliseBook()`. Everything else
- * is insulated from that by the OddsProvider interface, so it stays a
- * one-function fix.
+ * The /events and /events/{id} shapes below are VERIFIED against real captured
+ * responses and pinned by `__tests__/provider-contract.acceptance.spec.ts`.
+ * Refresh the fixtures with `npm run odds:capture`; check the provider itself
+ * with `npm run odds:contract`.
+ *
+ * `normaliseBook()` is the exception — it is still best-effort from the public
+ * docs, because the account has no bookmakers selected and /odds therefore
+ * answers `400 Missing bookmakers`. Select bookmakers in the odds-api.io
+ * dashboard, capture a real /odds response, and correct it before trusting a
+ * price. Everything else is insulated by the OddsProvider interface, so that
+ * stays a one-function fix.
  */
 export class OddsApiIoProvider implements OddsProvider {
   readonly name = "odds-api.io";
@@ -77,7 +83,9 @@ export class OddsApiIoProvider implements OddsProvider {
 
   async listLiveEvents(): Promise<SportEvent[]> {
     const raw = await this.get<unknown>("/events/live", {}, "CRITICAL");
-    return this.asArray(raw).map((e) => this.normaliseEvent(e, String(e.sport ?? "")));
+    // No sport to fall back on here — the live feed spans all of them — so the
+    // fallback is empty and `normaliseEvent` reads the slug off the event.
+    return this.asArray(raw).map((e) => this.normaliseEvent(e, ""));
   }
 
   async getOdds(eventIds: string[], bookmakers: string[]): Promise<OddsSnapshot[]> {
@@ -150,17 +158,38 @@ export class OddsApiIoProvider implements OddsProvider {
     return "PENDING";
   }
 
+  /**
+   * Reads a field the feed sends as EITHER a bare string or a {name, slug}
+   * object, and never as "[object Object]".
+   *
+   * `sport` and `league` arrive as objects; `home` and `away` arrive as
+   * strings. `String()` on the object form yields "[object Object]" — which is
+   * truthy, non-empty, and therefore survives every null check between here
+   * and the database. Every event synced before this fix was stored with
+   * sport = "[object Object]".
+   *
+   * `prefer` picks the key that suits the column: sport wants the slug
+   * (an identifier we join on), league wants the name (shown to the customer).
+   */
+  private text(value: unknown, prefer: "slug" | "name"): string | undefined {
+    if (typeof value === "string") return value || undefined;
+    if (isProviderRecord(value)) {
+      const first = value[prefer];
+      const second = value[prefer === "slug" ? "name" : "slug"];
+      if (typeof first === "string" && first) return first;
+      if (typeof second === "string" && second) return second;
+    }
+    return undefined;
+  }
+
   private normaliseEvent(e: ProviderRecord, sport: string): SportEvent {
-    const league = this.asRecord(e.league);
-    const home = this.asRecord(e.home);
-    const away = this.asRecord(e.away);
     const participants = this.asArray(e.participants);
     return {
       eventId: String(e.id ?? e.eventId),
-      sport: String(e.sport ?? sport),
-      league: String(league.name ?? e.league ?? "unknown"),
-      home: String(home.name ?? e.home ?? participants[0]?.name ?? ""),
-      away: String(away.name ?? e.away ?? participants[1]?.name ?? ""),
+      sport: this.text(e.sport, "slug") ?? sport,
+      league: this.text(e.league, "name") ?? "unknown",
+      home: this.text(e.home, "name") ?? this.text(participants[0], "name") ?? "",
+      away: this.text(e.away, "name") ?? this.text(participants[1], "name") ?? "",
       startsAt: new Date(String(e.startTime ?? e.commenceTime ?? e.date)),
       status: this.normaliseStatus(e.status),
     };

@@ -211,6 +211,51 @@ export async function operationalAlerts(): Promise<SubsystemAlert[]> {
     }
   }
 
+  /*
+   * Matches that finished long ago and still have no result.
+   *
+   * This is the alarm for a SILENT settlement stall. Ingestion refuses to
+   * record a finished match with no `periods.ft` — correctly, since settling
+   * without a regulation score would pay against a number that is not there.
+   * But refusing is invisible: the poll keeps running, throws nothing, and the
+   * bets simply stay PENDING.
+   *
+   * That is the exact failure mode of an upstream shape change, and it is the
+   * one nobody notices until customers ask where their winnings are. The poll
+   * runs every minute and assumes a match is over after three hours, so six
+   * hours without a result means the pipeline is stuck, not merely slow.
+   */
+  const [stalled] = await db.execute<{ n: number; oldest: Date | null }>(sql`
+    SELECT count(*)::int AS n, min(e.starts_at) AS oldest
+    FROM events e
+    WHERE e.status IN ('PENDING', 'LIVE')
+      AND e.starts_at < now() - INTERVAL '6 hours'
+      AND NOT EXISTS (SELECT 1 FROM event_results r WHERE r.event_id = e.id)
+      AND EXISTS (
+        SELECT 1
+        FROM bet_legs l
+        JOIN bets b ON b.id = l.bet_id
+        JOIN selections s ON s.id = l.selection_id
+        JOIN markets m ON m.id = s.market_id
+        WHERE m.event_id = e.id AND b.status = 'PENDING'
+      )
+  `);
+  if (Number(stalled?.n ?? 0) > 0) {
+    const hours = stalled?.oldest
+      ? Math.round((Date.now() - new Date(stalled.oldest).getTime()) / 3_600_000)
+      : 0;
+    alerts.push({
+      subsystem: "Settlement",
+      // Customers have staked money on these and cannot be paid. Only a
+      // divergent ledger outranks it.
+      state: "DOWN",
+      detail:
+        `${stalled!.n} finished matches with pending bets have no result` +
+        (hours ? ` — the oldest ended ${hours} hours ago` : "") +
+        ". Check the provider response shape.",
+    });
+  }
+
   if (!process.env.PAYSTACK_SECRET_KEY) {
     alerts.push({
       subsystem: "Payments",

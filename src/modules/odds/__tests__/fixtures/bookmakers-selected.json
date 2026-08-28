@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-08-27T22:26:40.349Z",
+  "path": "/bookmakers/selected",
+  "status": 200,
+  "body": {
+    "bookmakers": [],
+    "count": 0
+  }
+}

@@ -40,10 +40,13 @@ Four groups, ordered by what actually unblocks them.
 | A1 | **`PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY`** | No deposits, no withdrawals. The money loop is inert | Paystack dashboard → live keys |
 | A2 | **One real low-value Paystack transfer, end to end** | The adapter is written against published docs and exercised only by fixtures. It has never moved a real naira | Send ₦100 to a real account, confirm the webhook settles it |
 | A3 | **`TERMII_API_KEY` + `RESEND_API_KEY`** | OTP codes print to the server console. **Nobody can register or reset a password** | Buy both; ~₦ trivial |
+| A6 | **Select bookmakers on odds-api.io** | `/bookmakers/selected` returns `count: 0`, so `/odds` answers `400 Missing bookmakers`. **No prices can be fetched, so nothing is bettable** | Pick bookmakers in their dashboard. Costs nothing — it is a settings page |
 | A4 | **Verify a database restore** | Neon has point-in-time restore. Nothing here has ever restored from it — *an untested backup is not a backup* | Restore to a scratch branch, confirm the ledger reconciles |
 | A5 | **Rotate the credentials pasted into chat** | Neon, Upstash, Backblaze, Inngest, odds-api.io are all compromised | Rotate each. **`IDENTITY_PEPPER` cannot be rotated** — every stored identity digest derives from it. Move it to managed secret storage instead |
 
 A4 is the one that gets skipped, and the one that matters on the worst day.
+**A6 is free and takes two minutes** — it was invisible until the contract work
+in §3 went looking.
 
 ### 🟠 B — Needs a commercial contract. No amount of code closes these.
 
@@ -63,7 +66,7 @@ connected. None is a rewrite — they are waiting on a signature, not a sprint.
 
 | # | Item | Phase | Why it matters |
 |---|---|---|---|
-| C1 | **Odds provider contract test** | 6 | ⚠️ **Highest-consequence gap here.** Settlement reads `scores.periods.ft` from odds-api.io. Validated *once*, by a manual probe (`probe.txt`). If the provider changes that shape, bets settle wrongly and money moves wrongly — with no test to catch it |
+| ~~C1~~ | ~~Odds provider contract test~~ | 6 | ✅ **Closed.** Real captured responses now pin the parse on every test run, a live opt-in check pins the provider's side, and a production alarm catches a silent settlement stall. **It found a real bug on the first run** — see §3 |
 | C2 | Email verification UI | 2 | The service exists; the screen does not |
 | C3 | Edit bet | 9 | Cash-out and resettlement are done; edit-bet is the remaining leg |
 | C4 | Backfill dates of birth | 20 | Accounts predating the age gate are *flagged* on their account page but not *blocked* |
@@ -115,9 +118,40 @@ where the customer could not spend it. Fixed and pinned by a regression test.
 
 **Any new query against `wallets` must include `bucket = 'CASH'`.**
 
-### 🟡 The odds parse is the single highest-consequence unguarded line
+### ✅ The odds parse is now guarded — and the guard caught a live bug
 
-See C1. It decides whether bets won or lost.
+Settlement decides won-or-lost from `scores.periods.ft`. That shape had been
+checked exactly once, by a human reading probe output. It is now pinned three ways:
+
+| Guard | Catches | Runs |
+|---|---|---|
+| `provider-contract.acceptance.spec.ts` | *our* parse regressing | every test run |
+| The same file's `LIVE` block (`ODDS_LIVE_CONTRACT=1`) | *the provider* changing shape | opt-in — costs API budget |
+| `Settlement` operational alert | a stall in production | continuously |
+
+The fixtures under `src/modules/odds/__tests__/fixtures/` are **real captured
+responses**, refreshed by `npx tsx scripts/capture-odds-fixtures.ts` (the API key
+is scrubbed recursively before anything is written). A fixture hand-typed to
+match the code would test nothing but the typist.
+
+**The bug it found immediately:** `sport` arrives as an object `{name, slug}`,
+not a string. The adapter did `String(e.sport ?? sport)` — which yields
+`"[object Object]"`. That value is truthy and non-empty, so it passed every null
+check between the adapter and the database. **Every event ever synced would have
+been stored with `sport = "[object Object]"`**, breaking sport browsing and
+filtering. Caught before any event was synced, so no data repair was needed.
+
+The third guard matters most. If the provider moves `periods.ft`, ingestion
+correctly refuses to record the result — but refusing is *invisible*: the poll
+keeps running, throws nothing, and bets sit `PENDING` while customers wait. The
+alarm fires when a finished match **with pending bets on it** has had no result
+for six hours, and names the provider shape as the place to look.
+
+### 🟠 Odds cannot currently be fetched at all
+
+`/bookmakers/selected` returns `{"bookmakers": [], "count": 0}`, so `/odds`
+answers `400 Missing bookmakers`. **Select bookmakers in the odds-api.io
+dashboard** — until then the adapter is correct and still returns nothing.
 
 ### 🟢 Two deliberate exemptions, documented in-file
 

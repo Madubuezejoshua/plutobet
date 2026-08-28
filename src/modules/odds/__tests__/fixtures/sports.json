@@ -1,0 +1,143 @@
+{
+  "capturedAt": "2026-08-27T22:26:39.947Z",
+  "path": "/sports",
+  "status": 200,
+  "body": [
+    {
+      "name": "Football",
+      "slug": "football"
+    },
+    {
+      "name": "Basketball",
+      "slug": "basketball"
+    },
+    {
+      "name": "Tennis",
+      "slug": "tennis"
+    },
+    {
+      "name": "Baseball",
+      "slug": "baseball"
+    },
+    {
+      "name": "American Football",
+      "slug": "american-football"
+    },
+    {
+      "name": "Ice Hockey",
+      "slug": "ice-hockey"
+    },
+    {
+      "name": "Esports",
+      "slug": "esports"
+    },
+    {
+      "name": "Darts",
+      "slug": "darts"
+    },
+    {
+      "name": "MMA",
+      "slug": "mixed-martial-arts"
+    },
+    {
+      "name": "Boxing",
+      "slug": "boxing"
+    },
+    {
+      "name": "Handball",
+      "slug": "handball"
+    },
+    {
+      "name": "Volleyball",
+      "slug": "volleyball"
+    },
+    {
+      "name": "Snooker",
+      "slug": "snooker"
+    },
+    {
+      "name": "Table Tennis",
+      "slug": "table-tennis"
+    },
+    {
+      "name": "Rugby",
+      "slug": "rugby"
+    },
+    {
+      "name": "Cricket",
+      "slug": "cricket"
+    },
+    {
+      "name": "Waterpolo",
+      "slug": "water-polo"
+    },
+    {
+      "name": "Futsal",
+      "slug": "futsal"
+    },
+    {
+      "name": "Beach Volley",
+      "slug": "beach-volleyball"
+    },
+    {
+      "name": "Aussie Rules",
+      "slug": "aussie-rules"
+    },
+    {
+      "name": "Floorball",
+      "slug": "floorball"
+    },
+    {
+      "name": "Squash",
+      "slug": "squash"
+    },
+    {
+      "name": "Beach Soccer",
+      "slug": "beach-soccer"
+    },
+    {
+      "name": "Lacrosse",
+      "slug": "lacrosse"
+    },
+    {
+      "name": "Curling",
+      "slug": "curling"
+    },
+    {
+      "name": "Padel",
+      "slug": "padel"
+    },
+    {
+      "name": "Bandy",
+      "slug": "bandy"
+    },
+    {
+      "name": "Gaelic Football",
+      "slug": "gaelic-football"
+    },
+    {
+      "name": "Beach Handball",
+      "slug": "beach-handball"
+    },
+    {
+      "name": "Athletics",
+      "slug": "athletics"
+    },
+    {
+      "name": "Badminton",
+      "slug": "badminton"
+    },
+    {
+      "name": "Cross-Country",
+      "slug": "cross-country"
+    },
+    {
+      "name": "Golf",
+      "slug": "golf"
+    },
+    {
+      "name": "Cycling",
+      "slug": "cycling"
+    }
+  ]
+}

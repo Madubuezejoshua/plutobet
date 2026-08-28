@@ -1,0 +1,529 @@
+{
+  "capturedAt": "2026-08-27T22:26:43.225Z",
+  "path": "/events?sport=football",
+  "status": 200,
+  "note": "sampled from 5000 events — a few of each status",
+  "body": [
+    {
+      "id": 71128258,
+      "home": "SC Corinthians SP",
+      "away": "AD Taubate SP",
+      "homeId": 260739,
+      "awayId": 260745,
+      "date": "2026-08-26T21:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Brazil - Paulista, Women",
+        "slug": "brazil-paulista-women"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 6,
+        "away": 2,
+        "periods": {
+          "ft": {
+            "home": 6,
+            "away": 2
+          },
+          "p1": {
+            "home": 2,
+            "away": 1
+          }
+        }
+      }
+    },
+    {
+      "id": 71128260,
+      "home": "SE Palmeiras SP",
+      "away": "Red Bull Bragantino SP",
+      "homeId": 552275,
+      "awayId": 749357,
+      "date": "2026-08-26T21:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Brazil - Paulista, Women",
+        "slug": "brazil-paulista-women"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 4,
+        "away": 1,
+        "periods": {
+          "ft": {
+            "home": 4,
+            "away": 1
+          },
+          "p1": {
+            "home": 4,
+            "away": 0
+          }
+        }
+      }
+    },
+    {
+      "id": 71128262,
+      "home": "Santos FC SP",
+      "away": "Mirassol FC SP",
+      "homeId": 263077,
+      "awayId": 1345768,
+      "date": "2026-08-26T21:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Brazil - Paulista, Women",
+        "slug": "brazil-paulista-women"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 1,
+        "away": 0,
+        "periods": {
+          "ft": {
+            "home": 1,
+            "away": 0
+          },
+          "p1": {
+            "home": 1,
+            "away": 0
+          }
+        }
+      }
+    },
+    {
+      "id": 71128256,
+      "home": "Ferroviaria SP",
+      "away": "Sao Paulo FC SP",
+      "homeId": 263071,
+      "awayId": 552291,
+      "date": "2026-08-26T21:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Brazil - Paulista, Women",
+        "slug": "brazil-paulista-women"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 3,
+        "away": 0,
+        "periods": {
+          "ft": {
+            "home": 3,
+            "away": 0
+          },
+          "p1": {
+            "home": 1,
+            "away": 0
+          }
+        }
+      }
+    },
+    {
+      "id": 73455010,
+      "home": "Cristobal Colon JAS",
+      "away": "Club Olimpia",
+      "homeId": 585575,
+      "awayId": 5997,
+      "date": "2026-08-26T21:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Paraguay - Copa Paraguay",
+        "slug": "paraguay-copa-paraguay"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 3,
+        "away": 5,
+        "periods": {
+          "ft": {
+            "home": 3,
+            "away": 5
+          },
+          "p1": {
+            "home": 2,
+            "away": 3
+          }
+        }
+      }
+    },
+    {
+      "id": 73352752,
+      "home": "Stetson Hatters",
+      "away": "Webber International Warriors",
+      "homeId": 456819,
+      "awayId": 1377416,
+      "date": "2026-08-26T22:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "USA - NCAA",
+        "slug": "usa-ncaa"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 29818503423,
+      "home": "Shillong Lajong FC II",
+      "away": "Nongkseh SCC",
+      "homeId": 10001253210327,
+      "awayId": 10004075256379,
+      "date": "2026-08-27T12:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "India - Shillong Premier League",
+        "slug": "india-shillong-premier-league"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 72510110,
+      "home": "Vpv",
+      "away": "FC Saaripotku",
+      "homeId": 626124,
+      "awayId": 722885,
+      "date": "2026-08-27T16:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Finland - Kolmonen, Western, Group 3",
+        "slug": "finland-kolmonen-western-group-3"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73352760,
+      "home": "Robert Morris Colonials",
+      "away": "Waynesburg Yellow Jackets",
+      "homeId": 460607,
+      "awayId": 1377434,
+      "date": "2026-08-27T17:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "USA - NCAA",
+        "slug": "usa-ncaa"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73247844,
+      "home": "Iona Gaels",
+      "away": "Seton Hall Pirates",
+      "homeId": 452471,
+      "awayId": 475292,
+      "date": "2026-08-27T17:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "USA - NCAA, Women",
+        "slug": "usa-ncaa-women"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73247872,
+      "home": "Fairleigh Dickinson Knights",
+      "away": "Stony Brook Seawolves",
+      "homeId": 452395,
+      "awayId": 475240,
+      "date": "2026-08-27T17:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "USA - NCAA, Women",
+        "slug": "usa-ncaa-women"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 31322595606,
+      "home": "Las Mandarinas",
+      "away": "FC Ezeiza",
+      "homeId": 10000778037060,
+      "awayId": 10001309571712,
+      "date": "2026-08-27T18:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Argentina - Torneo Promocional Amateur",
+        "slug": "argentina-torneo-promocional-amateur"
+      },
+      "status": "live",
+      "scores": {
+        "home": 0,
+        "away": 0,
+        "periods": {
+          "period1": {
+            "home": 0,
+            "away": 0
+          }
+        }
+      }
+    },
+    {
+      "id": 73436216,
+      "home": "ES Setif",
+      "away": "Ben Aknoun",
+      "homeId": 41756,
+      "awayId": 133444,
+      "date": "2026-08-27T18:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Algeria - Ligue 1",
+        "slug": "algeria-ligue-1"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 68307992,
+      "home": "HK Kopavogur",
+      "away": "Keflavik IF",
+      "homeId": 671243,
+      "awayId": 48029,
+      "date": "2026-08-27T19:15:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Iceland - 1. deild, Women",
+        "slug": "iceland-1-deild-women"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73939706,
+      "home": "Atletico Nacional SA",
+      "away": "Millonarios FC",
+      "homeId": 613972,
+      "awayId": 613992,
+      "date": "2026-08-27T21:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Colombia - Liga Femenina, Main Round, Group B",
+        "slug": "colombia-liga-femenina-main-round-group-b"
+      },
+      "status": "live",
+      "scores": {
+        "home": 0,
+        "away": 0,
+        "periods": {
+          "p1": {
+            "home": 0,
+            "away": 0
+          }
+        }
+      },
+      "clock": {
+        "minute": 66,
+        "playedSeconds": 4004,
+        "period": 2,
+        "running": true,
+        "statusDetail": "2nd half"
+      }
+    },
+    {
+      "id": 73858560,
+      "home": "Club Nacional de Football",
+      "away": "Albion FC",
+      "homeId": 3230,
+      "awayId": 417775,
+      "date": "2026-08-27T21:15:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Uruguay - Copa Uruguay, Group E",
+        "slug": "uruguay-copa-uruguay-group-e"
+      },
+      "status": "live",
+      "scores": {
+        "home": 0,
+        "away": 0,
+        "periods": {
+          "p1": {
+            "home": 0,
+            "away": 0
+          }
+        }
+      },
+      "clock": {
+        "minute": 51,
+        "playedSeconds": 3112,
+        "period": 2,
+        "running": true,
+        "statusDetail": "2nd half"
+      }
+    },
+    {
+      "id": 73455014,
+      "home": "Resistencia SC",
+      "away": "Cerro Porteno",
+      "homeId": 90968,
+      "awayId": 5991,
+      "date": "2026-08-27T21:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Paraguay - Copa Paraguay",
+        "slug": "paraguay-copa-paraguay"
+      },
+      "status": "live",
+      "scores": {
+        "home": 0,
+        "away": 0,
+        "periods": {
+          "p1": {
+            "home": 0,
+            "away": 0
+          }
+        }
+      },
+      "clock": {
+        "minute": 56,
+        "playedSeconds": 3400,
+        "running": true,
+        "statusDetail": "Halftime"
+      }
+    },
+    {
+      "id": 72963614,
+      "home": "Estudiantes de La Plata",
+      "away": "CA Barracas Central",
+      "homeId": 3206,
+      "awayId": 65668,
+      "date": "2026-08-27T22:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Argentina - Copa Argentina",
+        "slug": "argentina-copa-argentina"
+      },
+      "status": "live",
+      "scores": {
+        "home": 0,
+        "away": 0
+      },
+      "clock": {
+        "minute": 23,
+        "playedSeconds": 1389,
+        "period": 1,
+        "running": true,
+        "statusDetail": "1st half"
+      }
+    },
+    {
+      "id": 72037294,
+      "home": "Dijon",
+      "away": "Saint-Etienne",
+      "homeId": 1686,
+      "awayId": 1678,
+      "date": "2026-08-28T18:45:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "France - Ligue 2",
+        "slug": "france-ligue-2"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 67018496,
+      "home": "Viking FK",
+      "away": "Tromsoe IL",
+      "homeId": 810932,
+      "awayId": 250585,
+      "date": "2026-08-29T10:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Norway - 1st Division, Women",
+        "slug": "norway-1st-division-women"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    }
+  ]
+}

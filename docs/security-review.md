@@ -104,6 +104,24 @@ At scale that wants caching in Redis with a short TTL.
 
 ## 24.6 User journey coverage
 
+### Provider contract ✅
+
+Settlement's read of `scores.periods.ft` is the highest-consequence parse in the
+system. It is now pinned by `provider-contract.acceptance.spec.ts` against **real
+captured responses** (refresh: `npx tsx scripts/capture-odds-fixtures.ts`), by an
+opt-in live check against the provider itself (`ODDS_LIVE_CONTRACT=1`), and in
+production by a `Settlement` operational alert.
+
+The alert exists because the failure mode is *silent*. Ingestion correctly
+refuses to record a finished match with no regulation score — but refusing
+throws nothing, so bets simply stay `PENDING`. The alarm fires when a finished
+match **with pending bets** has had no result for six hours.
+
+Writing the test found a live defect: `sport` arrives as `{name, slug}`, and
+`String()` on it produced `"[object Object]"` — truthy, non-empty, and therefore
+past every null check into the database. No events had been synced yet, so
+nothing needed repairing.
+
 | Journey | Automated | Notes |
 |---|---|---|
 | Register → verify → login | ✅ | Including the age gate |
