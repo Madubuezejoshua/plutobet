@@ -1,34 +1,34 @@
 {
-  "capturedAt": "2026-08-27T22:26:43.691Z",
-  "path": "/events/71128258",
+  "capturedAt": "2026-08-30T20:32:24.197Z",
+  "path": "/events/72278456",
   "status": 200,
   "body": {
-    "id": 71128258,
-    "home": "SC Corinthians SP",
-    "away": "AD Taubate SP",
-    "homeId": 260739,
-    "awayId": 260745,
-    "date": "2026-08-26T21:30:00Z",
+    "id": 72278456,
+    "home": "Bravo Ljubljana",
+    "away": "Mura Murska Sobota",
+    "homeId": 362744,
+    "awayId": 2410,
+    "date": "2026-08-29T18:15:00Z",
     "sport": {
       "name": "Football",
       "slug": "football"
     },
     "league": {
-      "name": "Brazil - Paulista, Women",
-      "slug": "brazil-paulista-women"
+      "name": "Slovenia - PrvaLiga",
+      "slug": "slovenia-prvaliga"
     },
     "status": "settled",
     "scores": {
-      "home": 6,
-      "away": 2,
+      "home": 2,
+      "away": 0,
       "periods": {
         "ft": {
-          "home": 6,
-          "away": 2
+          "home": 2,
+          "away": 0
         },
         "p1": {
-          "home": 2,
-          "away": 1
+          "home": 1,
+          "away": 0
         }
       }
     }

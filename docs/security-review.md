@@ -71,6 +71,34 @@ already prevent all of them.
 
 ---
 
+## 24.2a Deployment configuration ⚠️
+
+The first deployment to Railway returned 500 on every page because
+`AUTH_SECRET` was not set. That is correct behaviour — NextAuth must never
+invent a signing secret, since a generated default would differ between
+instances and across restarts, silently invalidating every live session — but
+it was **undiagnosable from outside**. Static assets and the 404 page kept
+working, so it looked like a partial outage rather than a configuration error.
+
+Now addressed by `/api/health`, which names the failing configuration. Two
+properties of that endpoint are deliberate and should survive review:
+
+- **Unauthenticated.** A deployment that cannot authenticate anybody is exactly
+  when this is needed; an auth-gated health check is unreachable at the moment
+  it matters.
+- **Never reports a value.** Only whether each name is set and structurally
+  usable. Connection failures are reduced to an error class, because Postgres
+  failure messages happily include the host, the user, and sometimes the URL.
+
+It returns 503 while anything blocking is wrong, so uptime monitoring treats a
+misconfigured deployment as down.
+
+**Related fix:** `AUTH_SECRET ?? NEXTAUTH_SECRET` retained an empty string,
+since `""` is neither null nor undefined — a variable declared in a hosting
+dashboard but left blank never fell through to the alias. Now treated as absent.
+
+---
+
 ## 24.3 Backups and disaster recovery ❌
 
 **Not implemented. This is a genuine gap.**

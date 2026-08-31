@@ -13,11 +13,43 @@
 
 | Check | Result |
 |---|---|
-| Tests | ✅ **549 passing across 42 suites** |
+| Tests | ✅ **572 passing across 45 suites** |
 | Typecheck (`tsc --noEmit`) | ✅ Clean |
 | Production build (`next build`) | ✅ Clean |
 | Migrations | ✅ **24 of 24 applied to Neon** · 60 tables |
 | Both git remotes | ✅ Pushed, identical HEAD |
+| **Deployed environment** | ⚠️ **See §0.1 — this was never verified until Railway, and it failed** |
+
+### 0.1 Deployment was the untested surface
+
+Everything above passes locally and in CI, and none of it exercised a *deployed*
+environment. The first Railway deployment answered **every page with a 500**,
+and there was no way to tell from outside whether the database was unreachable,
+a migration was missing, or one variable had never been set.
+
+It was the last one: `AUTH_SECRET`. `authOptions.secret` is a getter that
+throws, every page reads a session, so a missing secret takes the whole site
+down — while static assets and the 404 page keep working, which makes it look
+like a partial outage rather than a configuration error.
+
+Three things came out of it, all now in place:
+
+- **`/api/health`** names the failing configuration. Unauthenticated by design
+  (a deployment that cannot authenticate anybody is exactly when it is needed),
+  and it reports only whether each name is set and usable — never a value.
+- **`global-error.tsx`** replaces "A server error occurred" with a page that
+  points at `/api/health` and states plainly that no money moved.
+- **The build script detected only Vercel.** On Railway, `VERCEL_ENV` is never
+  set, so migrations and the `app_role` grant silently did not run. It now
+  detects both, prints its target on every build, and warns loudly rather than
+  skipping in silence.
+
+A latent bug surfaced with it: `process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET`
+kept an **empty string**, because `""` is neither null nor undefined — so a
+variable declared in a dashboard but left blank never fell through to the other
+name. Fixed and pinned by tests.
+
+**Setup instructions are in [`docs/deployment.md`](docs/deployment.md).**
 
 **All 24 phases of the Master Build Prompt have implementation.**
 Unweighted mean across the phase table (§4): **~74%**, up from ~23% at audit.
@@ -40,13 +72,13 @@ Four groups, ordered by what actually unblocks them.
 | A1 | **`PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY`** | No deposits, no withdrawals. The money loop is inert | Paystack dashboard → live keys |
 | A2 | **One real low-value Paystack transfer, end to end** | The adapter is written against published docs and exercised only by fixtures. It has never moved a real naira | Send ₦100 to a real account, confirm the webhook settles it |
 | A3 | **`TERMII_API_KEY` + `RESEND_API_KEY`** | OTP codes print to the server console. **Nobody can register or reset a password** | Buy both; ~₦ trivial |
-| A6 | **Select bookmakers on odds-api.io** | `/bookmakers/selected` returns `count: 0`, so `/odds` answers `400 Missing bookmakers`. **No prices can be fetched, so nothing is bettable** | Pick bookmakers in their dashboard. Costs nothing — it is a settings page |
+| A6 | ~~Select bookmakers on odds-api.io~~ | ✅ **Resolved — and my earlier diagnosis was wrong.** The 400 only occurs when `bookmakers` is OMITTED, which the probe script did but the adapter does not. Selection happens implicitly on first use; the plan caps it at **2 bookmakers** (`1xbet` is active). The real fault was the adapter parse — see §3 | Done |
 | A4 | **Verify a database restore** | Neon has point-in-time restore. Nothing here has ever restored from it — *an untested backup is not a backup* | Restore to a scratch branch, confirm the ledger reconciles |
 | A5 | **Rotate the credentials pasted into chat** | Neon, Upstash, Backblaze, Inngest, odds-api.io are all compromised | Rotate each. **`IDENTITY_PEPPER` cannot be rotated** — every stored identity digest derives from it. Move it to managed secret storage instead |
 
 A4 is the one that gets skipped, and the one that matters on the worst day.
-**A6 is free and takes two minutes** — it was invisible until the contract work
-in §3 went looking.
+**A6 turned out to be a misdiagnosis on my part**, and chasing it uncovered
+something worse: the odds parse produced no prices at all. See §3.
 
 ### 🟠 B — Needs a commercial contract. No amount of code closes these.
 
@@ -67,13 +99,13 @@ connected. None is a rewrite — they are waiting on a signature, not a sprint.
 | # | Item | Phase | Why it matters |
 |---|---|---|---|
 | ~~C1~~ | ~~Odds provider contract test~~ | 6 | ✅ **Closed.** Real captured responses now pin the parse on every test run, a live opt-in check pins the provider's side, and a production alarm catches a silent settlement stall. **It found a real bug on the first run** — see §3 |
-| C2 | Email verification UI | 2 | The service exists; the screen does not |
+| ~~C2~~ | ~~Email verification UI~~ | 2 | ✅ **Closed.** The OTP service and EMAIL_VERIFY purpose already existed; nothing reached them, so every account had a null email_verified_at. Authenticated route + account-page flow |
 | C3 | Edit bet | 9 | Cash-out and resettlement are done; edit-bet is the remaining leg |
 | C4 | Backfill dates of birth | 20 | Accounts predating the age gate are *flagged* on their account page but not *blocked* |
 | C5 | Cache `liveVersion` in Redis | 9 | The live feed polls conditionally (304 on no change) but still runs a query per poll. Fine now, wrong at scale |
 | C6 | Personalisation | 19 | RAG corpus is built; per-user tailoring is not started |
 | C7 | Admin AI | 23 | Revenue/customer/alert reporting is built; the AI layer over it is not |
-| C8 | **Delete `legacy/`** | — | An entire abandoned NestJS/Prisma codebase, imported by nothing. It will confuse every future audit |
+| ~~C8~~ | ~~Delete `legacy/`~~ | — | ✅ **Closed.** 30 files removed, plus its tsconfig and eslint exclusions. Recoverable from git history |
 | C9 | Load-test the untested paths | 24 | Covered: bet placement under contention. **Not covered:** homepage, casino callbacks, live-feed polling at scale, Pluto AI concurrency |
 | C10 | `SENTRY_DSN` | 24 | Wired but unconfigured — currently flying blind on production errors |
 
@@ -147,16 +179,36 @@ keeps running, throws nothing, and bets sit `PENDING` while customers wait. The
 alarm fires when a finished match **with pending bets on it** has had no result
 for six hours, and names the provider shape as the place to look.
 
-### 🟠 Odds cannot currently be fetched at all
+### 🔴 The odds parse produced NO prices — found and fixed
 
-`/bookmakers/selected` returns `{"bookmakers": [], "count": 0}`, so `/odds`
-answers `400 Missing bookmakers`. **Select bookmakers in the odds-api.io
-dashboard** — until then the adapter is correct and still returns nothing.
+Chasing the bookmaker question uncovered the real fault. `normaliseBook()` was
+the last function in the adapter still written from published docs and never
+checked — because `scripts/probe-odds.ts` called `/odds` **without** a
+`bookmakers` parameter, got a `400`, and stopped there. The real response
+differs at every level:
 
-### 🟢 Two deliberate exemptions, documented in-file
+| Adapter expected | Feed actually sends |
+|---|---|
+| `bookmakers` as an array | **object keyed by bookmaker name** |
+| `markets` as an object map | **array of `{name, updatedAt, odds[]}`** |
+| selections as `{name, odds}` objects | **rows where `hdp` is the line and every other key is a selection** |
+| prices as numbers | **strings** — `"1.584"` |
 
-- **`lookup.ts` is exempt from the `dbDirect` rule.** Every function there is a single read taking no lock, and the wallet service re-locks before moving anything. Routing them through the unpooled pool would exhaust it on the header balance alone. *Re-review if anything there ever writes.*
-- **The sandbox payment provider refuses to boot in production**, because it cannot verify webhook signatures — it has no secret to verify against. Failing to start beats starting with an open door to the ledger. The **AI's rules-based fallback is the opposite case**: a keyword router cannot invent a fixture or be prompt-injected, so it degrades rather than refusing to start.
+`asArray()` on an object returns `[]`, so every snapshot came back with zero
+books. **Silent, and indistinguishable from a quiet market** — which is why it
+survived until a real response was finally captured.
+
+Fixed and pinned. The same fixture that used to yield nothing now parses **77
+selections across 3 markets**: `double_chance`, `handicap` (32 lines) and
+`over_under` (42 lines).
+
+The canonical mapper was already correct and was left alone: `Corners Totals`
+maps to `null` rather than colliding with goal totals, so a corners bet can
+never settle against the goal count. A test now pins that too.
+
+**Still unverified:** `1x2` did not appear in this bookmaker's response, so the
+match-result market — the most commonly bet one — has not been seen in a real
+payload. Worth confirming against a second bookmaker before launch.
 
 ---
 

@@ -195,44 +195,88 @@ export class OddsApiIoProvider implements OddsProvider {
     };
   }
 
+  /**
+   * Turns an /odds or /odds/multi response into snapshots.
+   *
+   * VERIFIED against real responses, and the previous version was wrong in a
+   * way that produced no prices at all rather than wrong ones:
+   *
+   *   /odds/multi  ->  [ { id, bookmakers: { "1xbet": [ …markets ] } } ]
+   *   /odds        ->    { id, bookmakers: { "1xbet": [ …markets ] } }
+   *
+   * `bookmakers` is an OBJECT KEYED BY BOOKMAKER NAME, not an array, so the
+   * old `asArray(entry.bookmakers)` returned [] every time and every snapshot
+   * came back with zero books. Silent, and indistinguishable from a quiet
+   * market — which is why it survived until a real response was captured.
+   */
   private normaliseSnapshots(raw: unknown): OddsSnapshot[] {
-    return this.asArray(raw).map((entry) => ({
-      eventId: String(entry.eventId ?? entry.id),
-      fetchedAt: new Date(),
-      books: this.asArray(entry.bookmakers ?? entry.books)
-        .map((b) => this.normaliseBook(b))
-        .filter((b): b is BookmakerOdds => b !== null),
-    }));
+    // /odds returns a bare object; /odds/multi an array. Accept both.
+    const entries = Array.isArray(raw) ? this.asArray(raw) : [this.asRecord(raw)];
+
+    return entries
+      .filter((entry) => entry.id !== undefined || entry.eventId !== undefined)
+      .map((entry) => ({
+        eventId: String(entry.eventId ?? entry.id),
+        fetchedAt: new Date(),
+        books: Object.entries(this.asRecord(entry.bookmakers))
+          .map(([bookmaker, markets]) => this.normaliseBook(bookmaker, markets))
+          .filter((b): b is BookmakerOdds => b !== null),
+      }));
   }
 
-  private normaliseBook(b: ProviderRecord): BookmakerOdds | null {
+  /**
+   * One bookmaker's markets.
+   *
+   * Real shape — a LIST of markets, each holding rows of prices:
+   *
+   *   [ { name: "Double Chance", updatedAt, odds: [ { "1X": "1.74", … } ] },
+   *     { name: "Totals",        updatedAt, odds: [ { hdp: 2.5, over: "3.33",
+   *                                                   under: "1.3" }, … ] } ]
+   *
+   * Each row is one line of a market. `hdp` is the line itself; every OTHER
+   * key on the row is a selection label whose value is the price as a STRING.
+   * Rows repeat per line, which is why over_2.5 and over_3.5 arrive as
+   * separate rows rather than as a line field on one selection.
+   */
+  private normaliseBook(bookmaker: string, rawMarkets: unknown): BookmakerOdds | null {
     const markets: ProviderMarket[] = [];
+    let newestUpdate = 0;
 
-    for (const [rawKey, payload] of Object.entries(this.asRecord(b.markets))) {
-      const key = mapMarketKey(rawKey);
-      if (!key) continue; // unsupported market — skip, don't guess
+    for (const entry of this.asArray(rawMarkets)) {
+      const key = mapMarketKey(String(entry.name ?? ""));
+      // Unsupported market — skip, never guess. "Corners Totals" must not
+      // become a goals total, and the canonical mapper refuses it for us.
+      if (!key) continue;
 
-      const payloadRecord = this.asRecord(payload);
-      const selections = this.asArray(payloadRecord.selections ?? payload)
-        .map((s) => {
-          const label = String(s.name ?? s.label ?? "");
-          const line = s.line !== undefined ? Number(s.line) : undefined;
-          return {
-            key: mapSelectionKey(key, label, line),
-            label,
-            price: Number(s.odds ?? s.price),
-            line,
-          };
-        })
-        // A zero/NaN price means suspended. Never surface it as bettable.
-        .filter((s) => Number.isFinite(s.price) && s.price > 1)
-        // An unmappable label is dropped rather than guessed. Previously each
-        // market had a fallthrough default ("home", "no", ...), so a label we
-        // did not anticipate produced a selection whose key contradicted the
-        // price shown to the user.
-        .flatMap<ProviderSelection>((s) =>
-          s.key === null ? [] : [{ key: s.key, label: s.label, price: s.price, line: s.line }],
-        );
+      const updated = Date.parse(String(entry.updatedAt ?? ""));
+      if (Number.isFinite(updated)) newestUpdate = Math.max(newestUpdate, updated);
+
+      const selections: ProviderSelection[] = [];
+
+      for (const row of this.asArray(entry.odds)) {
+        // `hdp` names the line and is not itself a selection.
+        const line = row.hdp === undefined ? undefined : Number(row.hdp);
+        if (line !== undefined && !Number.isFinite(line)) continue;
+
+        for (const [label, rawPrice] of Object.entries(row)) {
+          if (label === "hdp") continue;
+
+          // Prices arrive as strings ("1.584"). Number() on a malformed one
+          // gives NaN, which the guard below drops rather than surfacing.
+          const price = Number(rawPrice);
+          // A zero/NaN/1.0 price means suspended or unavailable. Never
+          // surface it as bettable.
+          if (!Number.isFinite(price) || price <= 1) continue;
+
+          const selectionKey = mapSelectionKey(key, label, line);
+          // An unmappable label is dropped rather than guessed. A selection
+          // whose key contradicts the price shown to the user is a wrong
+          // payout waiting to happen.
+          if (!selectionKey) continue;
+
+          selections.push({ key: selectionKey, label, price, line });
+        }
+      }
 
       if (selections.length) markets.push({ key, selections });
     }
@@ -240,10 +284,12 @@ export class OddsApiIoProvider implements OddsProvider {
     if (!markets.length) return null;
 
     return {
-      bookmaker: String(b.name ?? b.bookmaker),
+      bookmaker,
       markets,
-      updatedAt: new Date(String(b.updatedAt ?? b.lastUpdate ?? Date.now())),
+      // The provider timestamps each market, not the book. The newest is the
+      // honest answer to "how stale is this?" — an older one would make a
+      // moving board look frozen and trip the staleness alarm.
+      updatedAt: new Date(newestUpdate || Date.now()),
     };
   }
-
 }

@@ -199,3 +199,120 @@ describe.skipIf(!live)("odds-api.io LIVE contract", () => {
     expect(typeof settled.sport === "object" || typeof settled.sport === "string").toBe(true);
   }, 60_000);
 });
+
+/**
+ * THE ODDS PARSE.
+ *
+ * `normaliseBook` was the last unverified function in the adapter — written
+ * from published docs and never checked, because the probe script called
+ * /odds without a `bookmakers` parameter, got a 400, and stopped there. The
+ * real response has a different shape at every level, and the mismatch
+ * produced NO prices rather than wrong ones: silent, and indistinguishable
+ * from a quiet market.
+ */
+describe("odds-api.io price contract", () => {
+  function oddsFixture() {
+    const { body } = fixture("odds-multi");
+    const first = (body as any[])[0];
+    expect(first, "the odds fixture has no event — recapture it").toBeDefined();
+    return first;
+  }
+
+  it("nests bookmakers as an object keyed by name, not an array", () => {
+    const event = oddsFixture();
+
+    // Asserted on the RAW fixture. `asArray()` on this object returned [],
+    // which is exactly how every price was silently dropped.
+    expect(Array.isArray(event.bookmakers)).toBe(false);
+    expect(Object.keys(event.bookmakers).length).toBeGreaterThan(0);
+  });
+
+  it("gives each bookmaker a LIST of markets, each with rows of prices", () => {
+    const event = oddsFixture();
+    const markets = Object.values(event.bookmakers)[0] as any[];
+
+    expect(Array.isArray(markets)).toBe(true);
+    expect(markets[0]).toHaveProperty("name");
+    expect(markets[0]).toHaveProperty("odds");
+    expect(Array.isArray(markets[0].odds)).toBe(true);
+  });
+
+  it("actually produces prices — the regression that mattered", async () => {
+    const { body } = fixture("odds-multi");
+    serve(body);
+
+    const [snapshot] = await new OddsApiIoProvider("k", noBudget).getOdds(["72409660"], ["1xbet"]);
+
+    expect(snapshot, "no snapshot returned").toBeDefined();
+    // The old parse returned a snapshot with books: [] here.
+    expect(snapshot!.books.length, "NO BOOKMAKERS PARSED — prices are being dropped").toBeGreaterThan(0);
+
+    const book = snapshot!.books[0]!;
+    expect(book.bookmaker).toBeTruthy();
+    expect(book.markets.length).toBeGreaterThan(0);
+  });
+
+  it("prices every selection as a finite number above 1", async () => {
+    const { body } = fixture("odds-multi");
+    serve(body);
+
+    const [snapshot] = await new OddsApiIoProvider("k", noBudget).getOdds(["72409660"], ["1xbet"]);
+
+    for (const book of snapshot!.books) {
+      for (const market of book.markets) {
+        for (const selection of market.selections) {
+          // Prices arrive as STRINGS in the feed. A NaN reaching the betslip
+          // is a price the user cannot be charged for.
+          expect(Number.isFinite(selection.price)).toBe(true);
+          expect(selection.price).toBeGreaterThan(1);
+        }
+      }
+    }
+  });
+
+  it("never emits a selection key it could not map", async () => {
+    const { body } = fixture("odds-multi");
+    serve(body);
+
+    const [snapshot] = await new OddsApiIoProvider("k", noBudget).getOdds(["72409660"], ["1xbet"]);
+
+    for (const book of snapshot!.books) {
+      for (const market of book.markets) {
+        for (const selection of market.selections) {
+          // Settlement resolves a bet by parsing this key. Null, "undefined"
+          // or an empty key is a bet that can never be settled.
+          expect(selection.key).toBeTruthy();
+          expect(selection.key).not.toBe("undefined");
+          expect(selection.key).not.toBe("null");
+        }
+      }
+    }
+  });
+
+  it("keeps corner markets out of the goals markets", async () => {
+    const { body } = fixture("odds-multi");
+    serve(body);
+
+    const [snapshot] = await new OddsApiIoProvider("k", noBudget).getOdds(["72409660"], ["1xbet"]);
+    const raw = (body as any[])[0];
+    const rawNames = (Object.values(raw.bookmakers)[0] as any[]).map((m) => String(m.name));
+
+    // The feed prices "Corners Totals" alongside "Totals". Mapping the former
+    // onto over_under would settle a corners bet against the goal count —
+    // the single most expensive mapping mistake available here.
+    if (rawNames.some((n) => /corner/i.test(n))) {
+      const overUnder = snapshot!.books[0]!.markets.find((m) => m.key === "over_under");
+      const goalRows = (Object.values(raw.bookmakers)[0] as any[])
+        .filter((m) => String(m.name).toLowerCase() === "totals")
+        .flatMap((m) => m.odds as any[]);
+
+      if (overUnder && goalRows.length) {
+        // Every line present must come from the goals market, not corners.
+        const goalLines = new Set(goalRows.map((r) => Number(r.hdp)));
+        for (const selection of overUnder.selections) {
+          expect(goalLines.has(selection.line!)).toBe(true);
+        }
+      }
+    }
+  });
+});

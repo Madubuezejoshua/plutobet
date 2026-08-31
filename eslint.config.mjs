@@ -11,7 +11,6 @@ export default defineConfig([
     ".pgdata-*/**",
     "dist/**",
     "coverage/**",
-    "legacy/**",
     "drizzle/meta/**",
   ]),
   {

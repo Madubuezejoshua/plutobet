@@ -6,6 +6,7 @@ import { UTILITY_ROUTES } from "@/lib/navigation";
 import { profileService } from "@/modules/users/profile.service";
 import { maskPhone } from "@/modules/notifications/phone";
 import type { UserStatus } from "@/modules/users/schema";
+import { VerifyEmail } from "./verify-email";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Account" };
@@ -65,6 +66,7 @@ export default async function AccountPage() {
                 <span className={profile.emailVerified ? "pill ok" : "pill warning"}>
                   {profile.emailVerified ? "Verified" : "Unverified"}
                 </span>
+                <VerifyEmail verified={profile.emailVerified} />
               </td>
             </tr>
             <tr>

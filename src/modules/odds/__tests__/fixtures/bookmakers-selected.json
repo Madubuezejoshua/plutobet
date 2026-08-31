@@ -1,9 +1,11 @@
 {
-  "capturedAt": "2026-08-27T22:26:40.349Z",
+  "capturedAt": "2026-08-30T20:32:11.913Z",
   "path": "/bookmakers/selected",
   "status": 200,
   "body": {
-    "bookmakers": [],
-    "count": 0
+    "bookmakers": [
+      "1xbet"
+    ],
+    "count": 1
   }
 }

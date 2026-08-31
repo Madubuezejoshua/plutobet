@@ -25,6 +25,9 @@ if (!KEY) {
 const BASE = "https://api.odds-api.io/v3";
 const OUT = join(process.cwd(), "src/modules/odds/__tests__/fixtures");
 
+/** The plan allows two selected bookmakers; this one is active on the account. */
+const BOOKMAKER = process.env.ODDS_BOOKMAKER?.trim() || "1xbet";
+
 /**
  * Removes anything that could identify the account.
  *
@@ -116,6 +119,54 @@ async function main() {
   // score settlement depends on, so it is the one worth pinning.
   const settled =
     list.find((e: Record<string, unknown>) => String(e?.status).toLowerCase() === "settled") ?? list[0];
+
+  /*
+   * A real /odds/multi response.
+   *
+   * This is the one the adapter got wrong: the endpoint returns an ARRAY of
+   * events whose `bookmakers` is an OBJECT keyed by bookmaker name, not an
+   * array, and each value is a list of markets rather than a markets map. The
+   * previous shape was inferred from docs and produced zero prices.
+   *
+   * Prefers an upcoming fixture, because a settled match carries no live
+   * prices and would pin an empty response that proves nothing.
+   */
+  const upcoming = list.filter((e) =>
+    ["pending", "live"].includes(String(e?.status).toLowerCase()),
+  );
+
+  /*
+   * Top-tier fixtures first.
+   *
+   * `upcoming` is ordered by kickoff, and the earliest matches of any day are
+   * reserve and youth games that no bookmaker prices. Taking the first N found
+   * ten empty responses in a row and captured a fixture proving nothing.
+   */
+  const tier = (event: Record<string, unknown>) => {
+    const league = String((event.league as { name?: string })?.name ?? "");
+    if (/U1\d|Youth|Reserve|Amateur|Friendly/i.test(league)) return 2;
+    if (/Premier League|Liga|Serie A|Bundesliga|Ligue 1|Champions|Cup/i.test(league)) return 0;
+    return 1;
+  };
+  const candidates = [...upcoming].sort((a, b) => tier(a) - tier(b));
+
+  let capturedOdds = false;
+  for (const event of candidates.slice(0, 12)) {
+    const body = await capture('odds-multi', '/odds/multi', {
+      eventIds: String(event.id),
+      bookmakers: BOOKMAKER,
+    });
+    const first = Array.isArray(body) ? body[0] : undefined;
+    const books = first && typeof first === 'object' ? first.bookmakers : undefined;
+    if (books && Object.keys(books).length > 0) {
+      console.log(`  odds fixture: event ${event.id} priced by ${Object.keys(books).join(", ")}`);
+      capturedOdds = true;
+      break;
+    }
+  }
+  if (!capturedOdds) {
+    console.warn('!! no upcoming event had prices — odds-multi fixture may be empty');
+  }
 
   if (settled?.id) {
     await capture("event-detail-settled", `/events/${settled.id}`);

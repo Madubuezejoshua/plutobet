@@ -44,12 +44,28 @@ function isUserStatus(value: unknown): value is UserStatus {
 }
 
 function requiredAuthSecret(): string {
-  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+  /*
+   * `??` was wrong here, and wrong in a way that only shows up on a deployment
+   * platform. A variable declared in a dashboard but left empty arrives as ""
+   * — which is not null or undefined, so `??` kept it and never looked at
+   * NEXTAUTH_SECRET. The result was "must be at least 32 characters" for a
+   * deployment whose secret was actually sitting in the other name.
+   *
+   * Blank means absent. Same fix as the blank NEXTAUTH_URL handling.
+   */
+  const secret = process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim();
+
   if (!secret) {
-    throw new Error("AUTH_SECRET is required; authentication has no default secret");
+    throw new Error(
+      "AUTH_SECRET is required; authentication has no default secret. " +
+        "Set AUTH_SECRET (32+ characters) — see /api/health and docs/deployment.md",
+    );
   }
   if (secret.length < 32) {
-    throw new Error("AUTH_SECRET must be at least 32 characters");
+    throw new Error(
+      `AUTH_SECRET must be at least 32 characters (got ${secret.length}). ` +
+        "See /api/health and docs/deployment.md",
+    );
   }
   return secret;
 }
