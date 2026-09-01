@@ -1,0 +1,103 @@
+{
+  "capturedAt": "2026-09-01T00:32:22.523Z",
+  "path": "/odds/multi?bookmakers=Bet365",
+  "status": 200,
+  "note": "One real Bet365 response, trimmed to the markets under test. ML is the 3-way match-result market.",
+  "body": [
+    {
+      "id": 73802362,
+      "home": "Dinthar FC",
+      "away": "Saikhamakawn FC",
+      "homeId": 1285561,
+      "awayId": 1277290,
+      "date": "2026-09-01T06:00:00Z",
+      "status": "pending",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "India - Mizoram Premier League",
+        "slug": "india-mizoram-premier-league"
+      },
+      "urls": {
+        "Bet365": "https://www.bet365.com/#/AC/B1/C1/D8/E200450342/F3/I1/"
+      },
+      "bookmakerIds": {
+        "Bet365": "200450342",
+        "Bet365_4": "200450342-bot365"
+      },
+      "bookmakers": {
+        "Bet365": [
+          {
+            "name": "ML",
+            "updatedAt": "2026-09-01T00:31:01.547Z",
+            "odds": [
+              {
+                "home": "2.000",
+                "draw": "3.600",
+                "away": "3.000"
+              }
+            ]
+          },
+          {
+            "name": "Draw No Bet",
+            "updatedAt": "2026-08-31T11:39:08.657Z",
+            "odds": [
+              {
+                "home": "1.533",
+                "away": "2.375"
+              }
+            ]
+          },
+          {
+            "name": "Double Chance",
+            "updatedAt": "2026-08-31T12:15:43.974Z",
+            "odds": [
+              {
+                "12": "1.222",
+                "1X": "1.300",
+                "X2": "1.666"
+              }
+            ]
+          },
+          {
+            "name": "Totals",
+            "updatedAt": "2026-08-31T12:15:43.974Z",
+            "odds": [
+              {
+                "hdp": 3.5,
+                "over": "2.000",
+                "under": "1.800"
+              }
+            ]
+          }
+        ],
+        "Bet365 (no latency)": [
+          {
+            "name": "ML",
+            "updatedAt": "2026-08-31T09:29:51.117Z",
+            "odds": [
+              {
+                "home": "2.00",
+                "draw": "3.60",
+                "away": "3.00"
+              }
+            ]
+          },
+          {
+            "name": "Totals",
+            "updatedAt": "2026-08-31T12:16:57.303Z",
+            "odds": [
+              {
+                "hdp": 3.5,
+                "over": "2.00",
+                "under": "1.80"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -27,6 +27,15 @@ export interface SyncConfig {
   bookmakers: string[];
 }
 
+/**
+ * How far ahead a fixture sync reaches.
+ *
+ * Matches the documented intent of the job. Beyond this the provider is
+ * listing fixtures whose prices will have moved many times before anybody
+ * can bet on them, and each one still costs an upsert plus taxonomy work.
+ */
+const FIXTURE_HORIZON_DAYS = 14;
+
 export class OddsSyncService {
   private lastDelta = new Date(Date.now() - 10 * 60_000);
 
@@ -38,7 +47,26 @@ export class OddsSyncService {
   /** Every 30 min. Cheap — one call covers the next 14 days. */
   async syncFixtures(): Promise<{ upserted: number }> {
     return this.guard("fixtures", async () => {
-      const found = await this.provider.listEvents(this.config.sport);
+      /*
+       * Ask for a BOUNDED window, and ingest only what can still be bet on.
+       *
+       * The docstring above always claimed "one call covers the next 14 days",
+       * but no `to` was ever passed, so the provider returned its full catalogue
+       * — around 5000 football events, of which only ~775 had not already
+       * finished. Each row then costs an upsert plus taxonomy resolution and
+       * classification, so a job scheduled every 30 minutes was taking hours
+       * and never completing. It looked like a slow job; it was an unbounded one.
+       *
+       * Already-settled fixtures are skipped rather than upserted. A match that
+       * has finished is not something anybody can place a bet on, and any
+       * settled event we actually care about is already in the table from when
+       * it was pending — that is what the settlement poller reads.
+       */
+      const horizon = new Date(Date.now() + FIXTURE_HORIZON_DAYS * 24 * 60 * 60_000);
+      const returned = await this.provider.listEvents(this.config.sport, { to: horizon });
+      const found = returned.filter(
+        (event) => event.status === "PENDING" || event.status === "LIVE",
+      );
 
       let classified = 0;
 
@@ -107,8 +135,31 @@ export class OddsSyncService {
       const since = this.lastDelta;
       const cursor = new Date(); // capture BEFORE the call, not after
 
+      /*
+       * The bookmaker is REQUIRED, and omitting it failed silently for the
+       * life of this project.
+       *
+       * `/odds/updated` answers `400 Missing bookmaker parameter` without one.
+       * This call passed only `sport`, so the adapter sent `bookmaker:
+       * undefined`, the URL builder dropped it, and every run since the job
+       * was written threw before reaching `persist()`. The result was a
+       * sportsbook with real fixtures and ZERO stored prices — and because the
+       * throw happens before the `if (snapshots)` check, the
+       * `fullRefreshWatchlist()` fallback never ran either.
+       *
+       * Note the singular/plural mismatch that hid it: the provider takes one
+       * `bookmaker`, while SyncConfig holds a `bookmakers` array. The first
+       * entry is the canonical price by the existing convention — the same
+       * order `canonicalBook()` resolves.
+       */
+      const bookmaker = this.config.bookmakers[0];
+      if (!bookmaker) {
+        throw new Error("odds sync requires at least one configured bookmaker");
+      }
+
       const snapshots = await this.provider.getUpdatedSince(since, {
         sport: this.config.sport,
+        bookmaker,
       });
 
       if (snapshots) {
@@ -141,6 +192,20 @@ export class OddsSyncService {
       await this.persist(snapshots);
       return { events: snapshots.length };
     });
+  }
+
+  /**
+   * Prices the upcoming watchlist in one batched call.
+   *
+   * Public because it is also the only way to FILL an empty board. The delta
+   * endpoint returns only what moved since the last cursor, so a database with
+   * no prices yet stays empty until something happens to change — which is
+   * precisely the state this platform sat in. An operator bringing the board
+   * up, or a QA run proving the pipeline end to end, has to be able to ask for
+   * everything rather than for the difference.
+   */
+  async refreshWatchlist(): Promise<{ events: number }> {
+    return this.guard("watchlist-refresh", () => this.fullRefreshWatchlist());
   }
 
   /** Fallback when the provider has no delta endpoint. */

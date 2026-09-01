@@ -316,3 +316,79 @@ describe("odds-api.io price contract", () => {
     }
   });
 });
+
+/**
+ * THE MATCH-RESULT MARKET.
+ *
+ * `1x2` is the market most bets are placed on, and for a long time it could
+ * not be found in any real payload — because the only selected bookmaker,
+ * 1xbet, does not publish it, and the configured second bookmaker name
+ * ("bet365") was rejected by the provider as invalid. The real name is
+ * "Bet365", which publishes it as `ML`.
+ *
+ * The canonical mapper already understood `ml`; nothing about the market
+ * vocabulary needed to change. These tests pin the finding so a future config
+ * edit cannot silently remove the only source of match-result odds.
+ */
+describe("odds-api.io 1x2 match-result contract", () => {
+  function bet365Fixture() {
+    const { body } = fixture("odds-bet365-1x2");
+    const event = (body as any[])[0];
+    expect(event, "the Bet365 fixture has no event — recapture it").toBeDefined();
+    return event;
+  }
+
+  it("publishes the match-result market under the name ML", () => {
+    const event = bet365Fixture();
+    const markets = event.bookmakers["Bet365"] as any[];
+    expect(markets.map((m) => m.name)).toContain("ML");
+  });
+
+  it("is a genuine THREE-WAY market, not Draw No Bet wearing a different name", () => {
+    const event = bet365Fixture();
+    const markets = event.bookmakers["Bet365"] as any[];
+    const ml = markets.find((m) => m.name === "ML")!;
+    const row = ml.odds[0];
+
+    // This is the assertion that matters. A two-way market mapped onto 1x2
+    // would settle a draw as a loss for both sides — silently, and only on
+    // matches that actually drew.
+    expect(Object.keys(row).sort()).toEqual(["away", "draw", "home"]);
+
+    const dnb = markets.find((m) => m.name === "Draw No Bet");
+    if (dnb) {
+      // Proof the distinction is real in this feed rather than assumed.
+      expect(Object.keys(dnb.odds[0]).sort()).toEqual(["away", "home"]);
+    }
+  });
+
+  it("maps ML onto the canonical 1x2 key with all three outcomes", async () => {
+    const { body } = fixture("odds-bet365-1x2");
+    serve(body);
+
+    const [snapshot] = await new OddsApiIoProvider("k", noBudget).getOdds(["x"], ["Bet365"]);
+    const book = snapshot!.books.find((b) => b.bookmaker === "Bet365")!;
+    const oneXTwo = book.markets.find((m) => m.key === "1x2");
+
+    expect(oneXTwo, "ML did not map to 1x2").toBeDefined();
+    expect(oneXTwo!.selections.map((s) => s.key).sort()).toEqual(["away", "draw", "home"]);
+
+    for (const selection of oneXTwo!.selections) {
+      expect(Number.isFinite(selection.price)).toBe(true);
+      expect(selection.price).toBeGreaterThan(1);
+    }
+  });
+
+  it("keeps Draw No Bet out of 1x2", async () => {
+    const { body } = fixture("odds-bet365-1x2");
+    serve(body);
+
+    const [snapshot] = await new OddsApiIoProvider("k", noBudget).getOdds(["x"], ["Bet365"]);
+    const book = snapshot!.books.find((b) => b.bookmaker === "Bet365")!;
+    const oneXTwo = book.markets.find((m) => m.key === "1x2");
+
+    // Draw No Bet has no canonical key, so it must be dropped rather than
+    // folded into the match-result market.
+    expect(oneXTwo!.selections).toHaveLength(3);
+  });
+});

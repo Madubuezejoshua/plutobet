@@ -18,9 +18,23 @@ import { inngest } from "../client";
 
 const config: SyncConfig = {
   sport: "football",
-  // Free tier allows exactly 2, and order decides the canonical price. Correct
-  // these against /bookmakers/selected (scripts/probe-odds.ts) before prod.
-  bookmakers: ["bet365", "1xbet"],
+  /*
+   * Names are CASE-SENSITIVE and validated by the provider.
+   *
+   * This read `"bet365"`, which the API rejects outright with "bet365 is not a
+   * valid bookmaker". The real name is `"Bet365"`. Since order decides the
+   * canonical price, the invalid name sat in the position every price is
+   * resolved from — so once the delta call started sending a bookmaker at all,
+   * it would have failed on this instead.
+   *
+   * Bet365 is first for a substantive reason: it publishes `ML`, the 3-way
+   * match-result market that maps to `1x2`, which is the market most bets are
+   * placed on. 1xbet does NOT return it — verified against both live — so a
+   * 1xbet-first ordering yields a sportsbook with no match-result odds.
+   *
+   * The plan permits exactly two. Verify against /v3/bookmakers before editing.
+   */
+  bookmakers: ["Bet365", "1xbet"],
 };
 
 function syncService(): OddsSyncService {
