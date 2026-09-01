@@ -129,6 +129,41 @@ export class OtpService {
    * alive at once and multiply an attacker's guesses.
    */
   async issue(params: IssueOtpParams): Promise<IssuedOtp> {
+    /*
+     * THE CONSOLE FALLBACK IS A VERIFICATION BYPASS IN PRODUCTION.
+     *
+     * `devCode` at the end of this method is returned whenever the active
+     * provider is the console one, so a production deployment missing vendor
+     * keys would hand the one-time code straight back in the API response.
+     * Anyone could then request a code for a destination they do not control
+     * and verify it immediately — which also defeats self-exclusion and
+     * duplicate-identity prevention, since both are keyed to a verified number.
+     *
+     * Checked FIRST, before the throttle is consumed or a row is written: a
+     * request that must not succeed should not spend a rate-limit budget or
+     * leave an OTP row behind.
+     *
+     * The check lives here rather than in `createOtpService` because refusing
+     * at construction broke `next build` — password-reset.service.ts builds an
+     * OtpService at module evaluation and the build runs with
+     * NODE_ENV=production, so page-data collection threw on a machine that was
+     * never going to serve a request. Guarding the dangerous operation is
+     * narrower and more accurate than guarding the object that can perform it.
+     */
+    const usingConsole =
+      params.channel === "SMS" ? this.sms.name === "console" : this.email.name === "console";
+
+    if (usingConsole && process.env.NODE_ENV === "production") {
+      throw new Error(
+        `refusing to issue a ${params.channel} code in production with no provider configured: ` +
+          "the console fallback returns the one-time code in the API response, which would let " +
+          "anyone verify a destination they do not control. Configure " +
+          (params.channel === "SMS"
+            ? "TERMII_API_KEY and TERMII_SENDER_ID"
+            : "RESEND_API_KEY and RESEND_FROM"),
+      );
+    }
+
     const destination =
       params.channel === "SMS"
         ? normalizePhone(params.destination)
@@ -173,9 +208,6 @@ export class OtpService {
 
     // Returned only when nothing real is configured, so local development and
     // tests can complete the flow. A configured deployment never sees this.
-    const usingConsole =
-      params.channel === "SMS" ? this.sms.name === "console" : this.email.name === "console";
-
     return { destination, expiresAt, ...(usingConsole ? { devCode: code } : {}) };
   }
 
@@ -342,15 +374,15 @@ export class OtpService {
  * a developer without vendor keys can still complete the flow end to end.
  */
 export function createOtpService(): OtpService {
-  const sms: SmsProvider =
-    process.env.TERMII_API_KEY && process.env.TERMII_SENDER_ID
-      ? new TermiiSmsProvider(process.env.TERMII_API_KEY, process.env.TERMII_SENDER_ID)
-      : new ConsoleSmsProvider();
+  const hasSms = Boolean(process.env.TERMII_API_KEY && process.env.TERMII_SENDER_ID);
+  const hasEmail = Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM);
+  const sms: SmsProvider = hasSms
+    ? new TermiiSmsProvider(process.env.TERMII_API_KEY!, process.env.TERMII_SENDER_ID!)
+    : new ConsoleSmsProvider();
 
-  const email: EmailProvider =
-    process.env.RESEND_API_KEY && process.env.RESEND_FROM
-      ? new ResendEmailProvider(process.env.RESEND_API_KEY, process.env.RESEND_FROM)
-      : new ConsoleEmailProvider();
+  const email: EmailProvider = hasEmail
+    ? new ResendEmailProvider(process.env.RESEND_API_KEY!, process.env.RESEND_FROM!)
+    : new ConsoleEmailProvider();
 
   return new OtpService(walletService, sms, email);
 }

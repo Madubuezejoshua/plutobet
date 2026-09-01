@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ApiError, authedRoute, money, type AuthedRouteContext } from "@/lib/api/handler";
 import { RATE_RULES } from "@/lib/api/rate-limit";
 import { SlipError, slipService } from "@/modules/betting/slip.service";
+import { StakeLimitError } from "@/modules/betting/errors";
 import { walletForUser } from "@/modules/wallet/lookup";
 import { profileService, type OddsChangePolicy } from "@/modules/users/profile.service";
 import type { OddsDriftPolicy } from "@/modules/betting/placement.service";
@@ -17,7 +18,12 @@ const placeSchema = z.object({
   stakeMinor: z
     .string()
     .regex(/^\d+$/, "stake must be a whole number of kobo")
-    .transform((value) => BigInt(value)),
+    .transform((value) => BigInt(value))
+    // `^\d+$` accepts "0", which then travelled all the way to the database
+    // and was refused by `bet_slips_unit_stake_positive` — correct, but it
+    // surfaced as a 500. The constraint is the last line of defence, not the
+    // first: a stake of zero is a form error and belongs to the boundary.
+    .refine((value) => value > 0n, "stake must be greater than zero"),
   legs: z
     .array(
       z.object({
@@ -89,6 +95,18 @@ export const POST = authedRoute(
           error.code,
           error.message,
         );
+      }
+      /*
+       * A stake outside the permitted range is the CLIENT's mistake.
+       *
+       * This was unmapped, so posting a stake of 0 — which the schema's
+       * `^\d+$` happily accepts — reached the service, threw StakeLimitError,
+       * and fell through to a generic 500. The customer saw "something went
+       * wrong" for a form error the UI could have explained, and the response
+       * was indistinguishable from a real outage in the logs.
+       */
+      if (error instanceof StakeLimitError) {
+        throw new ApiError(422, "STAKE_OUT_OF_RANGE", error.message);
       }
       throw error;
     }
