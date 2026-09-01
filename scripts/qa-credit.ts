@@ -22,6 +22,7 @@
 import "dotenv/config";
 import { sql } from "drizzle-orm";
 import { walletService } from "@/modules/wallet/wallet.service";
+import { appendAuditLog } from "@/modules/audit/append";
 
 function refuse(reason: string): never {
   console.error(`REFUSED: ${reason}`);
@@ -75,6 +76,37 @@ async function main() {
       idempotencyKey,
       actor: { type: "SYSTEM" },
       metadata: { reason: "QA_VALIDATION_CREDIT", issuedBy: "scripts/qa-credit.ts" },
+    });
+
+    /*
+     * An audit row, on the SAME transaction as the ledger entries.
+     *
+     * The ledger records that money moved; it does not record who decided it
+     * should. Money appearing with nobody accountable is the thing an auditor
+     * asks about first, and "a script did it" is only an acceptable answer
+     * when the script says so in the record.
+     *
+     * Appended inside the money transaction deliberately: an audit row that
+     * can be committed without its ledger entries — or the reverse — is worse
+     * than none, because it makes the trail look complete when it is not.
+     */
+    await appendAuditLog(tx, {
+      actorType: "SYSTEM",
+      actorId: null,
+      action: "WALLET_QA_CREDIT",
+      entity: "wallet",
+      entityId: wallet.id,
+      reason: `QA_VALIDATION_CREDIT via scripts/qa-credit.ts (idempotency key ${idempotencyKey})`,
+      before: { balanceMinor: before.toString(), bucket: "CASH", currency: "NGN" },
+      after: {
+        balanceMinor: operation.balanceAfterMinor.toString(),
+        bucket: "CASH",
+        currency: "NGN",
+        amountMinor: amountMinor.toString(),
+        userId,
+        transactionId: operation.transactionId,
+      },
+      ip: null,
     });
 
     return { walletId: wallet.id, before, operation };

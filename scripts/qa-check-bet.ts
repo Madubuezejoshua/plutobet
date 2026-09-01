@@ -3,7 +3,9 @@
  *
  *   npx tsx scripts/qa-check-bet.ts <betId>
  *
- * Read-only. It reports what the provider and the settlement engine have done;
+ * READ-ONLY BY CONSTRUCTION. There is no INSERT, UPDATE or DELETE anywhere in
+ * this file, and it never calls a settlement service. It reports what the
+ * provider and the settlement engine have done;
  * it never writes a status. A bet is settled by `pollMatchResults` reading the
  * provider's regulation score — manually marking one won or lost would prove
  * nothing except that a human can edit a row.

@@ -22,7 +22,11 @@
     "odds:capture": "tsx scripts/capture-odds-fixtures.ts",
     "odds:contract": "tsx scripts/odds-contract.ts",
     "admin:smoke": "tsx scripts/smoke-admin.ts",
-    "env:push": "tsx scripts/push-env-railway.ts"
+    "env:push": "tsx scripts/push-env-railway.ts",
+    "dev:inngest": "npx --yes inngest-cli@latest dev -u http://localhost:3000/api/inngest",
+    "dev:all": "concurrently -n next,inngest -c blue,magenta \"npm:dev\" \"npm:dev:inngest\"",
+    "bet:watch": "tsx scripts/qa-check-bet.ts",
+    "bench:sync": "tsx scripts/bench-sync-fixtures.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
@@ -45,6 +49,7 @@
     "@types/node": "24.5.2",
     "@types/react": "19.1.16",
     "@types/react-dom": "19.1.9",
+    "concurrently": "^10.0.5",
     "drizzle-kit": "0.31.10",
     "embedded-postgres": "16.14.0-beta.17",
     "eslint": "9.36.0",
