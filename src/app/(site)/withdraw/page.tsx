@@ -6,14 +6,11 @@ import { authOptions } from "@/modules/auth/auth-options";
 import { balancesForUser, walletForUser } from "@/modules/wallet/lookup";
 import { DEFAULT_WITHDRAWAL_LIMITS } from "@/modules/payments/withdrawal.service";
 import { WithdrawForm } from "./withdraw-form";
+import { naira } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Withdraw" };
 
-function naira(minor: bigint): string {
-  const whole = (minor / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `₦${whole}.${(minor % 100n).toString().padStart(2, "0")}`;
-}
 
 export default async function WithdrawPage() {
   const session = await getServerSession(authOptions);

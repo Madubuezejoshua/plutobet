@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { naira } from "@/lib/money";
 
 /**
  * Safer gambling controls.
@@ -34,11 +35,6 @@ const PERIODS = [
   { days: 30, label: "per month" },
 ] as const;
 
-function naira(minor: string): string {
-  const value = BigInt(minor);
-  const whole = (value / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `₦${whole}.${(value % 100n).toString().padStart(2, "0")}`;
-}
 
 export function ResponsibleControls(props: {
   limits: ActiveLimit[];

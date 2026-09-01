@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { EventView } from "@/modules/odds/odds.service";
-import { parseNairaToKobo } from "@/lib/money";
+import { naira as formatNaira, parseNairaToKobo } from "@/lib/money";
 import { formatOdds } from "@/modules/odds/format";
 import { namedSystems, systemTotalStake } from "@/modules/betting/system-bet";
 import type { OddsFormat } from "@/modules/users/schema";
@@ -31,12 +31,6 @@ function parseOdds(value: string): bigint {
   return BigInt(whole!) * ODDS_SCALE + BigInt(fraction.padEnd(3, "0").slice(0, 3));
 }
 
-function formatNaira(minor: bigint): string {
-  const sign = minor < 0n ? "-" : "";
-  const abs = minor < 0n ? -minor : minor;
-  const naira = (abs / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${sign}₦${naira}.${(abs % 100n).toString().padStart(2, "0")}`;
-}
 
 /**
  * Mirrors the server's pricing exactly: integer maths on scaled odds, one

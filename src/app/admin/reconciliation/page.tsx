@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
 import { productReconciliationService } from "@/modules/reconciliation/product-reconciliation.service";
+import { naira } from "@/lib/money";
 import { guardAdminPage } from "../_guard";
 
 export const dynamic = "force-dynamic";
@@ -99,7 +100,7 @@ export default async function AdminReconciliationPage() {
                     <td className="muted">{wallet.kind.toLowerCase()}</td>
                     <td>{wallet.email ?? "system"}</td>
                     <td className="muted">{wallet.bucket?.toLowerCase() ?? "—"}</td>
-                    <td className="right">{wallet.balance_minor}</td>
+                    <td className="right">{naira(wallet.balance_minor)}</td>
                   </tr>
                 ))}
               </tbody>

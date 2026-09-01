@@ -3,15 +3,11 @@ import { getServerSession } from "next-auth";
 import { sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
 import { authOptions } from "@/modules/auth/auth-options";
+import { naira } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My bets" };
 
-function naira(minor: string): string {
-  const value = BigInt(minor);
-  const whole = (value / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `₦${whole}.${(value % 100n).toString().padStart(2, "0")}`;
-}
 
 type BetRow = {
   id: string;

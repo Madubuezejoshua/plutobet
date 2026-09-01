@@ -5,14 +5,10 @@ import {
   requirePermission,
 } from "@/modules/admin/guard";
 import { reportingService } from "@/modules/reporting/reporting.service";
+import { naira as formatNaira } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-function formatNaira(minor: string): string {
-  const value = BigInt(minor);
-  const naira = (value / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `₦${naira}.${(value % 100n).toString().padStart(2, "0")}`;
-}
 
 /**
  * Regulator and AML reporting.
