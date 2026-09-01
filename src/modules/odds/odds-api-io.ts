@@ -1,5 +1,10 @@
 import { ApiBudget, apiBudget as defaultBudget, type CallPriority } from "./budget";
 import { mapMarketKey, mapSelectionKey } from "./canonical";
+import {
+  ProviderEventNotFoundError,
+  ProviderUnknownEventsError,
+  parseUnknownEventIds,
+} from "./errors";
 import type {
   BookmakerOdds,
   EventResult,
@@ -66,8 +71,30 @@ export class OddsApiIoProvider implements OddsProvider {
     if (res.status === 429) {
       throw new Error("odds-api.io rate limited (429) — budget guard drifted");
     }
+    /*
+     * A 404 is about ONE resource; every other failure is about the call.
+     *
+     * Raised as its own type so a caller iterating over event ids can skip the
+     * one the provider has forgotten and keep the rest, while a 401, 429 or 5xx
+     * still stops the run — those are batch-wide and retrying past them just
+     * burns budget.
+     */
+    if (res.status === 404) {
+      throw new ProviderEventNotFoundError(path.replace(/^\/events\//, ""));
+    }
     if (!res.ok) {
-      throw new Error(`odds-api.io ${path} -> ${res.status} ${await res.text()}`);
+      const body = await res.text();
+      /*
+       * A 400 that NAMES unknown event ids is about those ids, not the request.
+       * Surfaced as its own type so a batch caller can drop them and retry with
+       * the rest; any other 400 stays fatal, because guessing would turn every
+       * malformed request into a silent partial success.
+       */
+      if (res.status === 400) {
+        const unknown = parseUnknownEventIds(body);
+        if (unknown.length > 0) throw new ProviderUnknownEventsError(unknown);
+      }
+      throw new Error(`odds-api.io ${path} -> ${res.status} ${body}`);
     }
     return (await res.json()) as T;
   }
@@ -88,17 +115,52 @@ export class OddsApiIoProvider implements OddsProvider {
     return this.asArray(raw).map((e) => this.normaliseEvent(e, ""));
   }
 
+  /**
+   * Prices for a batch of events, tolerating ids the provider has dropped.
+   *
+   * We keep events after the provider forgets them, so a refresh chunk reliably
+   * contains at least one stale id. That returned `400 One or more eventIds not
+   * found`, which threw out of the chunk loop and lost the ENTIRE refresh — the
+   * reason upcoming fixtures sat on the board with no prices and nobody could
+   * place a bet on them.
+   *
+   * The provider names the offenders, so they are removed and the chunk is
+   * retried once with the survivors. One retry, not a loop: if a second attempt
+   * still names unknown ids, something else is wrong and quietly narrowing the
+   * request until it succeeds would hide it.
+   */
   async getOdds(eventIds: string[], bookmakers: string[]): Promise<OddsSnapshot[]> {
     const out: OddsSnapshot[] = [];
     for (let i = 0; i < eventIds.length; i += MULTI_CHUNK) {
       const chunk = eventIds.slice(i, i + MULTI_CHUNK);
+      const snapshots = await this.oddsForChunk(chunk, bookmakers, true);
+      out.push(...snapshots);
+    }
+    return out;
+  }
+
+  private async oddsForChunk(
+    chunk: string[],
+    bookmakers: string[],
+    mayRetry: boolean,
+  ): Promise<OddsSnapshot[]> {
+    if (chunk.length === 0) return [];
+    try {
       const raw = await this.get<unknown>("/odds/multi", {
         eventIds: chunk.join(","),
         bookmakers: bookmakers.join(","),
       });
-      out.push(...this.normaliseSnapshots(raw));
+      return this.normaliseSnapshots(raw);
+    } catch (error) {
+      if (!(error instanceof ProviderUnknownEventsError) || !mayRetry) throw error;
+
+      const unknown = new Set(error.unknownEventIds);
+      const survivors = chunk.filter((id) => !unknown.has(id));
+      console.warn(
+        `[odds] provider rejected ${unknown.size} stale event id(s); retrying with ${survivors.length}`,
+      );
+      return this.oddsForChunk(survivors, bookmakers, false);
     }
-    return out;
   }
 
   async getUpdatedSince(
@@ -113,12 +175,32 @@ export class OddsApiIoProvider implements OddsProvider {
     return this.normaliseSnapshots(raw);
   }
 
+  /**
+   * Results for a batch of events.
+   *
+   * An event the provider no longer knows is SKIPPED, not fatal. It used to
+   * throw, which meant one forgotten fixture returned nothing for the other
+   * nineteen and stopped every bet in the batch from settling — every minute,
+   * indefinitely, because that event sorts to the front of the queue each tick.
+   *
+   * The caller sees a shorter list and defers whatever is missing from it, so
+   * the event backs off instead of blocking the queue. Any OTHER provider
+   * failure still propagates: a rate limit or an auth failure is about the
+   * whole run and must stop it.
+   */
   async getResults(eventIds: string[]): Promise<EventResult[]> {
     const out: EventResult[] = [];
     for (const id of eventIds) {
-      const raw = this.asRecord(
-        await this.get<unknown>(`/events/${id}`, {}, "CRITICAL"),
-      );
+      let raw: ProviderRecord;
+      try {
+        raw = this.asRecord(await this.get<unknown>(`/events/${id}`, {}, "CRITICAL"));
+      } catch (error) {
+        if (error instanceof ProviderEventNotFoundError) {
+          console.warn(`[odds] provider no longer knows event ${id}; skipping it this tick`);
+          continue;
+        }
+        throw error;
+      }
       const e = this.asRecord(raw.data ?? raw);
       const scores = this.asRecord(e.scores);
       out.push({

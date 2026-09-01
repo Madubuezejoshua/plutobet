@@ -108,6 +108,9 @@ export class ResultIngestionService {
     const results = await this.provider.getResults([...byProviderId.keys()]);
 
     const finished: FinishedEvent[] = [];
+    // Every due event the provider actually spoke about, however it answered.
+    // What is missing from this set at the end gets backed off below.
+    const answered = new Set<string>();
     for (const result of results) {
       const eventId = byProviderId.get(result.eventId);
       if (!eventId) continue;
@@ -116,6 +119,7 @@ export class ResultIngestionService {
       // rather than recording a result the provider has not committed to.
       if (result.status !== "SETTLED" && result.status !== "CANCELLED") {
         await this.deferEvent(eventId);
+        answered.add(eventId);
         continue;
       }
 
@@ -130,6 +134,7 @@ export class ResultIngestionService {
       // later; deferring leaves it to be retried when the feed catches up.
       if (!cancelled && !match.periods.ft) {
         await this.deferEvent(eventId);
+        answered.add(eventId);
         continue;
       }
 
@@ -147,6 +152,26 @@ export class ResultIngestionService {
       });
 
       finished.push({ eventId, cancelled });
+      answered.add(eventId);
+    }
+
+    /*
+     * Defer every due event the provider said NOTHING about.
+     *
+     * `getResults` now skips an event the provider has forgotten rather than
+     * throwing, so such an event simply does not appear in `results`. Without
+     * this, it is never deferred either — it stays eligible, sorts to the head
+     * of the queue on the next tick, and is re-fetched every minute forever,
+     * spending the daily budget on a fixture that will never resolve and
+     * pushing real bets down the queue. The starvation fix, undone by the
+     * omission it did not anticipate.
+     *
+     * Deferring is not resolving. The event keeps its PENDING status and comes
+     * back on the backoff schedule, because a provider briefly missing data
+     * must never become a permanently unsettled bet.
+     */
+    for (const row of due) {
+      if (!answered.has(row.id)) await this.deferEvent(row.id);
     }
 
     return finished;

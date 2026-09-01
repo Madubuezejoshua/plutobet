@@ -24,9 +24,15 @@
     "admin:smoke": "tsx scripts/smoke-admin.ts",
     "env:push": "tsx scripts/push-env-railway.ts",
     "dev:inngest": "npx --yes inngest-cli@latest dev -u http://localhost:3000/api/inngest",
-    "dev:all": "concurrently -n next,inngest -c blue,magenta \"npm:dev\" \"npm:dev:inngest\"",
+    "dev:all": "concurrently -n next,inngest -c blue,magenta \"npm:dev:local\" \"npm:dev:inngest\"",
     "bet:watch": "tsx scripts/qa-check-bet.ts",
-    "bench:sync": "tsx scripts/bench-sync-fixtures.ts"
+    "bench:sync": "tsx scripts/bench-sync-fixtures.ts",
+    "production:check": "tsx scripts/production-check.ts",
+    "ci:secrets": "node scripts/secret-scan.mjs",
+    "ci:migrations": "node scripts/check-migrations.mjs",
+    "settle:watch": "tsx scripts/watch-settlement.ts",
+    "dev:local": "node scripts/dev-app-inngest-mode.mjs",
+    "db:clean-benchmark": "tsx scripts/clean-benchmark-data.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
