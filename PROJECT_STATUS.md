@@ -94,6 +94,20 @@ documented rather than silently changed.
 - After the fix, the same condition appears in the log as
   `provider no longer knows event …; skipping it this tick` and the poll
   continues.
+- **The results job then recorded its first successful unattended run**, which
+  is the end-to-end proof that the fix works and not merely that the tests pass:
+
+  ```
+  job=results  last_success=2026-09-01T23:39:42Z
+  total_runs=2  total_failures=1  processed=6  settled=0
+  ```
+
+  Two runs, one failure: run 1 is the 404 that used to abort everything, run 2 is
+  the same job processing six events to completion. `processed=6, settled=0` is
+  exactly the "ran and found nothing yet" signal the heartbeat exists to
+  distinguish from "did not run" — nothing was due for settlement at that moment,
+  and the job said so rather than staying silent.
+- The scheduler reports `connected: true` with all 13 functions registered.
 - The board went from **0** to **333** open selections on upcoming fixtures.
 
 **Placed, and now waiting on the match:** a real bet was registered, funded and
