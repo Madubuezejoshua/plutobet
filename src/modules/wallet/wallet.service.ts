@@ -12,6 +12,7 @@ import {
   NonUserWalletError,
   ReferenceConflictError,
   SelfTransferError,
+  WalletContentionError,
   WalletNotFoundError,
   WalletOwnershipError,
 } from "./errors";
@@ -723,9 +724,26 @@ export class WalletService implements WalletServiceContract {
     }
   }
 
+  /**
+   * How long a money transaction waits for a wallet row lock.
+   *
+   * Configurable because the right value is environment-specific: a serverless
+   * invocation with a 60s ceiling should not spend 30s of it queuing, while a
+   * background job can afford to wait. Overriding it also lets the contention
+   * path be tested in milliseconds instead of half a minute.
+   *
+   * Validated against a strict pattern rather than interpolated: this string
+   * goes into SET LOCAL, which takes no parameters, so an unchecked value
+   * would be a SQL injection through an environment variable.
+   */
+  private static lockTimeout(): string {
+    const configured = process.env.WALLET_LOCK_TIMEOUT?.trim();
+    return configured && /^\d{1,6}(ms|s)$/.test(configured) ? configured : "30s";
+  }
+
   private async configureTransactionBase(tx: DirectTransaction): Promise<void> {
     await tx.execute(sql.raw("SET LOCAL ROLE app_role"));
-    await tx.execute(sql.raw("SET LOCAL lock_timeout = '30s'"));
+    await tx.execute(sql.raw(`SET LOCAL lock_timeout = '${WalletService.lockTimeout()}'`));
   }
 
   private async replayIfPresent(
@@ -767,13 +785,57 @@ export class WalletService implements WalletServiceContract {
     };
   }
 
+  /**
+   * PostgreSQL codes meaning "could not take the lock", not "the data is wrong".
+   *
+   * 55P03 is lock_not_available, raised when the `SET LOCAL lock_timeout` set
+   * in configureTransactionBase expires waiting on FOR UPDATE. 40P01 is a
+   * deadlock, which the server resolves by aborting one side. Both leave
+   * NOTHING written, so both are safe for the caller to retry.
+   */
+  private static readonly CONTENTION_CODES = new Set(["55P03", "40P01"]);
+
+  /**
+   * Finds a contention code anywhere in the cause chain.
+   *
+   * Drizzle wraps driver failures in its own Error ("Failed query: …") and
+   * hangs the postgres error off `cause`, so reading `.code` from the thrown
+   * object alone finds nothing and every lock timeout stays unmapped. The
+   * chain is walked with a depth cap because `cause` is author-controlled and
+   * a cycle here would hang the request rather than fail it.
+   */
+  private static contentionCode(error: unknown): string | null {
+    let current: unknown = error;
+    for (let depth = 0; depth < 5 && current && typeof current === "object"; depth += 1) {
+      const code = (current as { code?: unknown }).code;
+      if (typeof code === "string" && WalletService.CONTENTION_CODES.has(code)) return code;
+      current = (current as { cause?: unknown }).cause;
+    }
+    return null;
+  }
+
   private async lockUserWallet(tx: DirectTransaction, walletId: string): Promise<LockedWallet & { cached_balance_minor: bigint }> {
-    const rows = await tx.execute<LockedWallet>(sql`
-      SELECT id, kind, user_id, cached_balance_minor, version
-      FROM wallets
-      WHERE id = ${walletId}::uuid
-      FOR UPDATE
-    `);
+    let rows: LockedWallet[];
+    try {
+      rows = await tx.execute<LockedWallet>(sql`
+        SELECT id, kind, user_id, cached_balance_minor, version
+        FROM wallets
+        WHERE id = ${walletId}::uuid
+        FOR UPDATE
+      `);
+    } catch (error) {
+      /*
+       * A lock timeout used to escape as a raw driver error and reach the API
+       * as an opaque 500, so a customer placing a bet during a burst was told
+       * nothing useful and no caller could distinguish "try again in a moment"
+       * from a real fault. It is an expected outcome under contention, so it
+       * gets a type callers can act on.
+       */
+      const code = WalletService.contentionCode(error);
+      if (code) throw new WalletContentionError(walletId, code);
+      throw error;
+    }
+
     const wallet = rows[0];
     if (!wallet) throw new WalletNotFoundError(walletId);
     if (wallet.kind !== "USER" || wallet.cached_balance_minor === null) {

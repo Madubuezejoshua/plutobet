@@ -5,6 +5,7 @@ import { db, pooledSql } from "../src/db/pooled";
 import { normalizeEmail } from "../src/modules/auth/email";
 import { hashPassword } from "../src/modules/auth/password";
 import { users } from "../src/modules/users/schema";
+import { bootstrapSuperAdmin } from "../src/modules/admin/bootstrap";
 
 function requiredSeedValue(name: "SEED_ADMIN_EMAIL" | "SEED_ADMIN_PASSWORD"): string {
   const value = process.env[name];
@@ -42,6 +43,12 @@ async function seedAdmin(): Promise<void> {
           `admin ${email} already exists with status ${existing.status}; refusing to reactivate it from a seed`,
         );
       }
+      // Repairs an admin seeded before the bootstrap grant existed, which
+      // could log in and then be denied every page. Only acts when the system
+      // holds no super admin at all, so it can never quietly re-elevate an
+      // account whose role was deliberately revoked.
+      const repaired = await bootstrapSuperAdmin(tx, existing.id);
+      if (repaired.granted) console.info("Granted SUPER_ADMIN to the existing administrator (bootstrap repair)");
       return { created: false as const, id: existing.id };
     }
 
@@ -76,6 +83,8 @@ async function seedAdmin(): Promise<void> {
         `account ${email} appeared while seeding; refusing to overwrite or promote it`,
       );
     }
+    const bootstrap = await bootstrapSuperAdmin(tx, inserted.id);
+    if (bootstrap.granted) console.info("Granted SUPER_ADMIN to the initial administrator (bootstrap)");
     return { created: true as const, id: inserted.id };
   });
 

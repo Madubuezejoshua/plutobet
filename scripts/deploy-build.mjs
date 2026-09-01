@@ -49,7 +49,20 @@ async function migrateProductionDatabase() {
     if (!rolePattern.test(currentUser)) {
       throw new Error("Database returned an invalid current role name");
     }
-    await client`GRANT app_role TO ${client(currentUser)}`;
+    /*
+     * WITH SET TRUE is not optional, and its absence is silent.
+     *
+     * PostgreSQL 16 changed what a non-superuser gets when it CREATES a role:
+     * membership arrives as ADMIN TRUE but INHERIT FALSE, SET FALSE. Since
+     * migration 0000 creates app_role, the migrating role ends up unable to
+     * SET ROLE to it — and every money path opens with SET LOCAL ROLE
+     * app_role, so bet placement, deposits and withdrawals all fail with
+     * "permission denied to set role" while reads keep working perfectly.
+     *
+     * A plain GRANT does not repair it, because the membership already
+     * exists; the options have to be restated.
+     */
+    await client`GRANT app_role TO ${client(currentUser)} WITH INHERIT TRUE, SET TRUE`;
     console.info("Production database migrations are current.");
   } finally {
     await client.end({ timeout: 5 });

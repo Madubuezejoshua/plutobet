@@ -20,7 +20,7 @@ async function main(): Promise<void> {
 
   const owner = postgres(ownerUrl, { max: 1, prepare: false });
   try {
-    await owner`GRANT app_role TO ${owner(runtimeRole)}`;
+    await owner`GRANT app_role TO ${owner(runtimeRole)} WITH INHERIT TRUE, SET TRUE`;
     console.info(`Granted app_role membership to ${runtimeRole}`);
   } finally {
     await owner.end({ timeout: 5 });

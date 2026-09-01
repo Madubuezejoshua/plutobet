@@ -106,3 +106,31 @@ export class ConcurrentWalletMutationError extends WalletError {
     this.name = "ConcurrentWalletMutationError";
   }
 }
+
+/**
+ * The wallet row could not be locked in time.
+ *
+ * Raised when PostgreSQL reports lock_not_available (55P03) or a deadlock
+ * (40P01) while taking the row lock that every money movement begins with.
+ * Money paths run with `SET LOCAL lock_timeout = '30s'`, so a long enough
+ * queue of concurrent operations on one wallet ends in a timeout rather than
+ * waiting forever — which is the correct trade, but it used to surface as a
+ * raw driver error.
+ *
+ * That mattered: an unmapped error reaches the API as an opaque 500, so a
+ * customer placing a bet during a burst was told nothing useful, and no
+ * caller could tell the difference between "try again in a moment" and a real
+ * fault. NOTHING WAS WRITTEN when this is thrown — the transaction never got
+ * past its lock — so retrying is always safe.
+ */
+export class WalletContentionError extends WalletError {
+  constructor(
+    public readonly walletId: string,
+    public readonly pgCode: string,
+  ) {
+    super(
+      `wallet ${walletId} is busy and could not be locked (${pgCode}); nothing was written, retry is safe`,
+    );
+    this.name = "WalletContentionError";
+  }
+}
