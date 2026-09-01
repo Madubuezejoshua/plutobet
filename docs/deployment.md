@@ -123,6 +123,10 @@ and `KV_URL`, all of which are accepted as aliases.
 
 1. **Verify a database restore.** Neon has point-in-time restore; nothing here
    has ever restored from it, and an untested backup is not a backup.
+   The procedure is written up in [`restore-runbook.md`](restore-runbook.md),
+   and the verification half is implemented and tested
+   (`npm run db:verify-restore`). The restore itself still needs Neon console
+   access, so it remains `BLOCKED_BY_OWNER_CONFIGURATION`.
 2. **Make one real low-value Paystack transfer.** The adapter is written
    against published docs and exercised only by fixtures.
 3. **Select bookmakers in the odds-api.io dashboard.** With none selected,

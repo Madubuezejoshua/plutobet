@@ -32,7 +32,8 @@
     "ci:migrations": "node scripts/check-migrations.mjs",
     "settle:watch": "tsx scripts/watch-settlement.ts",
     "dev:local": "node scripts/dev-app-inngest-mode.mjs",
-    "db:clean-benchmark": "tsx scripts/clean-benchmark-data.ts"
+    "db:clean-benchmark": "tsx scripts/clean-benchmark-data.ts",
+    "db:verify-restore": "tsx scripts/verify-restore.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
