@@ -105,6 +105,7 @@ connected. None is a rewrite — they are waiting on a signature, not a sprint.
 | C5 | Cache `liveVersion` in Redis | 9 | The live feed polls conditionally (304 on no change) but still runs a query per poll. Fine now, wrong at scale |
 | C6 | Personalisation | 19 | RAG corpus is built; per-user tailoring is not started |
 | C7 | Admin AI | 23 | Revenue/customer/alert reporting is built; the AI layer over it is not |
+| ~~C11~~ | ~~Admin panel gaps~~ | 3 | ✅ **Closed.** The nav declared 8 pages as built:false — bets, ledger, reconciliation, events, responsible gaming, compliance, casino, promotions. All 8 now exist and every query is verified against the live database by `npm run admin:smoke` |
 | ~~C8~~ | ~~Delete `legacy/`~~ | — | ✅ **Closed.** 30 files removed, plus its tsconfig and eslint exclusions. Recoverable from git history |
 | C9 | Load-test the untested paths | 24 | Covered: bet placement under contention. **Not covered:** homepage, casino callbacks, live-feed polling at scale, Pluto AI concurrency |
 | C10 | `SENTRY_DSN` | 24 | Wired but unconfigured — currently flying blind on production errors |
