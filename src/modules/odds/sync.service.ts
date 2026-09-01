@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lt, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
 import { taxonomyService } from "@/modules/sports/taxonomy.service";
 import { OutOfBudgetError } from "./budget";
@@ -36,6 +36,15 @@ export interface SyncConfig {
  */
 const FIXTURE_HORIZON_DAYS = 14;
 
+/**
+ * Rows per upsert statement.
+ *
+ * Large enough to collapse hundreds of round trips into a handful, small
+ * enough that one statement stays a short lock and a manageable parse — and
+ * that a failing chunk is cheap to retry row by row.
+ */
+const UPSERT_CHUNK = 50;
+
 export class OddsSyncService {
   private lastDelta = new Date(Date.now() - 10 * 60_000);
 
@@ -45,7 +54,7 @@ export class OddsSyncService {
   ) {}
 
   /** Every 30 min. Cheap — one call covers the next 14 days. */
-  async syncFixtures(): Promise<{ upserted: number }> {
+  async syncFixtures(): Promise<{ upserted: number; classified: number; failed: number }> {
     return this.guard("fixtures", async () => {
       /*
        * Ask for a BOUNDED window, and ingest only what can still be bet on.
@@ -69,30 +78,106 @@ export class OddsSyncService {
       );
 
       let classified = 0;
+      let failed = 0;
+
+      /*
+       * Upsert in BATCHES, not one row at a time.
+       *
+       * The pooled client is `max: 1` by design — it avoids multiplying
+       * connection pressure during serverless scale-out — so adding
+       * application-level concurrency would simply queue on one connection and
+       * buy nothing. The only lever that helps is fewer round trips, so rows
+       * go up in chunks and the loop below reads the returned ids.
+       *
+       * The chunk is bounded rather than "all of them": a single statement
+       * carrying 775 rows is a large parse and a long lock, and one failure
+       * would take the whole catalogue with it.
+       */
+      const upserted = new Map<string, string>();
+      for (let start = 0; start < found.length; start += UPSERT_CHUNK) {
+        const chunk = found.slice(start, start + UPSERT_CHUNK);
+        const values = chunk.map((e) => ({
+          provider: this.provider.name,
+          providerEventId: e.eventId,
+          sport: e.sport,
+          league: e.league,
+          home: e.home,
+          away: e.away,
+          startsAt: e.startsAt,
+          status: e.status,
+        }));
+
+        try {
+          const rows = await db
+            .insert(events)
+            .values(values)
+            .onConflictDoUpdate({
+              target: [events.provider, events.providerEventId],
+              set: {
+                startsAt: sql`excluded.starts_at`,
+                status: sql`excluded.status`,
+                league: sql`excluded.league`,
+                updatedAt: new Date(),
+              },
+            })
+            .returning({ id: events.id, providerEventId: events.providerEventId });
+
+          for (const row of rows) upserted.set(row.providerEventId, row.id);
+        } catch (error) {
+          /*
+           * One bad row must not lose the batch.
+           *
+           * Falling back to row-at-a-time for the failing chunk isolates the
+           * offender: the other events in it still land, and the failure is
+           * counted rather than swallowed. Silently dropping 50 fixtures
+           * because one had a malformed date is exactly the kind of loss
+           * nobody notices until a customer cannot find a match.
+           */
+          console.error(
+            `[odds-sync] batch upsert failed for ${chunk.length} events; retrying individually`,
+            error,
+          );
+          for (const [index, value] of values.entries()) {
+            try {
+              const [row] = await db
+                .insert(events)
+                .values(value)
+                .onConflictDoUpdate({
+                  target: [events.provider, events.providerEventId],
+                  set: {
+                    startsAt: value.startsAt,
+                    status: value.status,
+                    league: value.league,
+                    updatedAt: new Date(),
+                  },
+                })
+                .returning({ id: events.id });
+              if (row) upserted.set(value.providerEventId, row.id);
+            } catch (rowError) {
+              failed += 1;
+              console.error(
+                `[odds-sync] could not upsert event ${chunk[index]?.eventId}`,
+                rowError,
+              );
+            }
+          }
+        }
+      }
+
+      /*
+       * Taxonomy resolution is memoised for the run.
+       *
+       * A feed repeats leagues and clubs constantly — a day of one league is
+       * twenty events over ten clubs — and `resolveFixture` opens its own
+       * transaction each time. Without this, the same four lookups run
+       * hundreds of times per sync.
+       */
+      const resolutionCache = new Map<string, Awaited<
+        ReturnType<typeof taxonomyService.resolveFixture>
+      >>();
 
       for (const e of found) {
-        const [row] = await db
-          .insert(events)
-          .values({
-            provider: this.provider.name,
-            providerEventId: e.eventId,
-            sport: e.sport,
-            league: e.league,
-            home: e.home,
-            away: e.away,
-            startsAt: e.startsAt,
-            status: e.status,
-          })
-          .onConflictDoUpdate({
-            target: [events.provider, events.providerEventId],
-            set: {
-              startsAt: e.startsAt,
-              status: e.status,
-              league: e.league,
-              updatedAt: new Date(),
-            },
-          })
-          .returning({ id: events.id });
+        const row = upserted.has(e.eventId) ? { id: upserted.get(e.eventId)! } : undefined;
 
         /*
          * Resolve the fixture onto the sports hierarchy.
@@ -121,7 +206,7 @@ export class OddsSyncService {
         }
       }
 
-      return { upserted: found.length, classified };
+      return { upserted: upserted.size, classified, failed };
     });
   }
 
