@@ -20,7 +20,9 @@
     "dev:stack": "tsx scripts/dev-stack.ts",
     "db:seed-demo": "tsx scripts/seed-demo.ts",
     "odds:capture": "tsx scripts/capture-odds-fixtures.ts",
-    "odds:contract": "tsx scripts/odds-contract.ts"
+    "odds:contract": "tsx scripts/odds-contract.ts",
+    "admin:smoke": "tsx scripts/smoke-admin.ts",
+    "env:push": "tsx scripts/push-env-railway.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
