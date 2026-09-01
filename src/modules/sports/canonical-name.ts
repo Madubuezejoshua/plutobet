@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 /**
  * Turning provider strings into stable identities.
  *
@@ -80,7 +81,17 @@ export function normalizeTeamKey(raw: string): string {
      * SEPARATING marks — hyphens, slashes, brackets — become spaces, because
      * they stand between genuinely distinct words.
      */
-    .replace(/['’`.]/g, "")
+    /*
+     * Apostrophe VARIANTS, not just the ASCII one.
+     *
+     * `´` (U+00B4 ACUTE ACCENT) is a SPACING modifier, not a combining mark,
+     * so NFD never decomposes it and the combining-mark range above never
+     * matches it. "CD O´Higgins" therefore produced the key `cd-o´higgins`,
+     * which violates `teams_key_format` (`^[a-z0-9-]{1,120}$`) and made every
+     * such fixture fail classification — common across South America, Iberia
+     * and Turkey.
+     */
+    .replace(/['’‘`´ʼʻ′＇.]/g, "")
     .replace(/[\-_/(),]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -95,7 +106,39 @@ export function normalizeTeamKey(raw: string): string {
     }
   }
 
-  return value.replace(/\s+/g, "-");
+  return toSafeKey(value.replace(/\s+/g, "-"), raw);
+}
+
+/**
+ * The last line of defence before the database constraint.
+ *
+ * Enumerating every character a provider might send is a losing game — the
+ * acute accent above was already the second such surprise — so this inverts
+ * the rule: anything outside `[a-z0-9-]` is dropped, whatever it is. The
+ * column constraint can then never be violated by a name we have not seen.
+ *
+ * Existing keys are unaffected: they already contain only permitted
+ * characters, so this is a no-op for every key already stored.
+ *
+ * When a name is entirely non-Latin the cleaned key would be empty, which the
+ * constraint also rejects. Falling back to a hash of the ORIGINAL name keeps
+ * the result deterministic and stable — the same club always resolves to the
+ * same key — while making an accidental merge with an unrelated club
+ * vanishingly unlikely. Two different names never share a fallback key unless
+ * they collide in SHA-256.
+ */
+function toSafeKey(candidate: string, original: string): string {
+  const cleaned = candidate
+    .replace(/[^a-z0-9-]/g, "")
+    // Collapse and trim separators left behind by removed characters, so
+    // "o--higgins" and "-fc-" do not become distinct keys.
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+
+  if (cleaned.length > 0) return cleaned;
+
+  return `team-${createHash("sha256").update(original).digest("hex").slice(0, 16)}`;
 }
 
 /**
@@ -107,15 +150,18 @@ export function normalizeTeamKey(raw: string): string {
  * competitions).
  */
 export function normalizeCompetitionKey(raw: string): string {
-  return raw
+  const value = raw
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/&/g, " and ")
-    .replace(/[.'’`\-_/(),]/g, " ")
+    // Same spacing-modifier problem as the team key: NFD does not touch these.
+    .replace(/[.'’‘`´ʼʻ′＇\-_/(),]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\s+/g, "-");
+
+  return toSafeKey(value, raw);
 }
 
 export function normalizeSportKey(raw: string): string {
