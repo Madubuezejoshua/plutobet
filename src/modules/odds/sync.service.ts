@@ -19,6 +19,20 @@ import type { BookmakerOdds, OddsProvider, OddsSnapshot } from "./provider";
  *                                        an empty live board costs nothing)
  *   ------------------------------------------------------------------
  *   ~396/day, leaving ~100 in reserve for user-triggered refreshes.
+ *
+ * THE DELTA LINE ABOVE NO LONGER HOLDS — measured against the live API.
+ * `/odds/updated` refuses a cursor older than ~90 seconds (60s is accepted,
+ * 80s is not), so a five-minute delta would silently lose four minutes of
+ * movement on every cycle. The adapter now returns `null` for a cursor outside
+ * that window and this service falls back to `fullRefreshWatchlist()`, which
+ * costs 4 calls rather than 1 — about 1150/day at the current cadence, over
+ * the free tier.
+ *
+ * That is bounded, not unbounded: `ApiBudget` refuses once the quota is spent
+ * and `guard()` skips the tick, so the platform degrades to a staler board
+ * rather than an overspent account. Choosing the real cadence — a longer delta
+ * interval, a smaller watchlist, or a paid tier — is an owner decision with a
+ * cost attached, so it is documented rather than quietly changed here.
  */
 
 export interface FixtureSyncResult {

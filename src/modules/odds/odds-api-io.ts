@@ -21,6 +21,38 @@ const BASE = "https://api.odds-api.io/v3";
 /** Their hard cap on /odds/multi. Do not raise without checking the docs. */
 const MULTI_CHUNK = 10;
 
+/**
+ * How far back `/odds/updated` will accept a cursor.
+ *
+ * Measured against the live API, not documented anywhere: 60 seconds is
+ * accepted, 80 is refused with "cannot be older than 90 seconds". 60s is used
+ * rather than 90 because the boundary is evidently applied to arrival time, and
+ * a request that spends a second in flight must not tip over it.
+ */
+const DELTA_WINDOW_MS = 60_000;
+
+/**
+ * The sport name `/odds/updated` expects, from the slug everything else uses.
+ *
+ * Two vocabularies for one concept in one API: `/events` takes the slug
+ * ("football"), `/odds/updated` takes the display name ("Football"). Only the
+ * sports this platform actually trades are mapped — a guess would fail
+ * silently, and "MMA" is not what title-casing "mixed-martial-arts" produces.
+ */
+const SPORT_DISPLAY_NAMES: Record<string, string> = {
+  football: "Football",
+  basketball: "Basketball",
+  tennis: "Tennis",
+};
+
+function providerSportName(slug: string): string {
+  const known = SPORT_DISPLAY_NAMES[slug.toLowerCase()];
+  if (known) return known;
+  // Unmapped: send the slug unchanged so the provider rejects it loudly rather
+  // than this inventing a name that quietly matches nothing.
+  return slug;
+}
+
 type ProviderRecord = Record<string, unknown>;
 
 function isProviderRecord(value: unknown): value is ProviderRecord {
@@ -163,13 +195,45 @@ export class OddsApiIoProvider implements OddsProvider {
     }
   }
 
+  /**
+   * Prices that moved since a cursor, or null when a delta is not trustworthy.
+   *
+   * THREE THINGS THIS ENDPOINT WANTS THAT NOTHING DOCUMENTED SAID
+   *
+   * 1. `sport` is the DISPLAY NAME, not the slug. `/events` takes "football";
+   *    this takes "Football" and answers 400 for the slug. Exactly the trap
+   *    that `bet365` vs `Bet365` already set in this file.
+   *
+   * 2. `since` is UNIX SECONDS. An ISO-8601 string is rejected outright, which
+   *    is the harmless failure.
+   *
+   * 3. Unix MILLISECONDS are accepted and return `200 []`. That is the
+   *    dangerous one: a silent, permanent "nothing has changed" that no error
+   *    handler would ever notice. The board would simply stop updating and
+   *    every log would look clean.
+   *
+   * THE WINDOW
+   * The provider refuses a cursor older than about ninety seconds — sixty is
+   * accepted, eighty already is not. The documented budget plan of a delta call
+   * every five minutes therefore cannot work: four of those five minutes are
+   * outside the window, and the movements in them would be lost silently.
+   *
+   * So when the cursor is too old this returns `null`, and the caller falls
+   * back to a full watchlist refresh. That is the honest answer — "I cannot
+   * tell you what changed" — rather than an empty array, which claims nothing
+   * changed and is how a stale board looks healthy.
+   */
   async getUpdatedSince(
     since: Date,
     opts: { sport?: string; bookmaker?: string },
-  ): Promise<OddsSnapshot[]> {
+  ): Promise<OddsSnapshot[] | null> {
+    const ageMs = Date.now() - since.getTime();
+    if (ageMs > DELTA_WINDOW_MS) return null;
+
     const raw = await this.get<unknown>("/odds/updated", {
-      since: since.toISOString(),
-      sport: opts.sport,
+      // Seconds, floored. Never milliseconds — see above.
+      since: String(Math.floor(since.getTime() / 1000)),
+      sport: opts.sport ? providerSportName(opts.sport) : undefined,
       bookmaker: opts.bookmaker,
     });
     return this.normaliseSnapshots(raw);

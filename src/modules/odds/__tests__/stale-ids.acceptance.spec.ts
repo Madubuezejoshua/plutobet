@@ -46,3 +46,40 @@ describe("parsing the provider's unknown-id rejection", () => {
     expect(error.message).toMatch(/2 unknown event id/);
   });
 });
+
+/**
+ * The delta cursor, which the provider constrains in three undocumented ways.
+ *
+ * All three were found by probing the live API after the scheduler's own logs
+ * showed the delta job failing on every run:
+ *
+ *   sport=football          -> 400 "football is not a valid sport"
+ *   sport=Football          -> accepted            (display name, not slug)
+ *   since=<ISO string>      -> 400 "Invalid since parameter"
+ *   since=<unix seconds>    -> accepted
+ *   since=<unix ms>         -> 200 []              <- the dangerous one
+ *   since=60s ago           -> accepted
+ *   since=80s ago           -> 400 "cannot be older than 90 seconds"
+ *
+ * The milliseconds case is why these assertions exist. It does not fail; it
+ * returns an empty list, which reads as "nothing changed" and would freeze the
+ * board indefinitely with a clean log.
+ */
+describe("delta cursor handling", () => {
+  it("returns null rather than an empty list when the cursor is too old", async () => {
+    const { OddsApiIoProvider } = await import("../odds-api-io");
+    const provider = new OddsApiIoProvider("test-key-not-a-credential", {
+      spend: async () => {},
+    } as unknown as import("../budget").ApiBudget);
+
+    // Ten minutes is far outside the provider's window. `null` means "I cannot
+    // tell you what changed" and makes the caller do a full refresh; an empty
+    // array would claim nothing changed, which is how a stale board looks
+    // healthy. No network call is made at all.
+    const result = await provider.getUpdatedSince(new Date(Date.now() - 10 * 60_000), {
+      sport: "football",
+      bookmaker: "Bet365",
+    });
+    expect(result).toBeNull();
+  });
+});
