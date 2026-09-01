@@ -435,13 +435,26 @@ Run over HTTP against the **real persisted market**:
 
 ### NOT TESTED in this pass — stated plainly
 
+*All four were closed afterwards, in commit `3302e03` — 27 tests. Status added
+per item; the original wording is unchanged.*
+
 - ❌ **Two concurrent ₦200 placements over HTTP.** Covered at service level by
   the 100-way wallet hammer, **not** at the route level as the task specified.
+  → **NOW TESTED.** Driven through the route handler and repeated five times,
+  because a race that only sometimes loses is a race that passes once and ships.
 - ❌ **Closed / suspended market rejection** against the real persisted market.
+  → **NOW TESTED** — against `SETTLED`, `VOID` and `SUSPENDED`. There is no
+  `CLOSED` status; a first draft asserted one that does not exist.
 - ❌ **A normal user cannot invoke QA funding** — the script is environment-gated,
   but no test asserts a customer cannot reach it.
+  → **NOW TESTED**, architecturally: nothing in the shipped bundle imports the
+  QA credit script or reads `ALLOW_QA_CREDIT`, and no non-admin actor can create
+  an `ADJUSTMENT`.
 - ❌ **Support staff cannot perform super-admin settlement actions** — RBAC
   separation is covered by existing admin tests, but not re-verified here.
+  → **NOW TESTED**, including the **positive** case — a guard that denies
+  everyone passes every negative test. Two of these initially passed vacuously
+  on a 500 (a crash creates no grant either); they now assert the status.
 
 ---
 
@@ -457,27 +470,50 @@ Run over HTTP against the **real persisted market**:
 | Migrations | 24 of 24 applied |
 | Admin smoke (`npm run admin:smoke`) | 18/18 queries clean (last run) |
 
+*Those were the figures for THIS pass. The suite has since grown to
+**56 files - 712 passed - 1 skipped**, migrations to **26**, with the build and
+typecheck still clean - see `DEVELOPER_COMPLETION_REPORT.md` section 17.*
+
 ---
 
 ## 28–29. Commits and push
 
-*(Completed after verification — see the final section.)*
+The work described in this document was committed at the time. The **follow-up**
+round — the one that resolved most of section 30 — is seven further commits on
+`main`, range `c526a1d..0e7f659`:
+
+| Hash | Commit |
+|---|---|
+| `3603997` | Use one money formatter, and stop losing the minus sign |
+| `f2f19a3` | Make settlement run on a schedule, and stop it starving newer events |
+| `3cd03f1` | Stop a stray accent from silently unlisting a club |
+| `3302e03` | Test the money routes through HTTP, and set AUTH_SECRET for tests |
+| `c5efe34` | Batch fixture upserts, and measure the sync instead of guessing |
+| `a4261fa` | Run the scheduler locally, and make QA credit accountable |
+| `0e7f659` | Report what was done, and correct what the last report overstated |
+
+**Nothing has been pushed.** Thirteen commits sit ahead of `origin/main` awaiting
+authorisation. Full per-commit contents and the pre-commit secret scan are in
+`DEVELOPER_COMPLETION_REPORT.md` section 19.
 
 ---
 
 ## 30. Remaining blockers
 
-### Engineering, unresolved
+### Engineering — original findings, with current status
 
-| # | Defect | Impact |
-|---|---|---|
-| 1 | **Team key rejects non-ASCII names** | `CD O´Higgins` → key `cd-o´higgins` violates `teams_key_format`. Classification is best-effort so ingestion continues, but affected fixtures are never classified onto the sports hierarchy — losing competition browsing and head-to-head data. Affects South American, Iberian and Turkish clubs |
-| 2 | **`NEXTAUTH_URL` unset on Railway** | Sign-in callbacks point at `http://localhost:3000` |
-| 3 | **Railway has no database, Redis or `IDENTITY_PEPPER`** | The deployment cannot serve a customer at all |
-| 4 | **`syncFixtures` is slow** | ~775 upcoming events × (upsert + taxonomy) is minutes per run, sequential |
-| 5 | **QA credit writes no admin audit row** | Runs as `SYSTEM`; acceptable for a gated QA script, not as a pattern for real adjustments |
-| 6 | **Result polling can starve newer events (NEW)** | `pollFinishedEvents` takes the **20 oldest** unresolved events per tick, FIFO. Fixtures the provider never scores — the queue head was Welsh amateur football 22 hours old — stay in that queue and are re-fetched every run. The QA bet's event sat **59th of 60** and four full runs (≈80 provider calls) never reached it. The queue does drain (60 → 40), so it is throttling rather than deadlock, but with a 14-day horizon pulling in hundreds of unscored lower-league matches, a newer event can wait a long time behind them while its bets sit `PENDING`. **Not fixed** — it needs a deliberate policy (age out unresolvable events, or prioritise events that actually have bets on them) rather than a quick change |
-| 7 | **The settlement pipeline has never run on its own (NEW)** | Inngest is not running locally and the deployment has no database, so `pollMatchResults` had never executed. Settlement works — proven above — but nothing is currently scheduled to trigger it anywhere |
+Kept verbatim. The status column is what changed afterwards; nothing has been
+deleted, so the trail from defect to fix stays readable.
+
+| # | Defect | Impact | Status |
+|---|---|---|---|
+| 1 | **Team key rejects non-ASCII names** | `CD O´Higgins` → key `cd-o´higgins` violates `teams_key_format`. Classification is best-effort so ingestion continues, but affected fixtures are never classified onto the sports hierarchy — losing competition browsing and head-to-head data. Affects South American, Iberian and Turkish clubs | **FIXED** `3cd03f1`. The cause was narrower than "non-ASCII": U+00B4 is a *spacing* modifier, so NFD never decomposed it. Now anything outside `[a-z0-9-]` is dropped rather than enumerated, with a deterministic SHA-256 fallback for wholly non-Latin names. 33 tests |
+| 2 | **`NEXTAUTH_URL` unset on Railway** | Sign-in callbacks point at `http://localhost:3000` | **OPEN** — `BLOCKED_BY_OWNER_CONFIGURATION`. Owner action, see section 31 |
+| 3 | **Railway has no database, Redis or `IDENTITY_PEPPER`** | The deployment cannot serve a customer at all | **OPEN** — `BLOCKED_BY_OWNER_CONFIGURATION`. Owner action, see section 31 |
+| 4 | **`syncFixtures` is slow** | ~775 upcoming events × (upsert + taxonomy) is minutes per run, sequential | **PARTIAL** `c5efe34`. Upserts now batch 50 to a statement and taxonomy is memoised per run. The **3× target is not demonstrated**: the dominant cost turned out to be the per-event classification transaction, which still runs once per event over the network. Batching classification is the remaining lever |
+| 5 | **QA credit writes no admin audit row** | Runs as `SYSTEM`; acceptable for a gated QA script, not as a pattern for real adjustments | **FIXED** `a4261fa`. The audit row is appended on the *same* transaction as the ledger entries — one that could commit without the other would make the trail look complete when it is not |
+| 6 | **Result polling can starve newer events (NEW)** | `pollFinishedEvents` takes the **20 oldest** unresolved events per tick, FIFO. Fixtures the provider never scores — the queue head was Welsh amateur football 22 hours old — stay in that queue and are re-fetched every run. The QA bet's event sat **59th of 60** and four full runs (~80 provider calls) never reached it. The queue does drain (60 → 40), so it is throttling rather than deadlock, but with a 14-day horizon pulling in hundreds of unscored lower-league matches, a newer event can wait a long time behind them while its bets sit `PENDING`. **Not fixed** — it needs a deliberate policy (age out unresolvable events, or prioritise events that actually have bets on them) rather than a quick change | **FIXED** `f2f19a3`, via the second option. Events with a pending bet sort first, and each event carries its own `result_next_poll_at` so an unscored fixture backs off from 5 minutes to a daily cap. An event is **never** marked resolved for lack of a score — only deferred, because a provider briefly missing data must not become a permanently unsettled bet. 7 tests |
+| 7 | **The settlement pipeline has never run on its own (NEW)** | Inngest is not running locally and the deployment has no database, so `pollMatchResults` had never executed. Settlement works — proven above — but nothing is currently scheduled to trigger it anywhere | **LARGELY FIXED** `f2f19a3` + `a4261fa`. `npm run dev:all` now starts Inngest alongside Next — the missing piece — and a durable heartbeat records every run, so "ran and found nothing" is distinguishable from "did not run"; the alert fires when a job has *never* succeeded, which was this deployment's actual state. 9 acceptance tests drive the **registered** function end to end. Still `WAITING_ON_REAL_EVENT` for an unattended live run |
 
 ### External
 
@@ -518,6 +554,30 @@ replacement values.
 
 ## 32. Exact next recommended task
 
+**Superseded.** Items 1–4 of the original list are done — the scheduler runs and
+is proven against the registered function, the result-queue policy was decided
+and implemented, all four negative-test areas are covered (27 tests), and the
+team-key fix shipped. The original list is preserved below the line.
+
+What is actually next, in order:
+
+1. **Owner: rotate the exposed credentials** in the section 31 order,
+   `IDENTITY_PEPPER` first. It is still rotatable *only* because every account is
+   `@plutobet.test`; after the first real customer it is permanently unfixable.
+2. **Owner: give Railway a database, Redis and the environment it needs**, then
+   set `NEXTAUTH_URL`. Until then the deployment cannot serve anybody.
+3. **Watch one real fixture settle unattended** — the only thing standing between
+   `VERIFIED_AUTOMATED` and a genuinely observed automatic settlement. Needs
+   nothing but a running scheduler and a match that finishes.
+4. **Batch the taxonomy classification** — the remaining cost in `syncFixtures`,
+   and the reason the 3× target is not claimed.
+5. **CI**, so the 712 tests run on every change rather than when somebody
+   remembers.
+
+---
+
+*Original list, kept as written:*
+
 **Get something running the settlement poller.**
 
 The core journey is now proven end to end, including a real win paid from a real
@@ -529,17 +589,16 @@ running it.
 
 So, in order:
 
-1. **Run the Inngest dev server locally** (or schedule the poller some other way)
-   and confirm a bet settles with no manual step. This is the difference between
-   "settlement works" and "settlement happens".
-2. **Decide the result-queue policy** (Defect 6). Options: age out events the
-   provider has not scored after N hours, or order the queue by "has pending
-   bets" first. Either is a product decision, not a bug fix.
-3. **The four untested negative cases in §22** — concurrent HTTP placement,
-   closed/suspended market, QA-funding access control, support-vs-super-admin.
-4. **The team-key slug fix** (Defect 1) — a one-line transliteration.
-5. **Railway configuration**, only after the credential rotation in §31.
-6. **`syncFixtures` performance** (Defect 4).
+1. ~~**Run the Inngest dev server locally** (or schedule the poller some other
+   way) and confirm a bet settles with no manual step.~~ **DONE** — `npm run dev:all`
+2. ~~**Decide the result-queue policy** (Defect 6).~~ **DONE** — pending-bet
+   priority plus per-event backoff
+3. ~~**The four untested negative cases in section 22.**~~ **DONE** — 27 tests
+4. ~~**The team-key slug fix** (Defect 1).~~ **DONE** — and it was not a
+   transliteration
+5. **Railway configuration**, only after the credential rotation in section 31.
+   — **still open**
+6. **`syncFixtures` performance** (Defect 4). — **partially done**
 
 ---
 
