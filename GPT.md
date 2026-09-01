@@ -1,5 +1,18 @@
 # PlutoBet — Complete Engineering Audit
 
+> ## HISTORICAL — not the current status
+>
+> This document records a full engineering audit performed on 2026-08-31. It is kept as evidence and is **not** the
+> current state of the repository.
+>
+> **For what works today, read [`PROJECT_STATUS.md`](PROJECT_STATUS.md).**
+> Where this file disagrees with it, that file is right.
+>
+> Nothing here has been deleted. Findings that were later resolved are still
+> described as they were found, so the trail from defect to fix stays readable.
+
+
+
 **Prepared for:** a senior engineer picking this project up cold
 **Audit date:** 2026-08-31
 **Method:** direct inspection of the working tree, Git history, live database,

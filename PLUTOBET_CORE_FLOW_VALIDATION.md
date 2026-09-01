@@ -1,5 +1,18 @@
 # PlutoBet — Core Flow Validation
 
+> ## HISTORICAL — not the current status
+>
+> This document records the core-flow validation pass. It is kept as evidence and is **not** the
+> current state of the repository.
+>
+> **For what works today, read [`PROJECT_STATUS.md`](PROJECT_STATUS.md).**
+> Where this file disagrees with it, that file is right.
+>
+> Nothing here has been deleted. Findings that were later resolved are still
+> described as they were found, so the trail from defect to fix stays readable.
+
+
+
 ## 1. Executive result
 
 **`PARTIAL — core flow works but listed blockers remain`**

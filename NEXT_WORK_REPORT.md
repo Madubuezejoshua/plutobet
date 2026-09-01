@@ -2,6 +2,9 @@
 
 > ## STATUS: SUPERSEDED IN PART
 >
+> **For what works today, read [`PROJECT_STATUS.md`](PROJECT_STATUS.md)**, which is
+> the single source of truth. This document remains historical evidence.
+>
 > This document records the pass that got the first real bet placed and
 > settled. It is kept as historical evidence and is **not** the current state
 > of the repository. Where it is out of date, the newer figures are here:

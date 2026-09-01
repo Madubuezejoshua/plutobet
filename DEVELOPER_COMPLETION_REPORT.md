@@ -1,5 +1,18 @@
 # PlutoBet — Developer Completion Report
 
+> ## HISTORICAL — not the current status
+>
+> This document records the developer completion pass that preceded this one. It is kept as evidence and is **not** the
+> current state of the repository.
+>
+> **For what works today, read [`PROJECT_STATUS.md`](PROJECT_STATUS.md).**
+> Where this file disagrees with it, that file is right.
+>
+> Nothing here has been deleted. Findings that were later resolved are still
+> described as they were found, so the trail from defect to fix stays readable.
+
+
+
 **Scope:** developer-controlled work on the core sportsbook flow.
 No secret values, credentials, OTPs or personal data appear in this document.
 

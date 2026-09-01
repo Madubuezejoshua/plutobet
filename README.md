@@ -1,5 +1,13 @@
 # Bet Platform
 
+[![CI](https://github.com/plutobet-ai/plutobet_ai/actions/workflows/ci.yml/badge.svg)](https://github.com/plutobet-ai/plutobet_ai/actions/workflows/ci.yml)
+
+**Current status: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)** — the single source
+of truth for what works, what is waiting on a real event, and what is blocked on
+an owner decision. Other status documents in this repository are historical.
+
+**Before launching: [`OWNER_LAUNCH_CHECKLIST.md`](OWNER_LAUNCH_CHECKLIST.md).**
+
 Phase 1 of the Nigerian sports-betting platform: an auditable wallet,
 append-only double-entry ledger, authentication foundation, and durable daily
 reconciliation. Later betting, payments, odds, KYC, and casino phases are

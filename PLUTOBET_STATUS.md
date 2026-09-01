@@ -1,5 +1,18 @@
 # PlutoBet — Project Status
 
+> ## HISTORICAL — not the current status
+>
+> This document records the project status as of 2026-08-27. It is kept as evidence and is **not** the
+> current state of the repository.
+>
+> **For what works today, read [`PROJECT_STATUS.md`](PROJECT_STATUS.md).**
+> Where this file disagrees with it, that file is right.
+>
+> Nothing here has been deleted. Findings that were later resolved are still
+> described as they were found, so the trail from defect to fix stays readable.
+
+
+
 **Last updated:** 2026-08-27
 **Repository:** `github.com/plutobet-ai/plutobet_ai` (also `Madubuezejoshua/plutobet`)
 **Branch:** `main` · 12 commits · working tree clean
