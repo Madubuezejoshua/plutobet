@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { WalletContentionError } from "@/modules/wallet/errors";
 import { ZodError } from "zod";
 import { AccountNotEligibleError, BetRejectedError } from "@/modules/betting/errors";
 import { CasinoError } from "@/modules/casino/errors";
@@ -76,6 +77,28 @@ function toResponse(error: unknown): NextResponse {
     return NextResponse.json(
       { error: "INVALID_REQUEST", issues: error.issues.map((i) => ({ path: i.path, message: i.message })) },
       { status: 422 },
+    );
+  }
+  /*
+   * The wallet row could not be locked in time.
+   *
+   * Mapped centrally rather than per-route because every money path can raise
+   * it. `WalletContentionError` was introduced when a lock timeout was found
+   * escaping as an untyped driver error, but nothing taught the API layer
+   * about it — so a customer placing a bet during a burst still received an
+   * opaque 500, which is the outcome that fix existed to prevent.
+   *
+   * 503 with Retry-After, not 409: nothing was written, the request was never
+   * invalid, and the honest instruction is "try again in a moment". A client
+   * that retries on 503 does the right thing automatically.
+   */
+  if (error instanceof WalletContentionError) {
+    return NextResponse.json(
+      {
+        error: "WALLET_BUSY",
+        message: "That wallet is briefly busy. Nothing was charged — please try again.",
+      },
+      { status: 503, headers: { "retry-after": "1" } },
     );
   }
 

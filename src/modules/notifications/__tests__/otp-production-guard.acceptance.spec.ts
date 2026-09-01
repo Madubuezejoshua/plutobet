@@ -107,15 +107,26 @@ describe("OTP console-fallback production guard", () => {
     setNodeEnv("development");
     const otp = service(new ConsoleSmsProvider(), new ConsoleEmailProvider());
 
-    // Local development must still complete registration end to end without
-    // buying credentials — removing that would make the flow untestable.
-    await expect(
-      otp.issue({
-        destination: "08031234567",
-        channel: "SMS",
-        purpose: "PHONE_VERIFY",
-        ip: "102.89.0.1",
-      }),
-    ).rejects.not.toThrow(/refusing to issue/);
+    /*
+     * Local development must still complete registration end to end without
+     * buying credentials — removing that would make the flow untestable.
+     *
+     * This originally read `.rejects.not.toThrow(...)`, which REQUIRES the
+     * promise to reject. It passed only because AUTH_SECRET was unset in the
+     * test environment, so `issue()` threw for an unrelated reason and the
+     * assertion was satisfied by an accident. Once the secret was provided the
+     * call resolved, as it always should have, and the test failed.
+     *
+     * The right assertion is that it resolves AND hands back the dev code.
+     */
+    const issued = await otp.issue({
+      destination: "08031234567",
+      channel: "SMS",
+      purpose: "PHONE_VERIFY",
+      ip: "102.89.0.1",
+    });
+
+    expect(issued.devCode).toMatch(/^\d{6}$/);
+    expect(issued.destination).toBe("+2348031234567");
   });
 });
