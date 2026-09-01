@@ -1,5 +1,29 @@
 # PlutoBet — Core Sportsbook Flow: Implementation & Validation
 
+> ## STATUS: SUPERSEDED IN PART
+>
+> This document records the pass that got the first real bet placed and
+> settled. It is kept as historical evidence and is **not** the current state
+> of the repository. Where it is out of date, the newer figures are here:
+>
+> | This document says | Current truth | Where |
+> |---|---|---|
+> | Migrations 24 | **26** (0024 heartbeats, 0025 poll fairness) | `DEVELOPER_COMPLETION_REPORT.md` §7 |
+> | Stage 7 HTTP/RBAC `NOT_IMPLEMENTED` | **Complete** — 27 tests across four areas | §9 |
+> | Stage 9 fixture-sync `NOT_IMPLEMENTED` | **Batched**; target not demonstrated, limiting factor documented | §11 |
+> | Registered scheduler untested | **9 acceptance tests** drive the real handler | §6 |
+> | Defect 6 (poll starvation) open | **Fixed**, 7 tests | §8 |
+> | Defect 1 (non-ASCII team keys) open | **Fixed**, 33 tests | §10 |
+>
+> **The real match result and ₦600 payout were genuine, but the earlier
+> settlement services were manually invoked through QA scripts. Automatic
+> scheduling is validated separately** — see `DEVELOPER_COMPLETION_REPORT.md`
+> §6, where the registered Inngest function is driven end to end.
+>
+> Nothing here has been deleted. Findings that are now resolved are marked
+> above rather than removed, so the trail from defect to fix stays readable.
+
+
 **Objective:** move from *"real fixtures exist, zero markets stored, no real-provider
 bet ever placed"* to a proven journey:
 **Register → admin sees user → ingest real odds → persist markets → QA credit →
@@ -289,7 +313,20 @@ STAKE       DEBIT   20000  CASH
 
 ---
 
-## 19. Real settlement — **RESOLVED: the bet WON on a real result**
+## 19. Real settlement — **the bet WON on a real result, settled MANUALLY**
+
+> **CORRECTION (added later).** This section originally read as though the bet
+> settled on its own. It did not. The **result and the payout arithmetic were
+> entirely genuine** — the provider reported the score, the production resolver
+> decided the outcome, and the ledger moved real entries — but the settlement
+> services were **invoked by hand** through `scripts/qa-settle-run.ts` and
+> `scripts/qa-settle-one.ts`.
+>
+> `pollMatchResults` is an Inngest cron, Inngest was not running locally, and
+> the deployment has no database, so that job had **never executed once**.
+> Automatic settlement is addressed in `DEVELOPER_COMPLETION_REPORT.md` §6 and
+> is classified `IMPLEMENTED_NOT_LIVE_TESTED` — the scheduler now exists and
+> can be started, but has not been observed settling a bet unattended.
 
 The match finished while this work was in progress and the bet was settled by
 the production services. **No score was invented and no status was written by
@@ -368,10 +405,18 @@ Unchanged and still passing, from
 
 | Check | Result |
 |---|---|
-| Global debits vs credits | **60,000 = 60,000 — BALANCED** |
+| Global debits vs credits | **60,000 = 60,000 — BALANCED** *(snapshot taken BEFORE settlement)* |
 | Wallets with a negative balance | **0** |
 | Wallets flagged by reconciliation | **0** |
 | Bets without a stake debit | **0** |
+
+> **On the two different totals in this document.** §19 reports 120,000 and
+> this section reports 60,000. Both queries were global and identical in
+> scope; the difference is purely WHEN each was taken. This snapshot predates
+> the 60,000-kobo payout. The authoritative figure after settlement is
+> **120,000 debits = 120,000 credits**, and every transaction carries exactly
+> two legs. See `DEVELOPER_COMPLETION_REPORT.md` §5 for the full transaction
+> list.
 
 ---
 
