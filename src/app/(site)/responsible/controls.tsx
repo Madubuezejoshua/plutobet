@@ -104,7 +104,18 @@ export function ResponsibleControls(props: {
       return;
     }
     const result = await post({ action: "SELF_EXCLUDE", ...(months ? { months } : {}) });
-    if (result) window.location.href = "/api/auth/signout";
+    /*
+     * A FULL document navigation, deliberately.
+     *
+     * `/api/auth/signout` is a route handler, not a page: it clears the session
+     * cookie and issues its own redirect. `useRouter().push()` — which the lint
+     * rule below suggests — performs a client-side transition that never gives
+     * the browser a response to act on, so the cookie would survive and the
+     * user would stay signed in after asking to be excluded. That is the one
+     * outcome this button must never produce.
+     */
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    if (result) window.location.assign("/api/auth/signout");
   }
 
   if (excluded) {

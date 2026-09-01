@@ -37,11 +37,31 @@ async function hit(path: string, params: Record<string, string> = {}): Promise<u
   return body;
 }
 
-function asArray(raw: any): any[] {
+/*
+ * Reading a third party's JSON without pretending to know its shape.
+ *
+ * `unknown` rather than `any`: the payload genuinely IS unknown — that is the
+ * entire point of a probe — but `any` disables checking everywhere the value
+ * travels, so a typo in a property name becomes a silent `undefined` in the
+ * output rather than a compile error. These two helpers narrow once, at the
+ * boundary, and everything downstream stays checked.
+ */
+function asArray(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw;
-  if (Array.isArray(raw?.data)) return raw.data;
-  if (Array.isArray(raw?.events)) return raw.events;
+  const data = prop(raw, "data");
+  if (Array.isArray(data)) return data;
+  const events = prop(raw, "events");
+  if (Array.isArray(events)) return events;
   return [];
+}
+
+function prop(value: unknown, key: string): unknown {
+  if (typeof value !== "object" || value === null) return undefined;
+  return (value as Record<string, unknown>)[key];
+}
+
+function text(value: unknown): string {
+  return value === undefined || value === null ? "" : String(value);
 }
 
 async function main() {
@@ -56,29 +76,35 @@ async function main() {
     return;
   }
 
-  const eventId = String(first.id ?? first.eventId);
+  const eventId = text(prop(first, "id") ?? prop(first, "eventId"));
   const odds = await hit("/odds", { eventId });
 
   // Run the live payload through the real mappers. Anything printed as
   // "DROPPED" is a market or selection the adapter would silently discard.
   console.log(`\n${"=".repeat(72)}\nMAPPER DRY RUN (what the adapter would keep)`);
   const entry = asArray(odds)[0] ?? odds;
-  for (const book of asArray(entry?.bookmakers ?? entry?.books)) {
-    console.log(`\nbookmaker: ${book.name ?? book.bookmaker}`);
-    for (const [rawKey, payload] of Object.entries<any>(book.markets ?? {})) {
+  for (const book of asArray(prop(entry, "bookmakers") ?? prop(entry, "books"))) {
+    console.log(`\nbookmaker: ${text(prop(book, "name") ?? prop(book, "bookmaker"))}`);
+    const markets = prop(book, "markets");
+    const marketEntries: [string, unknown][] =
+      typeof markets === "object" && markets !== null
+        ? Object.entries(markets as Record<string, unknown>)
+        : [];
+    for (const [rawKey, payload] of marketEntries) {
       const market = mapMarketKey(rawKey);
       if (!market) {
         console.log(`  DROPPED market "${rawKey}" — no canonical mapping`);
         continue;
       }
-      const rows = asArray(payload?.selections ?? payload);
+      const rows = asArray(prop(payload, "selections") ?? payload);
       for (const s of rows) {
-        const label = String(s.name ?? s.label ?? "");
-        const line = s.line !== undefined ? Number(s.line) : undefined;
+        const label = text(prop(s, "name") ?? prop(s, "label"));
+        const rawLine = prop(s, "line");
+        const line = rawLine === undefined ? undefined : Number(rawLine);
         const key = mapSelectionKey(market, label, line);
         console.log(
           key
-            ? `  ${market.padEnd(14)} "${label}" -> ${key}  @ ${s.odds ?? s.price}`
+            ? `  ${market.padEnd(14)} "${label}" -> ${key}  @ ${text(prop(s, "odds") ?? prop(s, "price"))}`
             : `  DROPPED selection "${label}" in ${market} — no canonical mapping`,
         );
       }
@@ -87,13 +113,15 @@ async function main() {
 
   // The endpoint settlement depends on. This is the important one now.
   const detail = await hit(`/events/${eventId}`);
-  const e: any = (detail as any)?.data ?? detail;
+  const e: unknown = prop(detail, "data") ?? detail;
   console.log(`\n${"=".repeat(72)}\nSETTLEMENT SHAPE CHECK`);
-  console.log(`status:          ${e?.status}`);
-  console.log(`scores:          ${JSON.stringify(e?.scores)}`);
-  console.log(`scores.periods:  ${JSON.stringify(e?.scores?.periods)}`);
+  const scores = prop(e, "scores");
+  const periods = prop(scores, "periods");
+  console.log(`status:          ${text(prop(e, "status"))}`);
+  console.log(`scores:          ${JSON.stringify(scores)}`);
+  console.log(`scores.periods:  ${JSON.stringify(periods)}`);
   console.log(
-    e?.scores?.periods?.ft
+    prop(periods, "ft")
       ? "  OK — periods.ft is present, settlement can read a regulation score"
       : "  !! periods.ft NOT FOUND. resolveLeg() reads periods.ft for every\n" +
         "     match-result market. Correct the mapping in odds-api-io.ts\n" +

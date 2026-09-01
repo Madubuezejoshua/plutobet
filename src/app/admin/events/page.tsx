@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
-import { naira } from "@/lib/money";
 import { guardAdminPage } from "../_guard";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +27,7 @@ type EventRow = {
   selection_count: number;
   pending_bets: number;
   has_result: boolean;
+  finished: boolean;
   newest_price: Date | null;
 }
 
@@ -49,6 +49,11 @@ export default async function AdminEventsPage() {
       count(DISTINCT s.id)::int AS selection_count,
       count(DISTINCT b.id) FILTER (WHERE b.status = 'PENDING')::int AS pending_bets,
       EXISTS (SELECT 1 FROM event_results r WHERE r.event_id = e.id) AS has_result,
+      -- Staleness is judged by the clock that WROTE these timestamps.
+      -- Comparing a database timestamp against the web server's own clock
+      -- makes the stalled column disagree with the stalled count above the
+      -- moment the two machines drift, and the count already asks Postgres.
+      (e.starts_at < now() - INTERVAL '6 hours') AS finished,
       max(s.updated_at) AS newest_price
     FROM events e
     LEFT JOIN markets m ON m.event_id = e.id
@@ -79,13 +84,16 @@ export default async function AdminEventsPage() {
     FROM events
   `);
 
-  const [feed] = await db.execute<{ newest: Date | null }>(sql`
-    SELECT max(updated_at) AS newest FROM selections
+  const [feed] = await db.execute<{ newest: Date | null; stale_minutes: number | null }>(sql`
+    SELECT
+      max(updated_at) AS newest,
+      -- Same reasoning as the stalled column: the age of a database row is a
+      -- question for the database, not for this process's clock.
+      floor(EXTRACT(EPOCH FROM (now() - max(updated_at))) / 60)::int AS stale_minutes
+    FROM selections
   `);
 
-  const staleMinutes = feed?.newest
-    ? Math.round((Date.now() - new Date(feed.newest).getTime()) / 60_000)
-    : null;
+  const staleMinutes = feed?.newest ? Number(feed.stale_minutes ?? 0) : null;
 
   return (
     <>
@@ -133,8 +141,8 @@ export default async function AdminEventsPage() {
             </thead>
             <tbody>
               {rows.map((event) => {
-                const finished = new Date(event.starts_at).getTime() < Date.now() - 6 * 3_600_000;
-                const stalled = finished && !event.has_result && event.status !== "CANCELLED";
+                const stalled =
+                  event.finished && !event.has_result && event.status !== "CANCELLED";
                 return (
                   <tr key={event.id}>
                     <td className="muted">{new Date(event.starts_at).toLocaleString()}</td>

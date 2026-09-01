@@ -5,6 +5,24 @@ import { OddsApiIoProvider } from "../odds-api-io";
 import type { ApiBudget } from "../budget";
 
 /**
+ * The provider's payload, DELIBERATELY unmodelled.
+ *
+ * Every other boundary in this codebase gets a real type. This one must not:
+ * the whole purpose of a contract test is to notice when the provider's shape
+ * stops matching what we believe. A declared interface would encode that belief
+ * into the test itself, so a provider change would surface as a compile error
+ * in our own model — or worse, be silently accepted because the cast said it
+ * was fine — instead of as the failing assertion it should be.
+ *
+ * So the raw fixture stays untyped, and the assertions do the checking. One
+ * named alias rather than nineteen bare `any`s, so this is a single documented
+ * decision and a genuinely careless `any` elsewhere in the file still gets
+ * flagged.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- see the note above
+type RawPayload = any;
+
+/**
  * PROVIDER CONTRACT TEST
  * ======================
  *
@@ -58,7 +76,7 @@ describe("odds-api.io response contract", () => {
   describe("the settlement-critical parse", () => {
     it("finds a regulation score at scores.periods.ft", () => {
       const { body } = fixture("event-detail-settled");
-      const scores = (body as Record<string, any>).scores;
+      const scores = (body as Record<string, RawPayload>).scores;
 
       // Asserted on the RAW fixture, before any of our code runs. If the
       // provider renames this, the failure names the provider rather than
@@ -78,13 +96,13 @@ describe("odds-api.io response contract", () => {
 
       expect(result.status).toBe("SETTLED");
       expect(result.periods.ft).toEqual({
-        home: (body as any).scores.periods.ft.home,
-        away: (body as any).scores.periods.ft.away,
+        home: (body as RawPayload).scores.periods.ft.home,
+        away: (body as RawPayload).scores.periods.ft.away,
       });
       // `home`/`away` are the OT/penalty-inclusive final and are NOT what 1X2
       // settles against. Both must survive so cup ties resolve correctly.
-      expect(result.home).toBe((body as any).scores.home);
-      expect(result.away).toBe((body as any).scores.away);
+      expect(result.home).toBe((body as RawPayload).scores.home);
+      expect(result.away).toBe((body as RawPayload).scores.away);
     });
 
     it("reports no regulation score rather than inventing a 0-0", async () => {
@@ -108,7 +126,7 @@ describe("odds-api.io response contract", () => {
       expect(events.length).toBeGreaterThan(0);
 
       const first = events[0]!;
-      const raw = (body as any[])[0];
+      const raw = (body as RawPayload[])[0];
 
       expect(first.eventId).toBe(String(raw.id));
       expect(first.home).toBe(raw.home);
@@ -134,11 +152,11 @@ describe("odds-api.io response contract", () => {
 
     it("has a mapping for every status the feed actually emits", async () => {
       const { body } = fixture("events-football");
-      const emitted = new Set((body as any[]).map((e) => String(e.status).toLowerCase()));
+      const emitted = new Set((body as RawPayload[]).map((e) => String(e.status).toLowerCase()));
       serve(body);
 
       const events = await new OddsApiIoProvider("k", noBudget).listEvents("football");
-      const mapped = new Map(events.map((e, i) => [String((body as any[])[i].status).toLowerCase(), e.status]));
+      const mapped = new Map(events.map((e, i) => [String((body as RawPayload[])[i].status).toLowerCase(), e.status]));
 
       // An unrecognised status silently becomes PENDING. On a SETTLED match
       // that means the result is never ingested and the bet never pays.
@@ -160,7 +178,7 @@ describe("odds-api.io response contract", () => {
       // so no price can be fetched no matter how good the adapter is. If this
       // ever reads > 0, odds fetching has become possible and the sync path
       // needs its own end-to-end check.
-      expect((body as any).count).toBeTypeOf("number");
+      expect((body as RawPayload).count).toBeTypeOf("number");
     });
   });
 });
@@ -189,7 +207,7 @@ describe.skipIf(!live)("odds-api.io LIVE contract", () => {
     });
     expect(res.status, "the events endpoint is unreachable").toBe(200);
 
-    const events = (await res.json()) as any[];
+    const events = (await res.json()) as RawPayload[];
     const settled = events.find((e) => String(e?.status).toLowerCase() === "settled");
     expect(settled, "no settled football match to verify against").toBeDefined();
 
@@ -213,7 +231,7 @@ describe.skipIf(!live)("odds-api.io LIVE contract", () => {
 describe("odds-api.io price contract", () => {
   function oddsFixture() {
     const { body } = fixture("odds-multi");
-    const first = (body as any[])[0];
+    const first = (body as RawPayload[])[0];
     expect(first, "the odds fixture has no event — recapture it").toBeDefined();
     return first;
   }
@@ -229,7 +247,7 @@ describe("odds-api.io price contract", () => {
 
   it("gives each bookmaker a LIST of markets, each with rows of prices", () => {
     const event = oddsFixture();
-    const markets = Object.values(event.bookmakers)[0] as any[];
+    const markets = Object.values(event.bookmakers)[0] as RawPayload[];
 
     expect(Array.isArray(markets)).toBe(true);
     expect(markets[0]).toHaveProperty("name");
@@ -294,17 +312,17 @@ describe("odds-api.io price contract", () => {
     serve(body);
 
     const [snapshot] = await new OddsApiIoProvider("k", noBudget).getOdds(["72409660"], ["1xbet"]);
-    const raw = (body as any[])[0];
-    const rawNames = (Object.values(raw.bookmakers)[0] as any[]).map((m) => String(m.name));
+    const raw = (body as RawPayload[])[0];
+    const rawNames = (Object.values(raw.bookmakers)[0] as RawPayload[]).map((m) => String(m.name));
 
     // The feed prices "Corners Totals" alongside "Totals". Mapping the former
     // onto over_under would settle a corners bet against the goal count —
     // the single most expensive mapping mistake available here.
     if (rawNames.some((n) => /corner/i.test(n))) {
       const overUnder = snapshot!.books[0]!.markets.find((m) => m.key === "over_under");
-      const goalRows = (Object.values(raw.bookmakers)[0] as any[])
+      const goalRows = (Object.values(raw.bookmakers)[0] as RawPayload[])
         .filter((m) => String(m.name).toLowerCase() === "totals")
-        .flatMap((m) => m.odds as any[]);
+        .flatMap((m) => m.odds as RawPayload[]);
 
       if (overUnder && goalRows.length) {
         // Every line present must come from the goals market, not corners.
@@ -333,20 +351,20 @@ describe("odds-api.io price contract", () => {
 describe("odds-api.io 1x2 match-result contract", () => {
   function bet365Fixture() {
     const { body } = fixture("odds-bet365-1x2");
-    const event = (body as any[])[0];
+    const event = (body as RawPayload[])[0];
     expect(event, "the Bet365 fixture has no event — recapture it").toBeDefined();
     return event;
   }
 
   it("publishes the match-result market under the name ML", () => {
     const event = bet365Fixture();
-    const markets = event.bookmakers["Bet365"] as any[];
+    const markets = event.bookmakers["Bet365"] as RawPayload[];
     expect(markets.map((m) => m.name)).toContain("ML");
   });
 
   it("is a genuine THREE-WAY market, not Draw No Bet wearing a different name", () => {
     const event = bet365Fixture();
-    const markets = event.bookmakers["Bet365"] as any[];
+    const markets = event.bookmakers["Bet365"] as RawPayload[];
     const ml = markets.find((m) => m.name === "ML")!;
     const row = ml.odds[0];
 

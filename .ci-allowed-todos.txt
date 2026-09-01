@@ -1,0 +1,10 @@
+# Approved `todo` tests.
+#
+# Format:  full test name :: why it is a todo
+#
+# A todo test reads as a pass in every summary line while protecting nothing, so
+# adding one has to be a deliberate act somebody reviewed. If you are adding a
+# line here, the reason should say what has to happen before the test can be
+# written — a missing provider contract, an unavailable environment — not "later".
+#
+# Empty on purpose: this suite currently has no todo tests.

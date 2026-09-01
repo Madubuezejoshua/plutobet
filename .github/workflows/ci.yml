@@ -1,0 +1,135 @@
+name: CI
+
+# Every pull request, and every push to main. A check that only runs on one of
+# those lets a broken merge sit undetected until somebody happens to look.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A superseded run proves nothing about the code that replaced it. Cancel it and
+# free the runner — except on main, where each commit's own result is the record
+# of whether that commit was releasable.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Read-only by default. Nothing here publishes, comments or deploys, so nothing
+# here needs permission to.
+permissions:
+  contents: read
+
+env:
+  # NON-SECRETS. Every value below is a fixed placeholder that exists so module
+  # loading and the production build can proceed; none is used to reach a real
+  # service, and none may ever be replaced with a production value. The test
+  # suite starts its own PostgreSQL and Redis, so it needs no credentials at all.
+  CI: "true"
+  # NODE_ENV is deliberately NOT set here. Vitest sets `test` for itself and
+  # `next build` sets `production` for itself; pinning it globally would hand
+  # the build a non-standard environment and change which code path it compiles.
+  AUTH_SECRET: github-actions-placeholder-not-a-credential-000
+  NEXTAUTH_URL: http://localhost:3000
+  IDENTITY_PEPPER: github-actions-placeholder-pepper-000000000000
+  # Deliberately absent: ODDS_API_KEY. Its absence is what keeps the opt-in live
+  # provider contract test skipped, which is the intended default.
+
+jobs:
+  verify:
+    name: typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the whitespace check below compares against the base
+          # commit, which a shallow clone does not contain.
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Matches the engines field in package.json (">=20.9.0") and the
+          # version this project is developed and verified against.
+          node-version: '24'
+          # Keyed on package-lock.json by the action, so the cache is only
+          # reused when the resolved dependency tree is byte-identical.
+          cache: npm
+
+      - name: Install from the lockfile
+        # `npm ci`, never `npm install`: it installs exactly what the lockfile
+        # pins and fails if package.json and the lockfile have drifted apart.
+        # A CI run that silently resolves different versions is not testing the
+        # code that will ship.
+        run: npm ci
+
+      - name: Whitespace and conflict markers
+        # Scoped to what this change introduced, so pre-existing whitespace in
+        # untouched files does not block an unrelated pull request.
+        #
+        # NO `||` FALLBACK: an earlier draft chained two commands with `||`,
+        # which would have let a genuine whitespace error fall through to a
+        # second command that passed. A check that can be satisfied by failing
+        # is worse than no check, because it reports green.
+        run: |
+          set -euo pipefail
+          if [ -n "${BASE_SHA}" ]; then
+            RANGE="${BASE_SHA}"
+          elif git rev-parse --verify --quiet HEAD~1 >/dev/null; then
+            RANGE="HEAD~1"
+          else
+            echo "single commit with no parent — nothing to compare"
+            exit 0
+          fi
+          echo "checking whitespace in ${RANGE}..HEAD"
+          git diff --check "${RANGE}" HEAD
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Secret scan
+        # Reports file and line only; the matched text never leaves the process,
+        # so a finding cannot republish a credential into this public log.
+        run: node scripts/secret-scan.mjs
+
+      - name: Migration validation
+        # Applies every migration to a CLEAN throwaway PostgreSQL, so this proves
+        # the migrations can rebuild the schema from nothing — not merely that
+        # they are idempotent against a database that is already current.
+        run: node scripts/check-migrations.mjs
+
+      - name: Test suite
+        # The suite starts its own embedded PostgreSQL and in-memory Redis, so no
+        # service containers and no credentials are required. The live provider
+        # contract test stays skipped because ODDS_API_KEY is deliberately unset.
+        run: npx vitest run --reporter=default --reporter=json --outputFile=test-results.json
+
+      - name: Test totals, skipped and todo
+        # A suite that quietly grows skipped or todo tests reports "green" while
+        # covering less each week. Skips are printed so they stay visible, and a
+        # todo fails the build unless it is listed in .ci-allowed-todos.txt with
+        # a reason — the reason is the point.
+        if: always()
+        run: node scripts/ci-test-report.mjs test-results.json
+
+      - name: Production build
+        run: npm run build
+
+      - name: Upload logs on failure
+        # Only on failure. Uploading artefacts from a green run costs storage and
+        # nobody opens them.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-failure-logs
+          path: |
+            test-results.json
+            .next/build-manifest.json
+          retention-days: 7
+          if-no-files-found: ignore
