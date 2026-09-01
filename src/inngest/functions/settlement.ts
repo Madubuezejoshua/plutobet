@@ -3,6 +3,7 @@ import { NonRetriableError } from "inngest";
 import { z } from "zod";
 import { oddsCadence } from "@/modules/odds/cadence";
 import { OddsApiIoProvider } from "@/modules/odds/odds-api-io";
+import { heartbeatService } from "@/modules/reporting/heartbeat.service";
 import { ResultIngestionService } from "@/modules/settlement/ingestion.service";
 import { settlementService } from "@/modules/settlement/settlement.service";
 import { UnsettleableError } from "@/modules/settlement/resolve";
@@ -43,9 +44,26 @@ export const pollMatchResults = inngest.createFunction(
     const apiKey = process.env.ODDS_API_KEY;
     if (!apiKey) throw new NonRetriableError("ODDS_API_KEY is required to poll results");
 
+    /*
+     * Wrapped in a heartbeat so a job that stops running is VISIBLE.
+     *
+     * This poller had never executed once in the life of the project and
+     * nothing anywhere could say so. A bet on a finished match simply sat
+     * PENDING, and the first signal was going to be a customer asking where
+     * their winnings were.
+     *
+     * The counts are recorded even when zero: "ran and found nothing" and
+     * "did not run" are indistinguishable from the outside otherwise, and
+     * only one of them needs somebody woken up.
+     */
     const finished = await step.run("ingest-results", () =>
-      new ResultIngestionService(new OddsApiIoProvider(apiKey)).pollFinishedEvents(),
-    );
+      heartbeatService.track("results", async () => {
+        const events = await new ResultIngestionService(
+          new OddsApiIoProvider(apiKey),
+        ).pollFinishedEvents();
+        return { processed: events.length, settled: 0, events };
+      }),
+    ).then((outcome) => outcome.events);
 
     if (finished.length > 0) {
       await step.sendEvent(

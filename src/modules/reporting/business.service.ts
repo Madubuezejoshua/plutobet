@@ -256,6 +256,44 @@ export async function operationalAlerts(): Promise<SubsystemAlert[]> {
     });
   }
 
+  /*
+   * The settlement poller itself has stopped.
+   *
+   * Distinct from the stalled-match alert above, which notices the SYMPTOM.
+   * This notices the cause, and it is the alert that would have caught the
+   * real failure: the poller had never run at all, so no match ever became
+   * stale-with-a-result because none ever got a result.
+   *
+   * A missing row means the job has never succeeded on this deployment, which
+   * is exactly the state to shout about rather than treat as "no news".
+   */
+  const [heartbeat] = await db.execute<{ last_success_at: Date | null; last_error: string | null }>(
+    sql`SELECT last_success_at, last_error FROM job_heartbeats WHERE job = 'results'`,
+  );
+
+  if (!heartbeat || !heartbeat.last_success_at) {
+    alerts.push({
+      subsystem: "Settlement poller",
+      state: "DOWN",
+      detail:
+        "the result poller has never completed successfully on this deployment; " +
+        "no bet can settle until it runs",
+    });
+  } else {
+    const minutesSince = (Date.now() - new Date(heartbeat.last_success_at).getTime()) / 60_000;
+    // The job claims a slot every five minutes; thirty is six missed cycles,
+    // which is past any plausible transient and into "somebody should look".
+    if (minutesSince > 30) {
+      alerts.push({
+        subsystem: "Settlement poller",
+        state: "DOWN",
+        detail:
+          `no successful result poll in ${Math.round(minutesSince)} minutes` +
+          (heartbeat.last_error ? ` — last error: ${heartbeat.last_error.slice(0, 120)}` : ""),
+      });
+    }
+  }
+
   if (!process.env.PAYSTACK_SECRET_KEY) {
     alerts.push({
       subsystem: "Payments",

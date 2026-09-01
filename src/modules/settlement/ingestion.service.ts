@@ -27,6 +27,15 @@ import type { MatchResult, PeriodScore } from "./resolve";
  */
 const ASSUMED_FINISHED_AFTER_MS = 3 * 60 * 60_000;
 
+/**
+ * Backoff for an event the provider has not scored yet.
+ *
+ * Five minutes doubling to a day. The first few retries are quick because a
+ * result usually appears within minutes of a match ending; the cap stops a
+ * long feed outage from pushing events years out.
+ */
+const BASE_BACKOFF_SECONDS = 5 * 60;
+const MAX_BACKOFF_SECONDS = 24 * 60 * 60;
 /** Provider calls are the scarce resource — cap how many events per tick. */
 const MAX_EVENTS_PER_POLL = 20;
 
@@ -52,17 +61,43 @@ export class ResultIngestionService {
    * concurrency treatment.
    */
   async pollFinishedEvents(): Promise<FinishedEvent[]> {
+    /*
+     * MONEY WAITING COMES FIRST.
+     *
+     * This was a plain `ORDER BY starts_at` over the 20 oldest unresolved
+     * events. Fixtures the provider never scores — lower-league and amateur
+     * matches, of which a 14-day horizon ingests hundreds — stay unresolved
+     * forever and were re-fetched on every run, so newer events queued behind
+     * them. A real customer bet was observed sitting 59th of 60; four cycles
+     * and roughly 80 provider calls never reached it.
+     *
+     * Two changes fix it. Events with a PENDING bet sort first, because a
+     * delay only matters to somebody when money is riding on it. And each
+     * event carries its own `result_next_poll_at`, so a permanently unscored
+     * fixture backs off instead of occupying a slot every cycle.
+     *
+     * `result_next_poll_at IS NULL` means never tried, which must be eligible.
+     */
     const due = await this.wallet.withMoneyTransaction(async ({ tx }) =>
-      tx.execute<{ id: string; provider_event_id: string }>(sql`
-        SELECT e.id, e.provider_event_id
+      tx.execute<{ id: string; provider_event_id: string; has_pending_bet: boolean }>(sql`
+        SELECT e.id, e.provider_event_id,
+               EXISTS (
+                 SELECT 1
+                 FROM bet_legs l
+                 JOIN bets b ON b.id = l.bet_id
+                 JOIN selections s ON s.id = l.selection_id
+                 JOIN markets m ON m.id = s.market_id
+                 WHERE m.event_id = e.id AND b.status = 'PENDING'
+               ) AS has_pending_bet
         FROM events e
         WHERE e.provider = ${this.provider.name}
           AND e.status IN ('PENDING', 'LIVE')
           AND e.starts_at < now() - interval '3 hours'
+          AND (e.result_next_poll_at IS NULL OR e.result_next_poll_at <= now())
           AND NOT EXISTS (
             SELECT 1 FROM event_results r WHERE r.event_id = e.id
           )
-        ORDER BY e.starts_at
+        ORDER BY has_pending_bet DESC, e.starts_at
         LIMIT ${MAX_EVENTS_PER_POLL}
       `),
     );
@@ -79,7 +114,10 @@ export class ResultIngestionService {
 
       // Still in progress or unknown upstream: leave it for the next tick
       // rather than recording a result the provider has not committed to.
-      if (result.status !== "SETTLED" && result.status !== "CANCELLED") continue;
+      if (result.status !== "SETTLED" && result.status !== "CANCELLED") {
+        await this.deferEvent(eventId);
+        continue;
+      }
 
       const cancelled = result.status === "CANCELLED";
       const match: MatchResult = {
@@ -89,8 +127,11 @@ export class ResultIngestionService {
 
       // A finished match with no regulation score is a provider defect, not a
       // result. Recording it would only produce an UnsettleableError per bet
-      // later; skipping leaves it to be retried when the feed catches up.
-      if (!cancelled && !match.periods.ft) continue;
+      // later; deferring leaves it to be retried when the feed catches up.
+      if (!cancelled && !match.periods.ft) {
+        await this.deferEvent(eventId);
+        continue;
+      }
 
       await this.settlement.ingestResult({
         eventId,
@@ -109,6 +150,37 @@ export class ResultIngestionService {
     }
 
     return finished;
+  }
+
+  /**
+   * Backs an event off after a poll that produced no usable result.
+   *
+   * Exponential in the attempt count and capped, so a fixture the provider
+   * never scores drifts to a daily retry instead of occupying a slot on every
+   * cycle — which is what let one such event starve a match with real money on
+   * it. The event is NEVER marked resolved here: a provider briefly missing
+   * data must not turn into a bet that is never settled, so this only defers.
+   *
+   * The cap matters as much as the growth. Without it a long-running feed
+   * outage would push every affected event years into the future, and they
+   * would still be waiting long after the feed recovered.
+   */
+  private async deferEvent(eventId: string): Promise<void> {
+    await this.wallet.withMoneyTransaction(async ({ tx }) => {
+      await tx.execute(sql`
+        UPDATE events
+        SET result_poll_attempts = result_poll_attempts + 1,
+            result_last_polled_at = now(),
+            result_next_poll_at = now() + make_interval(
+              secs => LEAST(
+                ${MAX_BACKOFF_SECONDS}::int,
+                ${BASE_BACKOFF_SECONDS}::int * power(2, LEAST(result_poll_attempts, 10))::int
+              )
+            ),
+            updated_at = now()
+        WHERE id = ${eventId}::uuid
+      `);
+    });
   }
 
   /**
