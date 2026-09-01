@@ -286,6 +286,29 @@ wallets.
 
 ---
 
+## 7b. Commits in this pass
+
+Range `568393c..HEAD`, pushed to both remotes.
+
+| Hash | Commit |
+|---|---|
+| `99169ff` | Classify a whole sync at once instead of one fixture at a time |
+| `2aff4e2` | Run the checks on every change instead of when somebody remembers |
+| `588eb44` | Actually start the scheduler, and fix the three bugs that revealed |
+| `0a6150b` | Send /odds/updated what it actually wants, and say so when we cannot |
+| `b034fa3` | Answer launch questions without printing a single secret |
+| `596bffd` | Give the project one status document instead of five |
+| `73f90a3` | Record the bet that is waiting, and the gate results behind the claims |
+| `e981b29` | Record the scheduler's first successful unattended run |
+
+A ninth commit carries this table; a commit cannot quote its own hash.
+
+Remotes: `origin` → `github.com/Madubuezejoshua/plutobet`,
+`plutobet` → `github.com/plutobet-ai/plutobet_ai`. Both were fetched and
+confirmed fast-forward before pushing; no force, no history rewrite.
+
+---
+
 ## 8. What the owner should do next, in order
 
 1. **Rotate `IDENTITY_PEPPER`** — possible only while every account is a test
