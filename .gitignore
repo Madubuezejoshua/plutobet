@@ -12,3 +12,6 @@ probe.txt
 coverage/
 *.tsbuildinfo
 .pgdata-test-*/
+# Throwaway clusters started by the benchmark and the migration checker.
+.pgdata-bench-*/
+.pgdata-migcheck-*/

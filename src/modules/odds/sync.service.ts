@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
-import { taxonomyService } from "@/modules/sports/taxonomy.service";
+import { batchClassifier, type BatchClassifier } from "@/modules/sports/classify-batch";
 import { OutOfBudgetError } from "./budget";
 import { events, markets, oddsSnapshots, selections } from "./schema";
 import type { BookmakerOdds, OddsProvider, OddsSnapshot } from "./provider";
@@ -20,6 +20,15 @@ import type { BookmakerOdds, OddsProvider, OddsSnapshot } from "./provider";
  *   ------------------------------------------------------------------
  *   ~396/day, leaving ~100 in reserve for user-triggered refreshes.
  */
+
+export interface FixtureSyncResult {
+  upserted: number;
+  classified: number;
+  failed: number;
+  /** Transactions and statements spent classifying — what the benchmark reads. */
+  transactions: number;
+  statements: number;
+}
 
 export interface SyncConfig {
   sport: string;
@@ -51,10 +60,11 @@ export class OddsSyncService {
   constructor(
     private readonly provider: OddsProvider,
     private readonly config: SyncConfig,
+    private readonly classifier: BatchClassifier = batchClassifier,
   ) {}
 
   /** Every 30 min. Cheap — one call covers the next 14 days. */
-  async syncFixtures(): Promise<{ upserted: number; classified: number; failed: number }> {
+  async syncFixtures(): Promise<FixtureSyncResult> {
     return this.guard("fixtures", async () => {
       /*
        * Ask for a BOUNDED window, and ingest only what can still be bet on.
@@ -165,48 +175,58 @@ export class OddsSyncService {
       }
 
       /*
-       * Taxonomy resolution is memoised for the run.
+       * Classify the whole batch, not one fixture at a time.
        *
-       * A feed repeats leagues and clubs constantly — a day of one league is
-       * twenty events over ten clubs — and `resolveFixture` opens its own
-       * transaction each time. Without this, the same four lookups run
-       * hundreds of times per sync.
+       * This loop used to call `resolveFixture` and `classifyEvent` per event.
+       * Both are correct, and both open their own transaction, so a 775-event
+       * sync spent roughly fifteen thousand round trips re-resolving the same
+       * leagues and the same clubs. See `classify-batch.ts` for the shape;
+       * the summary is that the cost is now proportional to DISTINCT entities
+       * rather than to events.
+       *
+       * Still best-effort and still never fatal: an unclassified fixture is a
+       * real match somebody should be able to bet on, and taking the board
+       * down because a competition label changed shape is the worse outcome.
+       * Individual failures are reported per event rather than swallowed.
        */
-      const resolutionCache = new Map<string, Awaited<
-        ReturnType<typeof taxonomyService.resolveFixture>
-      >>();
+      const toClassify = found
+        .filter((e) => upserted.has(e.eventId))
+        .map((e) => ({
+          eventId: upserted.get(e.eventId)!,
+          sport: e.sport,
+          league: e.league,
+          home: e.home,
+          away: e.away,
+        }));
 
-      for (const e of found) {
-        const row = upserted.has(e.eventId) ? { id: upserted.get(e.eventId)! } : undefined;
-
-        /*
-         * Resolve the fixture onto the sports hierarchy.
-         *
-         * Deliberately best-effort and never fatal: an unclassified fixture is
-         * still a real match that people should be able to bet on, and
-         * refusing to ingest it because a competition label changed shape
-         * would take the whole board down over a formatting change. Failures
-         * are logged and the row can be backfilled.
-         */
-        if (row) {
-          try {
-            const resolved = await taxonomyService.resolveFixture({
-              sport: e.sport,
-              league: e.league,
-              home: e.home,
-              away: e.away,
-            });
-            if (resolved) {
-              await taxonomyService.classifyEvent(row.id, resolved);
-              classified += 1;
-            }
-          } catch (error) {
-            console.error("[odds-sync] could not classify fixture", e.eventId, error);
-          }
+      let classificationStatements = 0;
+      let classificationTransactions = 0;
+      try {
+        const outcome = await this.classifier.classify(toClassify);
+        classified = outcome.classified;
+        classificationStatements = outcome.statements;
+        classificationTransactions = outcome.transactions;
+        for (const failure of outcome.failures) {
+          console.error("[odds-sync] could not classify fixture", failure.eventId, failure.reason);
         }
+        if (outcome.unresolvedSport > 0) {
+          console.warn(
+            `[odds-sync] ${outcome.unresolvedSport} event(s) reference a sport that is not seeded`,
+          );
+        }
+      } catch (error) {
+        // The events themselves are already committed and bettable. A
+        // classification outage degrades browsing, not betting.
+        console.error("[odds-sync] batch classification failed", error);
       }
 
-      return { upserted: upserted.size, classified, failed };
+      return {
+        upserted: upserted.size,
+        classified,
+        failed,
+        transactions: classificationTransactions,
+        statements: classificationStatements,
+      };
     });
   }
 
