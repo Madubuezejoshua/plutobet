@@ -47,7 +47,7 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     items: [
       { key: "users", label: "Users", href: "/admin/users", permission: "users.read", built: true, phase: 3 },
       { key: "kyc", label: "Verification", href: "/admin/kyc", permission: "kyc.review", built: true, phase: 20 },
-      { key: "rg", label: "Responsible Gaming", href: "/admin/responsible", permission: "compliance.read", built: false, phase: 20 },
+      { key: "rg", label: "Responsible Gaming", href: "/admin/responsible", permission: "compliance.read", built: true, phase: 20 },
     ],
   },
   {
@@ -55,35 +55,35 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     items: [
       { key: "deposits", label: "Deposits", href: "/admin/deposits", permission: "deposits.read", built: true, phase: 5 },
       { key: "withdrawals", label: "Withdrawals", href: "/admin/withdrawals", permission: "withdrawals.read", built: true, phase: 5 },
-      { key: "ledger", label: "Ledger", href: "/admin/ledger", permission: "ledger.read", built: false, phase: 5 },
-      { key: "reconciliation", label: "Reconciliation", href: "/admin/reconciliation", permission: "reconciliation.read", built: false, phase: 24 },
+      { key: "ledger", label: "Ledger", href: "/admin/ledger", permission: "ledger.read", built: true, phase: 5 },
+      { key: "reconciliation", label: "Reconciliation", href: "/admin/reconciliation", permission: "reconciliation.read", built: true, phase: 24 },
     ],
   },
   {
     label: "Sportsbook",
     items: [
       { key: "exposure", label: "Exposure", href: "/admin/exposure", permission: "exposure.read", built: true, phase: 3 },
-      { key: "bets", label: "Bets", href: "/admin/bets", permission: "bets.read", built: false, phase: 8 },
-      { key: "events", label: "Events", href: "/admin/events", permission: "sportsbook.manage", built: false, phase: 6 },
+      { key: "bets", label: "Bets", href: "/admin/bets", permission: "bets.read", built: true, phase: 8 },
+      { key: "events", label: "Events", href: "/admin/events", permission: "sportsbook.manage", built: true, phase: 6 },
     ],
   },
   {
     label: "Casino",
     items: [
-      { key: "casino-games", label: "Games", href: "/admin/casino", permission: "casino.read", built: false, phase: 11 },
+      { key: "casino-games", label: "Games", href: "/admin/casino", permission: "casino.read", built: true, phase: 11 },
     ],
   },
   {
     label: "Risk & Compliance",
     items: [
       { key: "risk", label: "Risk Queue", href: "/admin/risk", permission: "risk.read", built: true, phase: 3 },
-      { key: "compliance", label: "Compliance", href: "/admin/compliance", permission: "compliance.read", built: false, phase: 20 },
+      { key: "compliance", label: "Compliance", href: "/admin/compliance", permission: "compliance.read", built: true, phase: 20 },
     ],
   },
   {
     label: "Marketing",
     items: [
-      { key: "promotions", label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", built: false, phase: 14 },
+      { key: "promotions", label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", built: true, phase: 14 },
     ],
   },
   {
