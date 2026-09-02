@@ -57,6 +57,15 @@ export interface OutboxItem {
  */
 export const MAX_DISPATCH_ATTEMPTS = 10;
 
+/**
+ * The longest a stale item may wait before being re-dispatched.
+ *
+ * An hour. Long enough that a database outage is not hammered, short enough
+ * that a customer's payout is never more than an hour behind once the
+ * infrastructure recovers.
+ */
+const MAX_BACKOFF_SECONDS = 3600;
+
 /** Errors can carry a connection string; stored text must not. */
 const MAX_ERROR_LENGTH = 300;
 
@@ -123,6 +132,18 @@ export class SettlementOutboxService {
    * accepted by the scheduler and then never completed is indistinguishable
    * from one that was lost, and leaving it alone forever is how a bet stays
    * unpaid quietly. Re-dispatching is safe: settlement is idempotent per bet.
+   *
+   * BACKOFF, BOUNDED, WITH JITTER
+   * The stale window used to be a flat 600 seconds for every attempt. Two
+   * problems with that. A genuinely stuck item was retried every ten minutes
+   * until it burned its ten attempts in under two hours, turning a transient
+   * outage into an abandoned work item. And because every row shared one
+   * deadline, a backlog became eligible in the same instant — a thundering herd
+   * against a database that was, by hypothesis, already struggling.
+   *
+   * The window now doubles per attempt from `staleAfterSeconds`, capped at an
+   * hour, multiplied by a random 0.75–1.25. The jitter is the part that spreads
+   * a herd; the cap is what stops the twelfth attempt landing next week.
    */
   async claimBatch(limit: number, staleAfterSeconds = 600): Promise<OutboxItem[]> {
     return this.wallet.withMoneyTransaction(async ({ tx }) => {
@@ -141,7 +162,15 @@ export class SettlementOutboxService {
           WHERE (
                   status = 'PENDING'
                   OR (status = 'DISPATCHED'
-                      AND dispatched_at < now() - make_interval(secs => ${staleAfterSeconds}::int))
+                      AND dispatched_at < now() - make_interval(
+                            secs => (
+                              LEAST(
+                                ${MAX_BACKOFF_SECONDS}::int,
+                                ${staleAfterSeconds}::int * power(2, LEAST(attempts, 6))::int
+                              )
+                              * (0.75 + random() * 0.5)
+                            )::int
+                          ))
                 )
             AND attempts < ${MAX_DISPATCH_ATTEMPTS}
           ORDER BY created_at

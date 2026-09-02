@@ -644,10 +644,12 @@ describe("re-dispatching a stale work item", () => {
      * attempt 7, climbing toward a FAILED alert about work that had already
      * succeeded, while the stale re-claim did nothing at all.
      */
+    // Far enough back to clear the jittered backoff for attempt 3
+    // (600s * 2^3 = 80 minutes, times up to 1.25).
     await ctx.database.execute(sql`
       UPDATE settlement_outbox
       SET status = 'DISPATCHED', completed_at = NULL,
-          dispatched_at = now() - interval '1 hour', attempts = 3
+          dispatched_at = now() - interval '4 hours', attempts = 3
       WHERE event_id = ${seeded.eventId}::uuid
     `);
 
@@ -672,7 +674,7 @@ describe("re-dispatching a stale work item", () => {
     await ctx.database.execute(sql`
       UPDATE settlement_outbox
       SET status = 'DISPATCHED', completed_at = NULL,
-          dispatched_at = now() - interval '1 hour', attempts = 5
+          dispatched_at = now() - interval '4 hours', attempts = 5
       WHERE event_id = ${seeded.eventId}::uuid
     `);
     const second = await runScheduledFunction(fns.dispatchSettlementOutbox, fns.registry);
@@ -731,5 +733,94 @@ describe("an alert that says something", () => {
 
     const beat = await beats.read(job);
     expect(beat!.lastError).toBe("unknown error with no message");
+  });
+});
+
+describe("surviving a transient database outage", () => {
+  it("backs off further with each attempt rather than retrying at a fixed rate", async () => {
+    const { SettlementOutboxService } = await import("@/modules/settlement/outbox.service");
+    const outbox = new SettlementOutboxService(wallet);
+    const tag = `backoff-${randomUUID().slice(0, 8)}`;
+    const seeded = await seedBet(tag, { home: 1, away: 2 }, "away");
+    await outbox.enqueue({ eventId: seeded.eventId, cancelled: false, source: "RECOVERY" });
+
+    /*
+     * A flat stale window meant a stuck item burned all ten attempts in under
+     * two hours, turning a transient outage into an abandoned payout. It also
+     * gave every row the same deadline, so a backlog became eligible in one
+     * instant — a thundering herd against a database already struggling.
+     *
+     * With a base of 60s, an item on attempt 1 is eligible after ~1-2 minutes;
+     * on attempt 5 it is not eligible for well over an hour of the same clock.
+     */
+    await ctx.database.execute(sql`
+      UPDATE settlement_outbox
+      SET status = 'DISPATCHED', attempts = 5, dispatched_at = now() - interval '5 minutes'
+      WHERE event_id = ${seeded.eventId}::uuid
+    `);
+    const tooSoon = await outbox.claimBatch(50, 60);
+    expect(tooSoon.find((i) => i.eventId === seeded.eventId)).toBeUndefined();
+
+    // Far enough past even the jittered upper bound, it is retried.
+    await ctx.database.execute(sql`
+      UPDATE settlement_outbox
+      SET dispatched_at = now() - interval '3 hours'
+      WHERE event_id = ${seeded.eventId}::uuid
+    `);
+    const eventually = await outbox.claimBatch(50, 60);
+    expect(eventually.find((i) => i.eventId === seeded.eventId)).toBeDefined();
+  });
+
+  it("does not mark an item completed when settlement fails", async () => {
+    const { SettlementOutboxService } = await import("@/modules/settlement/outbox.service");
+    const outbox = new SettlementOutboxService(wallet);
+    const tag = `nocomplete-${randomUUID().slice(0, 8)}`;
+    const seeded = await seedBet(tag, { home: 1, away: 2 }, "away");
+    // Ingest the result first. An outbox row for an event with no stored result
+    // is legitimately unsettleable, and would test the wrong thing.
+    const setup = await loadFunctions(
+      stubProvider(tag, new Map([[seeded.providerId, seeded.result]])),
+    );
+    await replayScheduledFunction(setup.pollMatchResults, setup.registry);
+    await deleteSettlementOutboxAsOwnerForTest(seeded.eventId);
+    await outbox.enqueue({ eventId: seeded.eventId, cancelled: false, source: "RECOVERY" });
+
+    const claimed = (await outbox.claimBatch(50)).find((i) => i.eventId === seeded.eventId);
+    expect(claimed).toBeDefined();
+    await outbox.markFailed(claimed!.id, new Error("connection terminated unexpectedly"));
+
+    // A transient failure must NEVER read as done. It goes back to PENDING with
+    // its error kept, so a later run picks it up.
+    const rows = await outboxRows(seeded.eventId);
+    expect(rows[0]!.status).toBe("PENDING");
+    expect(rows[0]!.status).not.toBe("COMPLETED");
+
+    // And a later retry does recover it, automatically.
+    const fns = await loadFunctions(stubProvider(tag, new Map([[seeded.providerId, seeded.result]])));
+    await runScheduledFunction(fns.dispatchSettlementOutbox, fns.registry);
+    expect(await betStatus(seeded.betId)).toBe("WON");
+    expect(await payoutCount(seeded.betId)).toBe(1);
+  });
+
+  it("retries after a transient failure without paying twice", async () => {
+    const tag = `retrypay-${randomUUID().slice(0, 8)}`;
+    const seeded = await seedBet(tag, { home: 1, away: 2 }, "away");
+    const fns = await loadFunctions(stubProvider(tag, new Map([[seeded.providerId, seeded.result]])));
+    await replayScheduledFunction(fns.pollMatchResults, fns.registry);
+    await runScheduledFunction(fns.dispatchSettlementOutbox, fns.registry);
+    expect(await payoutCount(seeded.betId)).toBe(1);
+
+    // Force the item back through the whole cycle, as a stale re-claim would.
+    await ctx.database.execute(sql`
+      UPDATE settlement_outbox
+      SET status = 'PENDING', completed_at = NULL, attempts = 0
+      WHERE event_id = ${seeded.eventId}::uuid
+    `);
+    await runScheduledFunction(fns.dispatchSettlementOutbox, fns.registry);
+
+    // The whole point: retrying a transient failure is safe.
+    expect(await payoutCount(seeded.betId)).toBe(1);
+    expect(await cash(seeded.walletId)).toBe(43000n);
+    expect(await ledgerBalanced()).toBe(true);
   });
 });
