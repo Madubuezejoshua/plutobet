@@ -236,7 +236,36 @@ export class PlacementService {
         // front of it.
         if (debit.idempotent) {
           const existing = await this.findBetByStakeTxn(tx, debit.transactionId);
-          if (existing) return existing;
+          if (existing) {
+            /*
+             * GIVE BACK THE EXPOSURE THIS ATTEMPT CLAIMED.
+             *
+             * The replay is detected here, but exposure was claimed further up
+             * — it has to be, because the global lock order is exposure before
+             * wallet and inverting it would deadlock against settlement. So a
+             * duplicate submit reserved the liability a SECOND time against
+             * every market on the slip, while creating no second bet to ever
+             * release it.
+             *
+             * Settlement releases one bet's worth, so the difference stayed on
+             * the market permanently and ate into a ceiling that exists to cap
+             * risk. Enough double-taps and a market stops accepting legitimate
+             * bets for a liability nobody is carrying.
+             *
+             * Found on the real recovered bet: its market held exactly
+             * `potential_return - stake` after settlement, and it had exactly
+             * one duplicate submit behind it.
+             *
+             * Released here rather than by checking earlier because an early
+             * check cannot be race-proof: two identical submits can both pass
+             * it, and only the wallet lock serialises them. Undoing precisely
+             * what this attempt added is correct in both cases.
+             */
+            for (const marketId of marketIds) {
+              await this.releaseExposure(tx, marketId, pricing.liabilityMinor);
+            }
+            return existing;
+          }
         }
 
         const [bet] = await tx
@@ -529,6 +558,30 @@ export class PlacementService {
     `);
 
     if (claimed.length === 0) throw new ExposureLimitError(marketId, liabilityMinor);
+  }
+
+  /**
+   * Returns liability a placement attempt claimed but did not use.
+   *
+   * The mirror of `claimExposure`, for the idempotent-replay path only. There
+   * is no conditional here: giving liability back can never breach a ceiling,
+   * and `GREATEST(0, ...)` keeps a double-release from driving the row
+   * negative, which the CHECK constraint would refuse anyway.
+   */
+  private async releaseExposure(
+    tx: DirectTransaction,
+    marketId: string,
+    liabilityMinor: bigint,
+  ): Promise<void> {
+    await tx.execute(sql`
+      UPDATE exposure
+      SET total_liability_minor = GREATEST(
+            0,
+            total_liability_minor - ${liabilityMinor.toString()}::bigint
+          ),
+          updated_at = now()
+      WHERE market_id = ${marketId}::uuid
+    `);
   }
 }
 
