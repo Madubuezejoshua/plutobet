@@ -622,3 +622,68 @@ describe("outbox bookkeeping", () => {
     expect(Number(detail!.attempts)).toBe(1);
   });
 });
+
+describe("re-dispatching a stale work item", () => {
+  it("completes an item whose settlement already finished", async () => {
+    const tag = `stale-${randomUUID().slice(0, 8)}`;
+    const seeded = await seedBet(tag, { home: 1, away: 2 }, "away");
+    const fns = await loadFunctions(stubProvider(tag, new Map([[seeded.providerId, seeded.result]])));
+
+    await replayScheduledFunction(fns.pollMatchResults, fns.registry);
+    await runScheduledFunction(fns.dispatchSettlementOutbox, fns.registry);
+    expect(await betStatus(seeded.betId)).toBe("WON");
+
+    /*
+     * Put the item back into the state the stale re-claim produces: dispatched
+     * long ago, never completed.
+     *
+     * THIS IS THE PRODUCTION BUG. The dispatch event id used to be stable for
+     * the life of the work item, so Inngest deduplicated every re-dispatch and
+     * `settleEvent` never ran again — which meant the step that COMPLETES the
+     * row never ran either. Six fully-settled events were observed sitting at
+     * attempt 7, climbing toward a FAILED alert about work that had already
+     * succeeded, while the stale re-claim did nothing at all.
+     */
+    await ctx.database.execute(sql`
+      UPDATE settlement_outbox
+      SET status = 'DISPATCHED', completed_at = NULL,
+          dispatched_at = now() - interval '1 hour', attempts = 3
+      WHERE event_id = ${seeded.eventId}::uuid
+    `);
+
+    await runScheduledFunction(fns.dispatchSettlementOutbox, fns.registry);
+
+    const rows = await outboxRows(seeded.eventId);
+    // Re-delivered, settleEvent ran again, found nothing left to do, and
+    // completed the row instead of leaving it to age into a false alarm.
+    expect(rows[0]!.status).toBe("COMPLETED");
+    // And re-running settlement on a finished event still pays only once.
+    expect(await payoutCount(seeded.betId)).toBe(1);
+    expect(await cash(seeded.walletId)).toBe(43000n);
+  });
+
+  it("gives each dispatch attempt a distinct delivery id", async () => {
+    const tag = `ids-${randomUUID().slice(0, 8)}`;
+    const seeded = await seedBet(tag, { home: 1, away: 2 }, "away");
+    const fns = await loadFunctions(stubProvider(tag, new Map([[seeded.providerId, seeded.result]])));
+    await replayScheduledFunction(fns.pollMatchResults, fns.registry);
+
+    const first = await runScheduledFunction(fns.dispatchSettlementOutbox, fns.registry);
+    await ctx.database.execute(sql`
+      UPDATE settlement_outbox
+      SET status = 'DISPATCHED', completed_at = NULL,
+          dispatched_at = now() - interval '1 hour', attempts = 5
+      WHERE event_id = ${seeded.eventId}::uuid
+    `);
+    const second = await runScheduledFunction(fns.dispatchSettlementOutbox, fns.registry);
+
+    const idOf = (run: { events: { name: string; id?: string }[] }) =>
+      run.events.find((e) => e.name === "settlement/event.finished")?.id;
+
+    // Different ids, or the scheduler drops the retry as a duplicate and the
+    // whole stale-reclaim mechanism is decorative.
+    expect(idOf(first)).toBeDefined();
+    expect(idOf(second)).toBeDefined();
+    expect(idOf(second)).not.toBe(idOf(first));
+  });
+});

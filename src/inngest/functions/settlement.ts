@@ -166,9 +166,27 @@ export const dispatchSettlementOutbox = inngest.createFunction(
     await step.sendEvent(
       "dispatch-finished-events",
       items.map((item) => ({
-        // Stable id: a replayed dispatch is deduplicated by the scheduler
-        // rather than fanning out twice.
-        id: item.idempotencyKey,
+        /*
+         * The id includes the ATTEMPT, and that is not incidental.
+         *
+         * It was just `item.idempotencyKey`, which is stable for the life of
+         * the work item. Inngest deduplicates by event id, so every
+         * re-dispatch of a stale item was silently dropped and `settleEvent`
+         * never ran again — which meant the step that completes the outbox
+         * row never ran either.
+         *
+         * Observed in production: six events fully settled (no pending bets,
+         * no open markets) whose work items sat at attempt 7, climbing toward
+         * the give-up threshold. They would have been marked FAILED and paged
+         * somebody about work that had already succeeded — and the stale-item
+         * re-claim, the entire point of which is to retry a lost hand-off, was
+         * a no-op.
+         *
+         * Per-attempt ids make a re-dispatch a real delivery, while a REPLAY
+         * of the same attempt is still deduplicated, which is the property
+         * that was actually wanted.
+         */
+        id: `${item.idempotencyKey}:${item.attempts}`,
         name: "settlement/event.finished",
         data: { eventId: item.eventId, cancelled: item.cancelled, outboxId: item.id },
       })),
