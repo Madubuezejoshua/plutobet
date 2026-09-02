@@ -17,11 +17,20 @@
 > | Registered scheduler untested | **9 acceptance tests** drive the real handler | §6 |
 > | Defect 6 (poll starvation) open | **Fixed**, 7 tests | §8 |
 > | Defect 1 (non-ASCII team keys) open | **Fixed**, 33 tests | §10 |
+> | Stage 9 target not demonstrated | **45–49× / 7.1–8.8× measured**, both runs completed | `PROJECT_STATUS.md` §4 |
+> | CI absent | **Green on both remotes** | `PROJECT_STATUS.md` §7 |
+> | Scheduler never observed running | **Ran unattended; ingested a real result** | §33 below |
+> | Migrations 26 | still **26** | — |
 >
 > **The real match result and ₦600 payout were genuine, but the earlier
 > settlement services were manually invoked through QA scripts. Automatic
 > scheduling is validated separately** — see `DEVELOPER_COMPLETION_REPORT.md`
 > §6, where the registered Inngest function is driven end to end.
+>
+> **Update, 2026-09-02:** the scheduler has since run unattended and ingested a
+> real match result on its own — no script, no human. The bet riding on that
+> result did **not** settle, and §33 records exactly how far the chain got and
+> where it stopped. That is a new, open defect, not a regression of the above.
 >
 > Nothing here has been deleted. Findings that are now resolved are marked
 > above rather than removed, so the trail from defect to fix stays readable.
@@ -602,6 +611,126 @@ So, in order:
 5. **Railway configuration**, only after the credential rotation in section 31.
    — **still open**
 6. **`syncFixtures` performance** (Defect 4). — **partially done**
+
+---
+
+---
+
+## 33. Follow-up pass — 2026-09-02
+
+Everything below happened after this document's original pass. It is recorded
+here because §32 asked for exactly this work; the authoritative summary is
+`PROJECT_STATUS.md`.
+
+### 33.1 What was completed
+
+| Item | Result |
+|---|---|
+| Fixture-sync performance (old Defect 4) | **Done.** 45–49× at 200 events, 7.1–8.8× at 775; statements 15,500 → 96; transactions 1,550 → 8. Both benchmark runs completed — no terminated measurement is quoted |
+| CI | **Done.** GitHub Actions on PR and push to main: install, whitespace, lint, typecheck, secret scan, migration validation, full suite, totals report, production build. Green on both remotes |
+| Production readiness audit | **Done.** `npm run production:check` — exits non-zero while a launch-blocker remains, and never prints a value |
+| Owner rotation checklist | **Done.** `OWNER_LAUNCH_CHECKLIST.md`, `IDENTITY_PEPPER` first |
+| Restore drill | **Blocked** — no Neon API key. `docs/restore-runbook.md` written; the verification half is implemented and tested (`npm run db:verify-restore`, 8/8) |
+| Status documents reconciled | **Done.** `PROJECT_STATUS.md` is now the single source of truth; this file and four others are banner-marked historical |
+
+### 33.2 Four defects found by RUNNING the scheduler
+
+The scheduler had never actually run. Starting it found more in twenty minutes
+than two sessions of reading had, because every one of these lives at the
+boundary with a real provider or a real dev server.
+
+| # | Defect | Consequence |
+|---|---|---|
+| 1 | The app registered **0** functions — the SDK chose cloud mode because signing keys were present | `npm run dev:all` looked like it fixed local scheduling and had not. No cron could fire |
+| 2 | One `404` aborted the whole result poll | **No bet on any event could settle** — every minute, forever, because the offending event sorted first |
+| 3 | An unanswered event was never deferred | It stayed eligible and was re-fetched forever — Defect 6's fix undone by the case it did not anticipate |
+| 4 | One stale id aborted the whole odds refresh (`400 eventIds not found`) | **586 upcoming fixtures had zero prices.** Not an empty board — a broken one |
+
+A fifth came from probing the live API: `/odds/updated` wants the sport DISPLAY
+NAME ("Football"), not the slug, and `since` in unix SECONDS — milliseconds
+return `200 []`, a silent permanent "nothing changed". Its ~90-second window
+also means this document's "delta every 5 min" budget line cannot work, which is
+now stated in the code rather than assumed.
+
+All fixed, with 9 tests, and all four confirmed live in the scheduler's own logs.
+
+### 33.3 The unattended settlement — how far it got
+
+Placed through the public HTTP routes, on a real fixture:
+
+| | |
+|---|---|
+| Bet id | `d7d34d58-507a-4bb0-95e0-338d1626d706` |
+| Fixture | Fortaleza FC v CD Once Caldas |
+| Selection / stake | away @ 2.150 · ₦200 · potential ₦430 |
+| Kickoff | 2026-09-02T01:00:00Z |
+
+**What the scheduler did on its own, with nobody watching:**
+
+- polled the provider, obtained the real result, and recorded it:
+  `SETTLED, ft 1-2 (p1 1-1) via odds-api.io` at `2026-09-02T11:43:34Z`
+- set the event to `SETTLED`
+- recorded the run in `job_heartbeats`
+
+No script and no human touched any of that. It is the first time result
+ingestion has ever happened automatically in this project.
+
+**What did NOT happen — a new open defect:**
+
+The bet was on **away**, and away won 1-2. It is still `PENDING`:
+
+| Evidence | Reading |
+|---|---|
+| `bets.status = PENDING`, `settled_at` null | the bet never settled |
+| 0 `PAYOUT` transactions for it | nobody was paid |
+| all 5 markets still `OPEN`, last touched `00:19:35` | `close-markets`, the LAST step of `settleEvent`, never ran |
+| **0 `settlement/event.finished` events** in the scheduler, ever | the fan-out was never dispatched |
+| `job_heartbeats.results`: `processed_count 10`, `settled_count 0` | the poll found 10 finished events and reported settling none |
+
+So `pollFinishedEvents` did its job and the hand-off to `settleEvent` did not
+occur. **The cause is not yet identified**, and it is not being guessed at here.
+Two facts complicate the reading and are recorded rather than resolved:
+
+- every `settlement-poll-results` run whose output could be read returned
+  `{"skipped": true, "reason": "not due"}`, while the heartbeat simultaneously
+  recorded a success with `processed_count: 10`. Both cannot be true of the same
+  run, so at least one run is not visible in the dev server's retained history.
+- the hourly provider budget was fully spent (`oddsbudget:h:...11 = 100/100`)
+  and the last recorded error is `odds provider budget exhausted for the hour`.
+
+**A related design gap, which IS certain:** the heartbeat wraps only the
+ingestion step, and `settled` is hardcoded to `0` at that point. So a run can
+report success and a settled count of zero while the dispatch that follows it
+fails or never happens — the alert would stay quiet. `settled_count` can never
+be anything but zero as the code stands.
+
+### 33.4 Exact next task
+
+1. **Find why `settleEvent` was never dispatched.** Start by capturing the dev
+   server's stdout to a file (it was discarded in this pass, which is why the
+   diagnosis stops here) and letting one poll run with provider budget available
+   — the hourly budget resets on the hour. Watch for `settlement/event.finished`
+   in the Inngest dev server.
+2. **Make the heartbeat cover the whole run, not just ingestion**, and report a
+   real `settled` count. As written it cannot distinguish "settled nothing
+   because nothing was due" from "settled nothing because the fan-out broke",
+   which is the precise failure sitting in front of it now.
+3. Then re-run the observation with the bet above, or a new one.
+
+Do **not** close this with `qa-settle-run.ts` or `qa-settle-one.ts`. They prove a
+human can settle a bet, which was never in question.
+
+### 33.5 Two things the owner should know
+
+- **`max: 1` is wrong for Railway.** Both database clients use it, justified for
+  serverless where each invocation is its own instance. Railway runs one
+  persistent container, so the whole application serialises on a single
+  connection and one slow query blocks every request. The dev server wedged
+  repeatedly during this pass, including with the scheduler stopped.
+- **400 synthetic fixtures are in the production database**, written by an
+  earlier benchmark through the shared pooled client. They would appear on the
+  customer board as real matches. `npm run db:clean-benchmark` reports them
+  (0 bets reference them) and deletes only with `--confirm`.
 
 ---
 

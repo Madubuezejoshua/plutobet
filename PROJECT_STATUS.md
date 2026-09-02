@@ -4,7 +4,7 @@
 document in this repository is historical evidence of a particular pass and is
 banner-marked as such. Where they disagree with this file, this file is right.
 
-**Last verified:** 2026-09-01 · branch `main` · see §7 for the exact gate output.
+**Last verified:** 2026-09-02 · branch `main` · see §7 for the exact gate output.
 
 No credential value appears in this document.
 
@@ -48,7 +48,8 @@ everything still outstanding.
 | Poll resilience to unknown fixtures | `VERIFIED_WORKING` | 5 tests, and observed live in the scheduler log |
 | Team-key generation | `VERIFIED_WORKING` | 33 tests |
 | **Automatic settlement scheduling** | `VERIFIED_AUTOMATED_BY_ACCEPTANCE_TEST` | 9 tests drive the registered Inngest function |
-| **An unattended real settlement** | `WAITING_ON_REAL_EVENT` | Real bet placed and waiting — bet id and command in §3 |
+| **Unattended result ingestion** | `VERIFIED_WORKING` | The scheduler polled, obtained and recorded a real result on its own — §3 |
+| **Unattended bet settlement** | **`NOT_IMPLEMENTED` — open defect** | The result arrived; the bet did not settle. §3 has the evidence |
 | Scheduler heartbeat and stall alert | `VERIFIED_WORKING` | Recorded a real failure with its cause on the first live run |
 | Admin panel (18 screens) | `IMPLEMENTED_NOT_LIVE_TESTED` | `npm run admin:smoke` passes; no human has used it against production traffic |
 | Backup / restore drill | `BLOCKED_BY_OWNER_CONFIGURATION` | No Neon API key. Runbook and tested verifier in `docs/restore-runbook.md` |
@@ -110,8 +111,8 @@ documented rather than silently changed.
 - The scheduler reports `connected: true` with all 13 functions registered.
 - The board went from **0** to **333** open selections on upcoming fixtures.
 
-**Placed, and now waiting on the match:** a real bet was registered, funded and
-placed entirely through the public HTTP routes during this session.
+**A real bet was registered, funded and placed entirely through the public HTTP
+routes**, and the match has since finished.
 
 | | |
 |---|---|
@@ -127,22 +128,59 @@ Registration refused an underage date of birth (403) and a duplicate email (409)
 placement refused an over-balance stake (409), a zero stake (422) and stale odds
 (409), and a duplicate submit returned the same bet id rather than a second bet.
 
-**Why this is still `WAITING_ON_REAL_EVENT`:** the poller only considers an event
-three hours after kickoff, so this bet becomes eligible at about
-2026-09-02T04:00Z. Nobody has yet watched it settle, and until somebody has, the
-claim is not made.
+### The match finished, and the chain broke halfway
 
-To watch it — the command runs in a `READ ONLY` transaction and cannot settle
-anything:
+**What the scheduler did on its own, with nobody watching:**
 
-```bash
-npm run dev:all                                                    # app + scheduler
-npm run settle:watch -- d7d34d58-507a-4bb0-95e0-338d1626d706 --follow
-```
+- polled the provider, obtained the real result, and recorded it —
+  `SETTLED, ft 1-2 (p1 1-1) via odds-api.io` at `2026-09-02T11:43:34Z`
+- set the event to `SETTLED`
+- recorded the run in `job_heartbeats`
 
-Expected on success: status `WON` or `LOST`, exactly one `PAYOUT` transaction if
-it wins and none if it loses, the scheduler heartbeat showing a recent success,
-and the ledger still balanced.
+That is the first time result ingestion has ever happened automatically here. No
+script, no human.
+
+**What did not happen.** The bet was on **away**, and away won 1-2. It is still
+`PENDING`:
+
+| Evidence | Reading |
+|---|---|
+| `bets.status = PENDING`, `settled_at` null | the bet never settled |
+| 0 `PAYOUT` transactions for it | nobody was paid |
+| all 5 markets still `OPEN`, last touched `00:19:35` | `close-markets`, the LAST step of `settleEvent`, never ran |
+| **0 `settlement/event.finished` events** in the scheduler, ever | the fan-out was never dispatched |
+| heartbeat: `processed_count 10`, `settled_count 0` | the poll found 10 finished events and settled none |
+
+So `pollFinishedEvents` did its job and the hand-off to `settleEvent` did not
+occur. **The cause is not yet identified and is not guessed at here.** Two facts
+complicate the reading and are recorded rather than resolved:
+
+- every `settlement-poll-results` run whose output could be read returned
+  `{"skipped": true, "reason": "not due"}`, while the heartbeat simultaneously
+  recorded a success with `processed_count: 10`. Both cannot be true of one run,
+  so at least one run is missing from the dev server's retained history.
+- the hourly provider budget was fully spent (`100/100`) and the last recorded
+  error is `odds provider budget exhausted for the hour`.
+
+**One design gap that IS certain.** The heartbeat wraps only the ingestion step,
+and `settled` is hardcoded to `0` there. A run can therefore report success with
+`settled_count: 0` while the dispatch after it fails or never happens, and the
+stall alert stays quiet. `settled_count` cannot be anything but zero as written.
+
+**Next diagnostic steps**, in order:
+
+1. Capture the dev server's stdout to a file — it was discarded in this pass,
+   which is exactly why the diagnosis stops here.
+2. Let one poll run with provider budget available (the hourly budget resets on
+   the hour) and watch for `settlement/event.finished` in the Inngest dev server.
+3. Make the heartbeat cover the whole run and report a real `settled` count. As
+   written it cannot tell "settled nothing because nothing was due" from "settled
+   nothing because the fan-out broke" — which is the precise failure in front of
+   it now.
+
+Then re-run the observation with the bet above, or a new one. **Do not** close it
+with `qa-settle-run.ts` or `qa-settle-one.ts`: they prove a human can settle a
+bet, which was never in question.
 
 **A local obstacle worth recording, because it is not only local:**
 
