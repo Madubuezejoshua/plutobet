@@ -2,6 +2,12 @@
 
 > ## HISTORICAL — not the current status
 >
+> **2026-09-02:** the settlement chain described here was later found to be
+> broken end to end — the dispatch was unreachable because a cadence claim sat
+> outside `step.run()`. A real winning bet stayed PENDING for fourteen hours.
+> Fixed, with a transactional outbox and a recovery sweep; the bet is paid. See
+> `PROJECT_STATUS.md` §2b.
+>
 > This document records the developer completion pass that preceded this one. It is kept as evidence and is **not** the
 > current state of the repository.
 >

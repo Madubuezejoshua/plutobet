@@ -6,6 +6,11 @@ banner-marked as such. Where they disagree with this file, this file is right.
 
 **Last verified:** 2026-09-02 · branch `main` · see §7 for the exact gate output.
 
+> **The stranded winning bet is settled.** It was recovered by the automatic
+> pipeline, not by hand: `WON`, one ₦430 payout, markets closed, ledger
+> balanced. The two faults that stranded it, and a third found while proving
+> it, are in §2b.
+
 No credential value appears in this document.
 
 ---
@@ -49,7 +54,9 @@ everything still outstanding.
 | Team-key generation | `VERIFIED_WORKING` | 33 tests |
 | **Automatic settlement scheduling** | `VERIFIED_AUTOMATED_BY_ACCEPTANCE_TEST` | 9 tests drive the registered Inngest function |
 | **Unattended result ingestion** | `VERIFIED_WORKING` | The scheduler polled, obtained and recorded a real result on its own — §3 |
-| **Unattended bet settlement** | **`NOT_IMPLEMENTED` — open defect** | The result arrived; the bet did not settle. §3 has the evidence |
+| **Unattended bet settlement** | `VERIFIED_WORKING` | The real stranded bet was recovered and paid by the pipeline — §2b, §3 |
+| Settlement outbox + recovery sweep | `VERIFIED_WORKING` | 19 acceptance tests through the registered functions |
+| Connection pooling for Railway | `VERIFIED_WORKING` | 14 tests, including a load check that `max: 1` serialises and the pool does not |
 | Scheduler heartbeat and stall alert | `VERIFIED_WORKING` | Recorded a real failure with its cause on the first live run |
 | Admin panel (18 screens) | `IMPLEMENTED_NOT_LIVE_TESTED` | `npm run admin:smoke` passes; no human has used it against production traffic |
 | Backup / restore drill | `BLOCKED_BY_OWNER_CONFIGURATION` | No Neon API key. Runbook and tested verifier in `docs/restore-runbook.md` |
@@ -78,6 +85,93 @@ which means the documented "delta every 5 minutes" budget plan cannot work. The
 adapter now returns `null` for a stale cursor so the caller falls back to a full
 refresh; the cadence itself is an owner decision with a cost attached and is
 documented rather than silently changed.
+
+---
+
+## 2b. The money-path repair
+
+A real winning bet — `d7d34d58-507a-4bb0-95e0-338d1626d706`, away @ 2.150 on
+Fortaleza FC v CD Once Caldas, which finished 1-2 — sat `PENDING` for fourteen
+hours after its event was automatically marked `SETTLED`. Three faults, two that
+caused it and one found while proving the fix.
+
+### Fault 1 — the dispatch was unreachable by construction
+
+`oddsCadence.claimIfDue` was called OUTSIDE `step.run()`, with a comment
+explaining that replaying it would report "not due" and skip real work. The
+reasoning was exactly inverted: code outside a step is what re-executes on every
+invocation; code inside one is memoised.
+
+Inngest invokes a handler once per step. Invocation 1 claimed the cadence slot
+and ran the ingestion step. Invocation 2 replayed from the top, found the claim
+**held by its own first invocation**, and returned `{skipped: "not due"}` —
+never reaching the dispatch. Everything after the first step was unreachable for
+every event, always.
+
+Evidence, before the fix: every `settlement-poll-results` run whose output could
+be read returned `{"skipped":true,"reason":"not due"}` with exactly one child
+span, while the heartbeat simultaneously recorded a success with
+`processed_count: 10`, and **zero** `settlement/event.finished` events had ever
+been emitted.
+
+### Fault 2 — a dual write with no shared commit
+
+The result committed to PostgreSQL; the hand-off went to the scheduler over the
+network. A crash between them stranded the bet permanently, because
+`pollFinishedEvents` only considers events with NO stored result — once the
+result exists the event is never reconsidered.
+
+Closed with a transactional outbox: the work item is written in the SAME
+transaction as the result, and a separate dispatcher drains it using only local
+data. **Provider budget exhaustion can no longer stop money reaching somebody
+whose result we already hold** — the state the system was in while the customer
+went unpaid.
+
+### Fault 3 — a duplicate submit reserved risk twice
+
+Found because "exposure released" is part of the required evidence. After the
+recovered bet was paid, its market still held exactly `potential_return - stake`.
+
+Placement detects an idempotent replay AFTER claiming exposure — it must, because
+the global lock order is exposure-then-wallet and inverting it would deadlock
+against settlement. So a re-submitted slip claimed the liability again against
+every market on it and created no second bet for settlement to release. A
+market's ceiling exists to cap risk; every double-tapped button permanently ate
+a slice of it.
+
+The replay path now releases precisely what that attempt claimed. A genuinely
+new bet still reserves normally — understating real risk would be the more
+dangerous mistake.
+
+### How the real bet was recovered
+
+By the pipeline, with no human in the loop:
+
+```
+13:56:48  SETTLEMENT_RECOVERY_ENQUEUED  recovery sweep found 1 pending bet(s)
+                                        on an event with a final result
+13:56:49  outbox DISPATCHED             source=RECOVERY, attempts=1
+13:56:56  ledger PAYOUT CREDIT 43000
+13:56:58  outbox COMPLETED
+```
+
+| Evidence | Result |
+|---|---|
+| Bet status | **WON**, `settled_at` populated |
+| Payout | **exactly 1** transaction, ₦430.00 |
+| CASH balance | ₦0 → **₦430.00** (profit ₦230) |
+| Markets | all 5 `SETTLED`, 0 of 68 selections open |
+| Ledger | ₦2,035.00 debits = ₦2,035.00 credits, 0 negative wallets |
+| Remaining recovery candidates | **0** |
+| Same sweep, wider effect | 21 stranded events recovered, 0 failures |
+
+**One residue, reported not repaired.** That market still holds ₦230 of
+liability from the duplicate submit that predates the fix. It is historical data
+in a money-adjacent table, so correcting it is an owner decision rather than
+something to quietly `UPDATE`. It is now counted as
+`unreleasedExposureMarkets` and surfaces in the sweep's health output.
+
+---
 
 ---
 
@@ -276,11 +370,16 @@ Nothing here is started unless stated. **D** = developer-controlled,
 | Item | Status | Who |
 |---|---|---|
 | CI | `VERIFIED_WORKING` — see §7 | D |
+| Settlement outbox, dispatcher, recovery sweep | `VERIFIED_WORKING` — §2b | D |
+| Honest per-stage heartbeats and alerts | `VERIFIED_WORKING` — `docs/settlement-operations.md` | D |
+| Railway connection pooling | `VERIFIED_WORKING` — was `max: 1`, now 10/5, validated | D |
+| Benchmark ephemeral-database guard | `VERIFIED_WORKING` — 18 tests | D |
 | Sentry production configuration | `BLOCKED_BY_OWNER_CONFIGURATION` — `SENTRY_DSN` unset | O |
 | Credential rotation | `BLOCKED_BY_OWNER_CONFIGURATION` — see `OWNER_LAUNCH_CHECKLIST.md` | O |
 | Restore drill | `BLOCKED_BY_OWNER_CONFIGURATION` — `docs/restore-runbook.md` | O |
 | Railway database, Redis, `NEXTAUTH_URL` | `BLOCKED_BY_OWNER_CONFIGURATION` | O |
-| `max: 1` connection review for Railway | `NOT_IMPLEMENTED` — see §3 | D |
+| ~~`max: 1` connection review for Railway~~ | **DONE** — §2b, `docs/settlement-operations.md` | D |
+| Residual exposure on one market (₦230) | Needs owner decision — §2b | O |
 | 400 synthetic fixtures in production | Cleanup ready, not run — `npm run db:clean-benchmark` | O approves, D runs |
 
 ---

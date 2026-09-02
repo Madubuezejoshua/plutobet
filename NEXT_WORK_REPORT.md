@@ -20,6 +20,7 @@
 > | Stage 9 target not demonstrated | **45–49× / 7.1–8.8× measured**, both runs completed | `PROJECT_STATUS.md` §4 |
 > | CI absent | **Green on both remotes** | `PROJECT_STATUS.md` §7 |
 > | Scheduler never observed running | **Ran unattended; ingested a real result** | §33 below |
+> | §33.3 settlement chain broken | **Repaired; the real bet is WON and paid** | §34 below |
 > | Migrations 26 | still **26** | — |
 >
 > **The real match result and ₦600 payout were genuine, but the earlier
@@ -731,6 +732,106 @@ human can settle a bet, which was never in question.
   earlier benchmark through the shared pooled client. They would appear on the
   customer board as real matches. `npm run db:clean-benchmark` reports them
   (0 bets reference them) and deletes only with `--confirm`.
+
+---
+
+---
+
+## 34. Money-path repair — 2026-09-02
+
+§33.3 recorded that the scheduler ingested a real result but the bet on it did
+not settle, and stated plainly that the cause was not yet identified. It is now,
+and the bet is paid. The authoritative summary is `PROJECT_STATUS.md` §2b;
+operational detail is in `docs/settlement-operations.md`.
+
+### 34.1 Root cause — the dispatch was unreachable by construction
+
+`oddsCadence.claimIfDue` was called OUTSIDE `step.run()`, with a comment
+explaining that replaying it would report "not due" and skip real work. The
+reasoning was exactly inverted: code outside a step re-executes on every
+invocation, and code inside one is memoised.
+
+Inngest invokes a handler once per step. Invocation 1 claimed the cadence slot
+and ran the ingestion step. Invocation 2 replayed from the top, found the claim
+**held by its own first invocation**, and returned `{skipped: "not due"}` —
+never reaching `step.sendEvent`. Everything after the first step was unreachable,
+for every event, always.
+
+This explains every observation in §33.3 that looked contradictory: results
+ingested, heartbeat green, run output `{"skipped":true}`, exactly one child span,
+and zero `settlement/event.finished` events ever emitted.
+
+The claim is now inside `step.run`, so the `true` replays from the checkpoint.
+
+### 34.2 The second fault — a dual write with no shared commit
+
+Even fixed, the result committed to PostgreSQL while the hand-off went to the
+scheduler over the network. A crash between them stranded the bet permanently,
+because `pollFinishedEvents` only considers events with NO stored result.
+
+A transactional outbox (`settlement_outbox`, migration 0026) now records the work
+item in the SAME transaction as the result. A separate dispatcher drains it using
+only local data, so **an exhausted provider budget can no longer stop money
+reaching somebody whose result we already hold** — the exact state the system
+was in while the customer went unpaid.
+
+### 34.3 The third fault — a duplicate submit reserved risk twice
+
+Found because "exposure released" was required evidence: after the recovered bet
+was paid, its market still held exactly `potential_return - stake`.
+
+Placement detects an idempotent replay AFTER claiming exposure — it must,
+because the global lock order is exposure-then-wallet and inverting it would
+deadlock against settlement. A re-submitted slip therefore claimed the liability
+again and created no second bet for settlement to release. Ceilings exist to cap
+risk, and every double-tap permanently consumed a slice of one.
+
+The replay path now releases precisely what that attempt claimed; a genuinely
+new bet still reserves normally.
+
+### 34.4 The bet, recovered automatically
+
+```
+13:56:48  SETTLEMENT_RECOVERY_ENQUEUED  recovery sweep found 1 pending bet(s)
+                                        on an event with a final result
+13:56:49  outbox DISPATCHED             source=RECOVERY, attempts=1
+13:56:56  ledger PAYOUT CREDIT 43000
+13:56:58  outbox COMPLETED
+```
+
+`WON`, one ₦430 payout, CASH ₦0 → ₦430, all five markets `SETTLED`, ledger
+balanced, 0 remaining recovery candidates. The same sweep recovered 21 stranded
+events with no failures. No manual settlement was used; `qa-settle-run.ts` and
+`qa-settle-one.ts` were not run.
+
+### 34.5 Monitoring that can see a settlement failure
+
+The old heartbeat had one row and hardcoded `settled: 0` at the point ingestion
+returned, so it could not report anything but zero — in front of exactly the
+failure it existed to catch. There are now four job rows and per-stage counts,
+including `pending_after_run_count`: bets still PENDING on a result we already
+hold. `dispatch_accepted` and `settlement_completed` are separate fields so
+"the scheduler took the message" can never again read as "somebody was paid".
+
+### 34.6 Also done
+
+- **Railway pooling.** Both runtime clients used `max: 1`; on one persistent
+  container that serialises the whole application. Now 10 (reads) and 5 (money,
+  smaller because those transactions take row locks), validated at boot and
+  refused rather than clamped. A load test proves `max: 1` serialises and the
+  pool does not.
+- **Benchmark guard.** The benchmark must now prove its target is disposable and
+  refuses to run from a shell holding production configuration — the condition
+  that put 400 synthetic fixtures in the production database.
+
+### 34.7 Still open
+
+- The 400 synthetic fixtures remain. `npm run db:clean-benchmark` was run in
+  **dry run only**: 400 events, 0 markets, 0 selections, 0 snapshots, 0 results,
+  0 bets, 0 audit rows reference them, and teams/competitions would be preserved.
+  Deletion awaits owner approval.
+- One market holds ₦230 of residual liability from a duplicate submit predating
+  the fix. Reported as `unreleasedExposureMarkets`, not silently corrected.
 
 ---
 

@@ -201,6 +201,35 @@ rejects any write it might attempt.
 
 ---
 
+## 12. Optional: connection pool sizing
+
+Defaults are 10 pooled reads and 5 on the money path, sized for ONE persistent
+Railway container. Override with `DATABASE_POOL_MAX` and
+`DIRECT_DATABASE_POOL_MAX` only if you have a reason from real traffic.
+
+Invalid, zero, negative or excessive values are **refused at boot**, not clamped:
+Neon's compute has a bounded `max_connections` shared by every client, and
+exhausting it fails requests outright rather than queueing them. `npm run
+production:check` reports the configured sizes.
+
+---
+
+## 13. Two decisions waiting on you
+
+**The 400 synthetic fixtures.** `npm run db:clean-benchmark` has been run in dry
+run only. It found 400 events with a `bench-<timestamp>` provider tag, and
+confirmed **0 markets, 0 selections, 0 odds snapshots, 0 results, 0 bets and 0
+audit rows** reference them. Teams and competitions are shared taxonomy and would
+be preserved. Re-run with `--confirm` to delete. Nothing was deleted for you.
+
+**₦230 of residual liability on one market.** A duplicate submit reserved
+exposure twice, before that bug was fixed. The bug is fixed and cannot recur;
+this is historical data in a money-adjacent table, so correcting it is your call
+rather than something to quietly `UPDATE`. It is visible as
+`unreleasedExposureMarkets` in the recovery sweep's health output.
+
+---
+
 ## Still blocked, and not by anything in this checklist
 
 | Item | Blocked by |
