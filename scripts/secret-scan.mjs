@@ -98,6 +98,15 @@ const KNOWN_SAFE = [
   // made under one pepper cannot be read under another. Its whole purpose is to
   // be the value that does not work.
   "a-completely-different-pepper-32-chars!!",
+  /*
+   * Fake credentials the ephemeral-database guard tests assert are NEVER
+   * echoed back in a refusal message. They exist to prove the guard does not
+   * leak the thing it is protecting, so they have to look like the real shape
+   * — and they name themselves, which is the point. Neither is a credential
+   * for anything.
+   */
+  "fake-value-that-must-never-be-echoed",
+  "fake-db-password-never-echoed",
 ];
 
 function tracked() {
