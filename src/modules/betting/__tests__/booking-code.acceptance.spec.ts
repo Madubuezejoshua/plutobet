@@ -27,9 +27,28 @@ describe("booking codes", () => {
     expect(codes.replace(/P/g, "")).not.toMatch(/[01OIL]/);
   });
 
-  it("does not repeat within a large sample", () => {
-    const codes = new Set(Array.from({ length: 5000 }, generateBookingCode));
-    expect(codes.size).toBe(5000);
+  /*
+   * Collisions must be at RANDOM-CHANCE level, not zero.
+   *
+   * This asserted `size === 5000`, which is a birthday-paradox trap: with a
+   * 31^6 space (~8.9e8) and 5000 draws, the expected number of collisions is
+   * 0.014 and the chance of seeing at least one is about 1.4% PER RUN. So the
+   * test failed roughly one run in seventy, for a generator working exactly as
+   * designed — and a test that cries wolf at that rate teaches people to
+   * re-run CI instead of reading it. It duly failed once here, on a change
+   * that had nothing to do with booking codes.
+   *
+   * The property worth protecting is that the generator is not BIASED. A
+   * broken one — a short body, a clustered alphabet, a seeded PRNG — produces
+   * collisions in the hundreds or thousands, not one. Allowing three is over
+   * two hundred times the expectation and still orders of magnitude below any
+   * real defect.
+   */
+  it("does not repeat more often than chance allows", () => {
+    const sample = 5000;
+    const codes = new Set(Array.from({ length: sample }, generateBookingCode));
+    const collisions = sample - codes.size;
+    expect(collisions).toBeLessThanOrEqual(3);
   });
 
   it("uses the whole alphabet rather than clustering", () => {
