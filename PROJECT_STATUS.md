@@ -568,6 +568,13 @@ Pushed fast-forward to both remotes.
 | `2f51a1f` | Prepare two destructive operations without performing either |
 | `5faedfb` | Separate "can it demo" from "may it take money", and correct the backlog |
 | `0516b38` | Stop two reports calling an older commit the final one |
+| `f9746f4` | Stop a heartbeat publishing the database endpoint |
+| `835c14e` | Put this pass's findings in the next work report |
+
+CI is **completed / success on both remotes** for `f9746f4` and `835c14e`,
+confirmed per-SHA through the API rather than by reading a badge — a passing
+badge reflects the latest COMPLETED run on the branch, which is not necessarily
+the newest commit.
 
 **The tip is the last row above**, plus one further commit carrying this
 correction — a commit cannot quote its own hash, which is the reason a

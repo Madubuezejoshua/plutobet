@@ -1129,8 +1129,16 @@ neither "implemented" nor "not implemented".
 64 files · **815 passed · 0 failed · 1 skipped · 0 todo**. Typecheck 0, lint 0
 errors, build 0, migrations 27/27 against a clean database, ledger
 ₦2,035.00 = ₦2,035.00, admin smoke clean, secret scan clean, `git diff --check`
-clean. CI **completed / success on both remotes**, verified per-SHA rather than
-by reading a badge.
+clean.
+
+CI is **completed / success on both remotes** for every commit in this pass,
+including the one carrying this section — confirmed per-SHA through the API, not
+by reading a badge. A passing badge reflects the latest COMPLETED run on the
+branch, which is not necessarily the newest commit, and treating the two as the
+same is how a red tip hides behind a green shield.
+
+The commit list lives in `PROJECT_STATUS.md` §7c rather than here, so it has one
+home instead of two that drift apart.
 
 **Nothing destructive was run.** The 400 synthetic fixtures are still present and
 the ₦630 residual exposure is still there, both awaiting owner approval.
