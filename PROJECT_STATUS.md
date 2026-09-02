@@ -6,6 +6,12 @@ banner-marked as such. Where they disagree with this file, this file is right.
 
 **Last verified:** 2026-09-02 · branch `main` · see §7 for the exact gate output.
 
+> **Two readiness modes, and they are different questions.** `DEMO_READY` asks
+> whether this can serve a test account end to end. `REAL_MONEY_READY` asks
+> whether it may take a stranger's money. Neither is currently satisfied — §2c.
+> A previous report said "NEXTAUTH_URL is the only remaining launch blocker";
+> that was the only blocker the infrastructure checker could SEE.
+
 > **The stranded winning bet is settled.** It was recovered by the automatic
 > pipeline, not by hand: `WON`, one ₦430 payout, markets closed, ledger
 > balanced. The two faults that stranded it, and a third found while proving
@@ -193,6 +199,73 @@ something to quietly `UPDATE`. It is now counted as
 
 ---
 
+## 2c. Readiness, security and the two questions
+
+```bash
+npm run readiness:demo          # can this serve a test account, end to end?
+npm run readiness:real-money    # may this take a stranger's money?
+```
+
+### DEMO_READY — **NOT SATISFIED**, 2 blockers
+
+| Blocker | Why |
+|---|---|
+| `NEXTAUTH_URL` points at localhost | sign-in callbacks send real users to their own machine |
+| **runtime database role owns the ledger** | see below |
+
+Everything else a demo needs is in place: real fixtures and odds, QA ledger
+credit, bet placement over HTTP, automatic ingestion, settlement and recovery.
+
+### REAL_MONEY_READY — **NOT SATISFIED**, 14 blockers
+
+The two above, plus: Paystack deposits, Paystack payouts, Termii SMS, Resend
+email, a KYC provider, `SENTRY_DSN`, a real deposit proof, a real withdrawal
+proof, credential rotation, a verified restore drill, a gaming licence, and a
+settlement bank account.
+
+**QA ledger credit is not a deposit** and is never presented as one.
+
+### The runtime database role — the most serious finding in this pass
+
+`npm run db:audit-roles`, read-only, reports for all three configured URLs:
+
+```
+session_user / current_user / current_role   neondb_owner
+superuser                                    no
+bypasses RLS                                 YES
+owns ledger tables                           YES (ledger_entries, ledger_transactions, wallets)
+can DROP / ALTER / TRUNCATE ledger           YES
+can grant itself more                        YES
+```
+
+The money paths issue `SET LOCAL ROLE app_role` inside every transaction and are
+safe. **The pooled READ client does no role handling at all**, and thirty-four
+files import it — every board query, every admin page, every public route. A
+compromised read path inherits owner rights over the ledger.
+
+`SET ROLE` on the pooled connection would not fix it reliably: that URL goes
+through Neon's transaction-mode pooler, where a session-level role does not
+dependably survive to the next transaction. The fix is a separate
+least-privilege credential for `DATABASE_URL`, with the exact SQL in
+`OWNER_LAUNCH_CHECKLIST.md` §13.
+
+`production:check` now **fails** on this. It previously appeared as a note
+beside a passing check, which is how a privilege problem survives a review.
+
+**What the restricted role can and cannot do** is pinned by 12 tests that
+attempt real DDL through the real runtime client against a real PostgreSQL
+(`runtime-role.acceptance.spec.ts`). As `app_role`, PostgreSQL refuses `DROP`,
+`ALTER`, `TRUNCATE`, `DELETE`, disabling the balance trigger, replacing the
+trigger function, and creating tables in `public`; a self-`GRANT` returns
+successfully but changes nothing. It retains exactly what the application uses,
+including **column-level** UPDATE on `wallets` — it can write the balance and
+version columns and cannot write `user_id` or `kind`, so it cannot move a
+balance between people.
+
+---
+
+---
+
 ## 3. The unattended settlement: what was and was not proven
 
 **Proven:**
@@ -343,18 +416,21 @@ Nothing here is started unless stated. **D** = developer-controlled,
 
 | Item | Status | Who |
 |---|---|---|
-| Edit bet / cash out | `NOT_IMPLEMENTED` | D |
-| Bet builder (correlated selections) | `NOT_IMPLEMENTED` · needs a pricing provider | D + O |
+| **Cash out (full)** | `IMPLEMENTED_NOT_REACHABLE` — service + tests exist; **no API route, no caller** | D |
+| **Cash out (partial)** | `IMPLEMENTED_NOT_REACHABLE` — `cashOutPartial` exists with tests; same gap | D |
+| **Edit bet** | `NOT_IMPLEMENTED` — no code of any kind | D |
+| Bet builder (correlated selections) | `NOT_IMPLEMENTED` — no code; also needs a pricing provider | D + O |
 | Live / in-play betting | `BLOCKED_BY_CONTRACT` | O |
-| Redis caching of `liveVersion` | `NOT_IMPLEMENTED` — every board read hits Postgres | D |
-| Homepage and live-polling load tests | `NOT_IMPLEMENTED` | D |
-| Prompt-injection tests for AI surfaces | `NOT_IMPLEMENTED` | D |
+| Redis caching of `liveVersion` | `NOT_IMPLEMENTED` — confirmed: `liveVersion()` runs a three-table aggregate against Postgres on every `/api/live` request | D |
+| Homepage / live-polling load tests | `PARTIAL` — a 500-concurrent-reader test exists for the odds read path; no HTTP-level homepage or `/api/live` load test | D |
+| Prompt-injection tests for AI surfaces | `PARTIAL` — `ai/__tests__/guardrails.acceptance.spec.ts` exists; no dedicated injection corpus | D |
 
 ### Compliance and identity
 
 | Item | Status | Who |
 |---|---|---|
-| DOB capture backfill and enforcement | `NOT_IMPLEMENTED` — needs an owner decision on existing accounts | D + O |
+| DOB capture and enforcement | `VERIFIED_WORKING` — `users.date_of_birth` exists, `age.ts` validates, registration refuses underage with 403 | D |
+| DOB **backfill** | `NOT_IMPLEMENTED` — the column is NULLABLE and **1 of 7 accounts has no DOB**; enforcement is not structural until it is NOT NULL | D + O |
 | KYC identity verification | `BLOCKED_BY_CONTRACT` — no provider | O |
 | Regulatory licensing | `BLOCKED_BY_REGULATION` | O |
 | Independent RNG / platform certification | `BLOCKED_BY_REGULATION` | O |
@@ -378,10 +454,10 @@ Nothing here is started unless stated. **D** = developer-controlled,
 
 | Item | Status | Who |
 |---|---|---|
-| Fantasy | `NOT_IMPLEMENTED` | D |
-| Lucky Numbers | `NOT_IMPLEMENTED` | D |
-| Personalisation | `NOT_IMPLEMENTED` | D |
-| Admin AI | `NOT_IMPLEMENTED` | D |
+| Fantasy | `NOT_IMPLEMENTED` — a `ComingSoon` stub page and a nav entry, no product | D |
+| Lucky Numbers | `NOT_IMPLEMENTED` — no code | D |
+| Personalisation | `NOT_IMPLEMENTED` — no code | D |
+| Admin AI | `NOT_IMPLEMENTED` — no code | D |
 
 ### Operations
 
@@ -425,21 +501,23 @@ Every figure below is from the final run on the pushed commit.
 |---|---|
 | `npx tsc --noEmit` | exit 0 |
 | `npm run lint` | exit 0 — 0 errors, 15 pre-existing warnings |
-| `npx vitest run` | **63 files, 795 passed, 0 failed, 1 skipped, 0 todo**, exit 0 |
+| `npx vitest run` | **64 files, 810 passed, 0 failed, 1 skipped, 0 todo**, exit 0 |
 | The 1 skip | the opt-in live provider contract (`ODDS_LIVE_CONTRACT`) — **not counted as passing** |
 | `npm run build` | exit 0 |
 | `node scripts/check-migrations.mjs` | 27 of 27 applied to a **clean** database, 62 tables |
 | `npm run db:verify-restore` | 8 of 8 pass; ledger ₦2,035.00 debits = ₦2,035.00 credits, 0 negative wallets |
 | `npm run admin:smoke` | all admin queries clean |
-| `node scripts/secret-scan.mjs` | clean, 390 files, 15 rules |
+| `node scripts/secret-scan.mjs` | clean, 396 files, 15 rules |
 | `git diff --check` | clean |
 | `npm run bench:sync` | completed at 200 and 775 events — §4 |
-| `npm run production:check` | **exit 1**, correctly: `NEXTAUTH_URL` points at localhost. Settlement consistency now **PRESENT** |
-| **GitHub Actions CI** | **passing on both remotes** at `4445c6e` |
+| `npm run readiness:demo` | **exit 1**, correctly: `NEXTAUTH_URL` and the runtime database role — §2c |
+| `npm run readiness:real-money` | **exit 1**, correctly: 14 blockers — §2c |
+| `npm run db:audit-roles` | **exit 1**, correctly: runtime role owns the ledger — §2c |
+| **GitHub Actions CI** | **completed / success on both remotes** at `363c937`, verified per-SHA via the API (not the badge) |
 
-Test count rose from 736 to 795 across this work: +19 outbox and recovery, +14
-connection pool, +18 ephemeral guard, +3 exposure replay, +2 stale re-dispatch,
-+2 alert-message, plus the replay regression test.
+Test count rose from 736 to 810 across this work: +26 outbox, recovery, backoff
+and transient-failure, +14 connection pool, +18 ephemeral guard, +12 runtime
+role, +3 exposure replay, plus the replay regression test.
 
 ---
 

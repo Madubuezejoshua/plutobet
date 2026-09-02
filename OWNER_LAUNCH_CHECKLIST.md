@@ -214,19 +214,148 @@ production:check` reports the configured sizes.
 
 ---
 
-## 13. Two decisions waiting on you
+## 13. THE FIRST THING TO FIX: the runtime database role
 
-**The 400 synthetic fixtures.** `npm run db:clean-benchmark` has been run in dry
-run only. It found 400 events with a `bench-<timestamp>` provider tag, and
-confirmed **0 markets, 0 selections, 0 odds snapshots, 0 results, 0 bets and 0
-audit rows** reference them. Teams and competitions are shared taxonomy and would
-be preserved. Re-run with `--confirm` to delete. Nothing was deleted for you.
+**All three configured database URLs connect as `neondb_owner`, which owns the
+ledger tables.** Verified, not inferred — `npm run db:audit-roles` prints the
+evidence.
 
-**₦230 of residual liability on one market.** A duplicate submit reserved
-exposure twice, before that bug was fixed. The bug is fixed and cannot recur;
-this is historical data in a money-adjacent table, so correcting it is your call
-rather than something to quietly `UPDATE`. It is visible as
-`unreleasedExposureMarkets` in the recovery sweep's health output.
+The money paths issue `SET LOCAL ROLE app_role` inside every transaction and
+are safe. **The pooled READ client does no role handling at all**, and
+thirty-four files import it: every board query, every admin page, every public
+route. A SQL-injection or a compromised dependency on any of those paths
+inherits the ability to `DROP`, `ALTER` or `TRUNCATE` the ledger, disable the
+balance-enforcement trigger, and grant itself more.
+
+Using `SET ROLE` on the pooled connection would NOT fix this reliably: the
+pooled URL goes through Neon's transaction-mode pooler, where a session-level
+`SET ROLE` does not dependably survive to the next transaction. The fix is a
+separate credential.
+
+**In the Neon SQL editor, as the owner:**
+
+```sql
+CREATE ROLE plutobet_app LOGIN PASSWORD '<generate a strong one>';
+GRANT app_role TO plutobet_app;
+GRANT USAGE ON SCHEMA public TO plutobet_app;
+ALTER ROLE plutobet_app SET role = 'app_role';
+```
+
+Then set **`DATABASE_URL`** (the pooled runtime URL, and only that one) to
+connect as `plutobet_app`. Leave `DIRECT_DATABASE_URL` and
+`MIGRATION_DATABASE_URL` as they are — the money path needs the unpooled
+endpoint, and migrations legitimately need the owner.
+
+Verify:
+
+```bash
+npm run db:audit-roles          # runtime row must show: owns ledger tables  no
+npm run production:check        # "runtime db role" must be PRESENT
+```
+
+`production:check` now **fails** while the runtime role owns the ledger. It used
+to report this beside a passing check, as a note. It is not a note.
+
+---
+
+## 14. Two readiness modes, and why the difference matters
+
+```bash
+npm run readiness:demo          # can this serve a test account, end to end?
+npm run readiness:real-money    # may this take a stranger's money?
+```
+
+A previous report said "NEXTAUTH_URL is the only remaining launch blocker". That
+was the only blocker the infrastructure checker could SEE, which is a very
+different sentence. Real-money launch is additionally blocked by payment
+credentials, notification delivery, identity verification, credential rotation,
+a proven restore, error reporting and a gaming licence — none of which is
+implied by the demo passing.
+
+**QA ledger credit is not a deposit and must never be presented as one.**
+
+---
+
+## 15. APPROVAL BLOCK — delete the 400 synthetic fixtures
+
+Nothing has been deleted. This is the evidence; the decision is yours.
+
+**Verify immediately before approving** (read-only, changes nothing):
+
+```bash
+npm run db:verify-cleanup
+```
+
+| | |
+|---|---|
+| Exact count to delete | **400 events** |
+| Predicate | `provider ~ '^bench-[0-9]+$'` |
+| Matched tags | `bench-1788273932228` (200), `bench-1788276430186` (200) |
+| Other providers in table | `odds-api.io` — **does not match the filter** |
+| Tables affected | `events`, plus their `markets`, `selections`, `odds_snapshots`, `event_results` (all currently **0**) |
+| Tables preserved | `teams` (1,697), `competitions` (212), `bets`, `ledger_*`, `wallets`, `users`, `audit_log` |
+
+**Pre-deletion checks, all currently passing:** 0 markets, 0 selections, 0 odds
+snapshots, 0 results, 0 bets and 0 audit rows reference them; every matched tag
+is a benchmark tag; no legitimate provider matches the filter.
+
+**Recovery method:** Neon point-in-time restore to a scratch branch. The
+synthetic rows were created `2026-09-01T14:45:50Z`, so any restore point before
+that recovers the pre-contamination state. See `docs/restore-runbook.md`.
+
+**To approve and run:**
+
+```bash
+npm run db:verify-cleanup       # confirm all checks still pass
+npm run db:clean-benchmark -- --confirm
+npm run db:verify-cleanup       # post-deletion: expect 0 synthetic events
+```
+
+The cleanup **refuses** if any bet references them, and never touches teams or
+competitions — a real fixture may legitimately reference the same club.
+
+---
+
+## 16. APPROVAL BLOCK — repair ₦630 of residual exposure
+
+**Corrected figure.** An earlier report said ₦230 on one market. The full audit
+found **two** markets totalling **₦630**.
+
+| Market | Fixture | Residual |
+|---|---|---|
+| `701daa4f-8b00-4d36-bf97-5ef236a3e52a` | Dinthar FC v Saikhamakawn FC `1x2` | ₦400.00 |
+| `822cfe03-f701-4251-86e4-3a3e7842baed` | Fortaleza FC v CD Once Caldas `1x2` | ₦230.00 |
+
+**What happened.** Placement claims exposure BEFORE it can detect an idempotent
+replay — it must, because the global lock order is exposure-then-wallet and
+inverting it would deadlock against settlement. A re-submitted slip therefore
+claimed the liability twice and created no second bet for settlement to release.
+Each residual is exactly `potential_return - stake` for its one bet.
+
+**The code defect is fixed** (the replay path now releases exactly what that
+attempt claimed, with tests). These are the rows it left behind.
+
+**No money is involved.** Exposure is a RISK LIMIT, not a balance: it caps what
+the book may stand to lose on one market. Verified before proposing any repair —
+the ledger nets to zero, every affected bet has exactly one payout, and both
+markets are already `SETTLED`. **No wallet or ledger row will be touched.**
+
+**The invariant after repair:** a market with no `PENDING` bets holds zero
+liability.
+
+**To approve and run:**
+
+```bash
+npm run db:repair-exposure                                   # dry run, prints a fingerprint
+npm run db:repair-exposure -- --expect=<fingerprint> --confirm
+```
+
+The confirmed run **refuses without the fingerprint from a dry run**, and
+refuses again if the data has changed since — approving a repair you have read
+and applying one you have not are different acts. It runs in one transaction,
+locks each row, re-checks the pending-bet condition under the lock, skips any
+market where a bet has since been placed, writes an audit row, and reconciles
+afterwards.
 
 ---
 
