@@ -3,6 +3,7 @@ import { betLegs, bets, exposure } from "../betting/schema";
 import { markets, selections } from "../odds/schema";
 import type { MarketKey } from "../odds/canonical";
 import { walletService, WalletService } from "../wallet/wallet.service";
+import { settlementOutbox, SettlementOutboxService } from "./outbox.service";
 import type { WalletTransaction } from "../wallet/types";
 import { eventResults } from "./schema";
 import {
@@ -56,14 +57,33 @@ function parseOddsToScaled(value: string): bigint {
 }
 
 export class SettlementService {
-  constructor(private readonly wallet: WalletService = walletService) {}
+  constructor(
+    private readonly wallet: WalletService = walletService,
+    private readonly outbox: SettlementOutboxService = settlementOutbox,
+  ) {}
 
-  /** Records a delivered result. Append-only; corrections are new rows. */
+  /**
+   * Records a final result AND the intent to settle it, atomically.
+   *
+   * The outbox row is written in the SAME transaction as the result, and that
+   * is the whole point. Previously the result committed here and the settlement
+   * hand-off was a separate network call afterwards; anything interrupting the
+   * gap — a crash, a redeploy, a function replay that returned early — lost the
+   * hand-off permanently, because `pollFinishedEvents` only ever considers
+   * events with NO stored result. Once the result existed, the event was never
+   * looked at again and the bet on it stayed PENDING forever.
+   *
+   * That is not hypothetical: it is what happened to a real winning bet.
+   *
+   * Either both rows exist or neither does. A dispatcher drains the outbox
+   * afterwards and can retry indefinitely without touching the provider, which
+   * is what makes settlement independent of API budget.
+   */
   async ingestResult(params: {
     eventId: string;
     provider: string;
     result: MatchResult;
-  }): Promise<{ resultId: string }> {
+  }): Promise<{ resultId: string; outboxCreated: boolean }> {
     return this.wallet.withMoneyTransaction(async ({ tx }) => {
       const [row] = await tx
         .insert(eventResults)
@@ -75,7 +95,14 @@ export class SettlementService {
         })
         .returning({ id: eventResults.id });
       if (!row) throw new Error("event result insert returned no row");
-      return { resultId: row.id };
+
+      const queued = await this.outbox.enqueueWithin(tx, {
+        eventId: params.eventId,
+        cancelled: params.result.status === "CANCELLED",
+        source: "RESULT_INGESTED",
+      });
+
+      return { resultId: row.id, outboxCreated: queued.created };
     });
   }
 
@@ -273,8 +300,9 @@ export class SettlementService {
    * Closes the event's markets once its bets are settled, so nothing new can
    * be placed on a finished match.
    */
-  async closeEventMarkets(eventId: string, cancelled: boolean): Promise<void> {
-    await this.wallet.withMoneyTransaction(async ({ tx }) => {
+  /** Returns how many markets were closed, so monitoring can count them. */
+  async closeEventMarkets(eventId: string, cancelled: boolean): Promise<number> {
+    return this.wallet.withMoneyTransaction(async ({ tx }) => {
       const status = cancelled ? "VOID" : "SETTLED";
       const marketIds = await tx
         .select({ id: markets.id })
@@ -291,6 +319,7 @@ export class SettlementService {
           .set({ status, updatedAt: new Date() })
           .where(eq(markets.eventId, eventId));
       }
+      return ids.length;
     });
   }
 }

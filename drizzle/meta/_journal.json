@@ -183,6 +183,13 @@
       "when": 1789607393227,
       "tag": "0025_result_poll_fairness",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789693793227,
+      "tag": "0026_settlement_outbox",
+      "breakpoints": true
     }
   ]
 }

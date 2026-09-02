@@ -8,7 +8,13 @@ import {
   scheduleApprovedPayouts,
   submitPayout,
 } from "@/inngest/functions/payouts";
-import { pollMatchResults, settleBet, settleEvent } from "@/inngest/functions/settlement";
+import {
+  dispatchSettlementOutbox,
+  pollMatchResults,
+  recoverStrandedSettlements,
+  settleBet,
+  settleEvent,
+} from "@/inngest/functions/settlement";
 import { reconcileWallet, scheduleWalletReconciliation } from "@/inngest/functions/wallet-reconciliation";
 
 export const runtime = "nodejs";
@@ -23,6 +29,8 @@ export const { GET, POST, PUT } = serve({
     syncOddsDelta,
     syncLiveOdds,
     pollMatchResults,
+    dispatchSettlementOutbox,
+    recoverStrandedSettlements,
     settleEvent,
     settleBet,
     dailyReconciliation,
