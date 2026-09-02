@@ -419,48 +419,57 @@ own throwaway cluster.
 
 ## 7. Verification gates
 
+Every figure below is from the final run on the pushed commit.
+
 | Gate | Result |
 |---|---|
 | `npx tsc --noEmit` | exit 0 |
 | `npm run lint` | exit 0 — 0 errors, 15 pre-existing warnings |
-| `npx vitest run` | **59 files, 736 passed, 1 skipped, 0 todo**, exit 0 |
+| `npx vitest run` | **63 files, 795 passed, 0 failed, 1 skipped, 0 todo**, exit 0 |
 | The 1 skip | the opt-in live provider contract (`ODDS_LIVE_CONTRACT`) — **not counted as passing** |
 | `npm run build` | exit 0 |
-| `node scripts/check-migrations.mjs` | 26 of 26 applied to a **clean** database, 61 tables |
-| `npm run db:verify-restore` | 8 of 8 checks pass; ledger ₦1,205.00 debits = ₦1,205.00 credits |
+| `node scripts/check-migrations.mjs` | 27 of 27 applied to a **clean** database, 62 tables |
+| `npm run db:verify-restore` | 8 of 8 pass; ledger ₦2,035.00 debits = ₦2,035.00 credits, 0 negative wallets |
 | `npm run admin:smoke` | all admin queries clean |
-| `node scripts/secret-scan.mjs` | clean, 373 files, 15 rules |
+| `node scripts/secret-scan.mjs` | clean, 390 files, 15 rules |
 | `git diff --check` | clean |
 | `npm run bench:sync` | completed at 200 and 775 events — §4 |
-| `npm run production:check` | **exit 1**, correctly: `NEXTAUTH_URL` points at localhost |
-| **GitHub Actions CI** | **green on both remotes**, every step, first run |
+| `npm run production:check` | **exit 1**, correctly: `NEXTAUTH_URL` points at localhost. Settlement consistency now **PRESENT** |
+| **GitHub Actions CI** | **passing on both remotes** at `4445c6e` |
 
-The ledger figure above was taken before the QA bet in §3; after it the ledger
-reads ₦1,605.00 debits = ₦1,605.00 credits, still balanced with 0 negative
-wallets.
+Test count rose from 736 to 795 across this work: +19 outbox and recovery, +14
+connection pool, +18 ephemeral guard, +3 exposure replay, +2 stale re-dispatch,
++2 alert-message, plus the replay regression test.
 
 ---
 
 ## 7b. Commits in this pass
 
-Range `568393c..HEAD`, pushed to both remotes.
+Eleven commits, `de3eb16..4445c6e`, pushed fast-forward to both remotes. No
+force-push, no rewrite of anything previously pushed.
 
 | Hash | Commit |
 |---|---|
-| `99169ff` | Classify a whole sync at once instead of one fixture at a time |
-| `2aff4e2` | Run the checks on every change instead of when somebody remembers |
-| `588eb44` | Actually start the scheduler, and fix the three bugs that revealed |
-| `0a6150b` | Send /odds/updated what it actually wants, and say so when we cannot |
-| `b034fa3` | Answer launch questions without printing a single secret |
-| `596bffd` | Give the project one status document instead of five |
-| `73f90a3` | Record the bet that is waiting, and the gate results behind the claims |
-| `e981b29` | Record the scheduler's first successful unattended run |
+| `8db76d3` | Make the dispatch reachable, and stop losing it between two systems |
+| `60371ff` | Test the replay that every previous test was blind to |
+| `e73e907` | Stop a double-tapped bet slip from eating a market's ceiling |
+| `658742b` | Stop one slow query blocking the whole application on Railway |
+| `c85c3eb` | Make the benchmark prove its target is disposable |
+| `8b9e5e3` | Report the repair, and what the real bet actually did |
+| `49c7472` | Allow the two fake values the guard tests assert are never echoed |
+| `8a3b793` | Give each dispatch attempt its own delivery id |
+| `67c0e8c` | Stop the booking-code test failing one run in seventy |
+| `05d6275` | Record the fourth fault, which only appeared under real load |
+| `4445c6e` | Make a failure alert say something |
 
-A ninth commit carries this table; a commit cannot quote its own hash.
-
-Remotes: `origin` → `github.com/Madubuezejoshua/plutobet`,
-`plutobet` → `github.com/plutobet-ai/plutobet_ai`. Both were fetched and
-confirmed fast-forward before pushing; no force, no history rewrite.
+**One thing needed an owner decision and got one.** GitHub push protection
+blocked the first push: a guard test used a fake `sk_live_`-shaped fixture,
+which GitHub classified as a Stripe API Key. It was never a credential — it
+exists so a test can assert the refusal message does not echo it — but the
+choice was between rewriting the unpushed commits and whitelisting a
+Stripe-shaped string in the repository's secret-scanning history. The owner
+chose the rewrite. The string is now absent from every commit, verified with
+`git log --all -S`.
 
 ---
 

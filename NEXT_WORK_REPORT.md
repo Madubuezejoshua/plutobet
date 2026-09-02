@@ -11,7 +11,7 @@
 >
 > | This document says | Current truth | Where |
 > |---|---|---|
-> | Migrations 24 | **26** (0024 heartbeats, 0025 poll fairness) | `DEVELOPER_COMPLETION_REPORT.md` §7 |
+> | Migrations 24 | **27** (0024 heartbeats, 0025 poll fairness, 0026 settlement outbox) | §34 |
 > | Stage 7 HTTP/RBAC `NOT_IMPLEMENTED` | **Complete** — 27 tests across four areas | §9 |
 > | Stage 9 fixture-sync `NOT_IMPLEMENTED` | **Batched**; target not demonstrated, limiting factor documented | §11 |
 > | Registered scheduler untested | **9 acceptance tests** drive the real handler | §6 |
@@ -20,8 +20,7 @@
 > | Stage 9 target not demonstrated | **45–49× / 7.1–8.8× measured**, both runs completed | `PROJECT_STATUS.md` §4 |
 > | CI absent | **Green on both remotes** | `PROJECT_STATUS.md` §7 |
 > | Scheduler never observed running | **Ran unattended; ingested a real result** | §33 below |
-> | §33.3 settlement chain broken | **Repaired; the real bet is WON and paid** | §34 below |
-> | Migrations 26 | still **26** | — |
+> | §33.3 settlement chain broken, cause unknown | **Four faults found and fixed; the real bet is WON and paid** | §34 below |
 >
 > **The real match result and ₦600 payout were genuine, but the earlier
 > settlement services were manually invoked through QA scripts. Automatic
@@ -689,7 +688,17 @@ The bet was on **away**, and away won 1-2. It is still `PENDING`:
 | `job_heartbeats.results`: `processed_count 10`, `settled_count 0` | the poll found 10 finished events and reported settling none |
 
 So `pollFinishedEvents` did its job and the hand-off to `settleEvent` did not
-occur. **The cause is not yet identified**, and it is not being guessed at here.
+occur.
+
+> **ANSWERED in §34.** The cause was that the cadence claim sat outside
+> `step.run()`, so the function's second invocation found the claim held by its
+> own first invocation and returned "not due" before ever reaching the dispatch.
+> The two facts below that looked contradictory are both explained by it. Kept
+> as written, because the reasoning that led from here to there is the useful
+> part.
+
+**At the time of writing the cause was not yet identified**, and it was not
+guessed at.
 Two facts complicate the reading and are recorded rather than resolved:
 
 - every `settlement-poll-results` run whose output could be read returned
@@ -740,56 +749,92 @@ human can settle a bet, which was never in question.
 ## 34. Money-path repair — 2026-09-02
 
 §33.3 recorded that the scheduler ingested a real result but the bet on it did
-not settle, and stated plainly that the cause was not yet identified. It is now,
-and the bet is paid. The authoritative summary is `PROJECT_STATUS.md` §2b;
-operational detail is in `docs/settlement-operations.md`.
+not settle, and said plainly that the cause was not yet identified. It is now,
+and **the bet is paid**. Authoritative summary: `PROJECT_STATUS.md` §2b.
+Operational detail: `docs/settlement-operations.md`.
 
-### 34.1 Root cause — the dispatch was unreachable by construction
+**Four faults, not one.** Two caused the stranded bet; two more were found while
+proving the fix, and both would have caused their own incidents later.
+
+---
+
+### 34.1 Fault 1 — the dispatch was unreachable by construction
 
 `oddsCadence.claimIfDue` was called OUTSIDE `step.run()`, with a comment
 explaining that replaying it would report "not due" and skip real work. The
 reasoning was exactly inverted: code outside a step re-executes on every
 invocation, and code inside one is memoised.
 
-Inngest invokes a handler once per step. Invocation 1 claimed the cadence slot
-and ran the ingestion step. Invocation 2 replayed from the top, found the claim
-**held by its own first invocation**, and returned `{skipped: "not due"}` —
-never reaching `step.sendEvent`. Everything after the first step was unreachable,
-for every event, always.
+Inngest invokes a handler once per step:
 
-This explains every observation in §33.3 that looked contradictory: results
-ingested, heartbeat green, run output `{"skipped":true}`, exactly one child span,
-and zero `settlement/event.finished` events ever emitted.
+```
+invocation 1   claim succeeds -> ingest step runs -> results stored,
+               heartbeat written, step output checkpointed
+invocation 2   replays from the top; the claim is still held BY ITS OWN
+               FIRST INVOCATION, returns false, function returns
+               {skipped: "not due"} and never reaches step.sendEvent
+```
 
-The claim is now inside `step.run`, so the `true` replays from the checkpoint.
+Everything after the first step was dead code at runtime. **No bet on any event
+could ever have settled.** This explains every observation in §33.3 that looked
+contradictory: results ingested, heartbeat green, run output `{"skipped":true}`,
+exactly one child span, and zero `settlement/event.finished` events emitted in
+the project's life.
 
-### 34.2 The second fault — a dual write with no shared commit
+The claim now sits inside `step.run`, so the `true` replays from the checkpoint.
+
+### 34.2 Fault 2 — a dual write with no shared commit
 
 Even fixed, the result committed to PostgreSQL while the hand-off went to the
 scheduler over the network. A crash between them stranded the bet permanently,
-because `pollFinishedEvents` only considers events with NO stored result.
+because `pollFinishedEvents` only considers events with NO stored result — once
+the result exists, the event is never reconsidered.
 
-A transactional outbox (`settlement_outbox`, migration 0026) now records the work
-item in the SAME transaction as the result. A separate dispatcher drains it using
-only local data, so **an exhausted provider budget can no longer stop money
-reaching somebody whose result we already hold** — the exact state the system
-was in while the customer went unpaid.
+`settlement_outbox` (migration 0026) records the work item in the SAME
+transaction as the result: either both exist or neither does. One row per event,
+enforced by a unique index rather than by convention.
 
-### 34.3 The third fault — a duplicate submit reserved risk twice
+A separate dispatcher drains it using ONLY local data, so **an exhausted provider
+budget can no longer stop money reaching somebody whose result we already hold**.
+That is not theoretical: on the day of the repair the `results` job failed 131 of
+145 runs on the daily provider budget while the dispatcher ran 152 times with
+**zero** failures.
+
+### 34.3 Fault 3 — a duplicate submit reserved risk twice
 
 Found because "exposure released" was required evidence: after the recovered bet
 was paid, its market still held exactly `potential_return - stake`.
 
-Placement detects an idempotent replay AFTER claiming exposure — it must,
-because the global lock order is exposure-then-wallet and inverting it would
-deadlock against settlement. A re-submitted slip therefore claimed the liability
-again and created no second bet for settlement to release. Ceilings exist to cap
-risk, and every double-tap permanently consumed a slice of one.
+Placement detects an idempotent replay AFTER claiming exposure — it must, because
+the global lock order is exposure-then-wallet and inverting it would deadlock
+against settlement. A re-submitted slip therefore claimed the liability again and
+created no second bet for settlement to release. Ceilings exist to cap risk, and
+every double-tapped button permanently consumed a slice of one until the market
+would refuse honest bets for liability nobody was carrying.
 
-The replay path now releases precisely what that attempt claimed; a genuinely
-new bet still reserves normally.
+The replay path now releases precisely what that attempt claimed. A genuinely new
+bet still reserves normally — understating real risk is the more dangerous
+version of this mistake.
 
-### 34.4 The bet, recovered automatically
+### 34.4 Fault 4 — the retry path had never once delivered
+
+Found by watching the repaired pipeline run for an hour. Six **fully settled**
+events — no pending bets, no open markets — sat in the outbox at `DISPATCHED`
+with `attempts` climbing past seven, heading for the give-up threshold and an
+alert about payouts that had already happened.
+
+The dispatch event id was the work item's idempotency key, stable for the item's
+whole life. Inngest deduplicates by event id, so every re-dispatch of a stale
+item was silently dropped, `settleEvent` never ran again, and the step that
+COMPLETES the row never ran either. The stale-item re-claim — whose entire
+purpose is retrying a lost hand-off — was a no-op that incremented a counter.
+
+The id now includes the attempt: a re-dispatch is a real delivery, while a replay
+of the SAME attempt is still deduplicated. All six cleared to `COMPLETED`.
+
+---
+
+### 34.5 The bet, recovered automatically
 
 ```
 13:56:48  SETTLEMENT_RECOVERY_ENQUEUED  recovery sweep found 1 pending bet(s)
@@ -799,39 +844,95 @@ new bet still reserves normally.
 13:56:58  outbox COMPLETED
 ```
 
-`WON`, one ₦430 payout, CASH ₦0 → ₦430, all five markets `SETTLED`, ledger
-balanced, 0 remaining recovery candidates. The same sweep recovered 21 stranded
-events with no failures. No manual settlement was used; `qa-settle-run.ts` and
-`qa-settle-one.ts` were not run.
+| Evidence | Result |
+|---|---|
+| Bet `d7d34d58-507a-4bb0-95e0-338d1626d706` | **WON**, `settled_at` populated |
+| Payout | **exactly 1** transaction, ₦430.00 |
+| CASH | ₦0 → **₦430.00** (stake ₦200, profit ₦230) |
+| Markets | all 5 `SETTLED`, 0 of 68 selections open |
+| Exposure | released by settlement (see §34.3 for the residue) |
+| Ledger | ₦2,035.00 debits = ₦2,035.00 credits, 0 negative wallets |
+| Remaining recovery candidates | **0** |
+| Same sweep, wider effect | 21 stranded events recovered, 0 failures |
+| Replay safety | still one payout after **152 dispatcher runs and 85 recovery runs** |
 
-### 34.5 Monitoring that can see a settlement failure
+No manual settlement was used. `qa-settle-run.ts` and `qa-settle-one.ts` were
+never run.
 
-The old heartbeat had one row and hardcoded `settled: 0` at the point ingestion
-returned, so it could not report anything but zero — in front of exactly the
-failure it existed to catch. There are now four job rows and per-stage counts,
-including `pending_after_run_count`: bets still PENDING on a result we already
-hold. `dispatch_accepted` and `settlement_completed` are separate fields so
+### 34.6 Monitoring that can see a settlement failure
+
+The old heartbeat had one row and passed `settled: 0` as a literal at the point
+ingestion returned. It could not report anything but zero — sitting in front of
+exactly the failure it existed to catch.
+
+Four job rows now, per-stage counts, and an `error_stage` naming where a run
+stopped. `dispatch_accepted` and `settlement_completed` are separate fields so
 "the scheduler took the message" can never again read as "somebody was paid".
+`pending_after_run_count` is the alarm number: bets still PENDING on a result we
+already hold.
 
-### 34.6 Also done
+A late addition, because the first version of the alert was still useless: the
+recovery job logged nine failures with an EMPTY `last_error`, courtesy of Node's
+`AggregateError` for a failed connection, which carries no message of its own.
+Errors are now described by name, code and message with the inner error
+unwrapped, and never contain a URL. The same line now reads:
+
+```
+AggregateError - code ETIMEDOUT - 6 attempt(s) failed: connect ETIMEDOUT ...
+```
+
+Those failures are transient — Neon's free-tier compute suspending — and the job
+succeeds again within seconds. What was broken was the reporting, not the
+recovery.
+
+### 34.7 Also done
 
 - **Railway pooling.** Both runtime clients used `max: 1`; on one persistent
-  container that serialises the whole application. Now 10 (reads) and 5 (money,
-  smaller because those transactions take row locks), validated at boot and
-  refused rather than clamped. A load test proves `max: 1` serialises and the
-  pool does not.
-- **Benchmark guard.** The benchmark must now prove its target is disposable and
-  refuses to run from a shell holding production configuration — the condition
-  that put 400 synthetic fixtures in the production database.
+  container that serialises the whole application, so one slow query blocked
+  every unrelated request. Now 10 (reads) and 5 (money — smaller because those
+  transactions take row locks). Invalid, zero, negative and excessive values are
+  REFUSED at boot rather than clamped. The load test asserts ORDER, not duration:
+  a fast query overtakes a slow one through a real pool and does not through a
+  pool of 1, and the old behaviour is reproduced in its own test so the
+  comparison is against the real thing.
+- **Benchmark guard.** A destructive benchmark must now prove its target is
+  disposable, and refuses to run from a shell holding production configuration —
+  the condition that actually put 400 synthetic fixtures in the production
+  database. Refusals never echo the value or the URL.
+- **Two pre-existing test defects.** The harness propagated a listener's failure
+  into the sender, which Inngest does not do — a failure mode that existed only
+  in the harness, turning one unsettleable event into a failed batch. And a
+  booking-code test asserted zero birthday collisions among 5000 draws from a
+  31^6 space, failing about one run in seventy for a correct generator.
 
-### 34.7 Still open
+### 34.8 Verification and delivery
 
-- The 400 synthetic fixtures remain. `npm run db:clean-benchmark` was run in
-  **dry run only**: 400 events, 0 markets, 0 selections, 0 snapshots, 0 results,
-  0 bets, 0 audit rows reference them, and teams/competitions would be preserved.
-  Deletion awaits owner approval.
-- One market holds ₦230 of residual liability from a duplicate submit predating
-  the fix. Reported as `unreleasedExposureMarkets`, not silently corrected.
+63 files · **795 passed · 0 failed · 1 skipped · 0 todo**. Typecheck 0, lint 0
+errors, build 0, migrations 27/27 against a clean database (62 tables), ledger
+balanced, admin smoke clean, secret scan clean over 390 files, `git diff --check`
+clean.
+
+Eleven commits, `de3eb16..4445c6e`, pushed fast-forward to both remotes with no
+force-push. CI passing on both.
+
+GitHub push protection blocked the first attempt: a guard test used a fake
+`sk_live_`-shaped fixture that GitHub classified as a Stripe API Key. It was
+never a credential — it exists so a test can assert the refusal does not echo it.
+The owner chose rewriting the unpushed commits over whitelisting a Stripe-shaped
+string in the repository's secret-scanning history. The string is absent from
+every commit, verified with `git log --all -S`.
+
+### 34.9 Still open, and deliberately not touched
+
+- The **400 synthetic fixtures** remain. `npm run db:clean-benchmark` was run in
+  **dry run only**: 400 events, and 0 markets, 0 selections, 0 snapshots, 0
+  results, 0 bets and 0 audit rows reference them. Teams and competitions would
+  be preserved. Deletion awaits owner approval.
+- **₦230 of residual liability** on one market, from a duplicate submit predating
+  the §34.3 fix. The bug cannot recur; this is historical data in a
+  money-adjacent table, so correcting it is an owner decision rather than a
+  quiet `UPDATE`. Now visible as `unreleasedExposureMarkets`.
+- `NEXTAUTH_URL` is the only remaining launch blocker in `production:check`.
 
 ---
 
