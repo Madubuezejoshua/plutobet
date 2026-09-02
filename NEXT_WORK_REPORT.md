@@ -915,6 +915,10 @@ clean.
 Eleven commits, `de3eb16..4445c6e`, pushed fast-forward to both remotes with no
 force-push. CI passing on both.
 
+**That is not the project's final commit.** It was followed by `363c937` (report
+accuracy) and a launch-hygiene pass ending at `5faedfb`. The current tip is
+always recorded in `PROJECT_STATUS.md` §7c, which is the file to trust.
+
 GitHub push protection blocked the first attempt: a guard test used a fake
 `sk_live_`-shaped fixture that GitHub classified as a Stripe API Key. It was
 never a credential — it exists so a test can assert the refusal does not echo it.

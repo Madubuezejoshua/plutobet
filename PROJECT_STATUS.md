@@ -521,10 +521,15 @@ role, +3 exposure replay, plus the replay regression test.
 
 ---
 
-## 7b. Commits in this pass
+## 7b. Commit history
 
-Eleven commits, `de3eb16..4445c6e`, pushed fast-forward to both remotes. No
-force-push, no rewrite of anything previously pushed.
+**The money-path pass** was eleven commits, `de3eb16..4445c6e`. It was followed
+by `363c937` (report accuracy) and then the launch-hygiene pass in §7c. None of
+those is "the final commit" of the project; the current tip is recorded in §7c
+and verified against both remotes there.
+
+All pushed fast-forward. No force-push, and nothing previously pushed was
+rewritten.
 
 | Hash | Commit |
 |---|---|
@@ -539,6 +544,7 @@ force-push, no rewrite of anything previously pushed.
 | `67c0e8c` | Stop the booking-code test failing one run in seventy |
 | `05d6275` | Record the fourth fault, which only appeared under real load |
 | `4445c6e` | Make a failure alert say something |
+| `363c937` | Bring the reports up to the state that was actually shipped |
 
 **One thing needed an owner decision and got one.** GitHub push protection
 blocked the first push: a guard test used a fake `sk_live_`-shaped fixture,
@@ -548,6 +554,26 @@ choice was between rewriting the unpushed commits and whitelisting a
 Stripe-shaped string in the repository's secret-scanning history. The owner
 chose the rewrite. The string is now absent from every commit, verified with
 `git log --all -S`.
+
+---
+
+## 7c. Launch-hygiene pass — 2026-09-02
+
+Four further commits, `363c937..5faedfb`, pushed fast-forward to both remotes.
+
+| Hash | Commit |
+|---|---|
+| `6192420` | Refuse to pass while a web request could drop the ledger |
+| `781574a` | Back off from a struggling database instead of stampeding it |
+| `2f51a1f` | Prepare two destructive operations without performing either |
+| `5faedfb` | Separate "can it demo" from "may it take money", and correct the backlog |
+
+**Current tip: `5faedfb`**, identical on `origin/main` and `plutobet/main` —
+verified by comparing both remotes' tree hashes, not just their commit ids.
+
+Nothing destructive was run: the synthetic fixtures are still present and the
+residual exposure is still there, both awaiting the approval blocks in
+`OWNER_LAUNCH_CHECKLIST.md` §15 and §16.
 
 ---
 
