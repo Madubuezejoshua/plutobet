@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { directSettings } from "@/db/pool-config";
 import { auditLog } from "../audit/schema";
 import { users } from "../users/schema";
 import { ledgerEntries, ledgerTransactions, wallets } from "./schema";
@@ -12,10 +13,27 @@ const directSchema = {
   ledgerEntries,
 };
 
-export function createDirectSqlClient(databaseUrl: string) {
+export function createDirectSqlClient(databaseUrl: string, overrides: { max?: number } = {}) {
+  const settings = directSettings();
   return postgres(databaseUrl, {
-    // One unpooled Neon connection per serverless instance.
-    max: 1,
+    /*
+     * Bounded concurrency on the UNPOOLED endpoint, deliberately smaller than
+     * the read pool.
+     *
+     * This was `max: 1`, described as "one unpooled connection per serverless
+     * instance". Railway is one persistent container, so that made every money
+     * operation queue behind every other one — and behind any slow read sharing
+     * the process.
+     *
+     * Smaller than the read pool on purpose: these transactions take row locks
+     * and run SELECT ... FOR UPDATE, so extra concurrency buys contention, not
+     * throughput. Tests pass `max: 1` explicitly where they need a single
+     * connection to create real cross-connection contention.
+     */
+    max: overrides.max ?? settings.max,
+    connect_timeout: settings.connectTimeout,
+    idle_timeout: settings.idleTimeout,
+    max_lifetime: settings.maxLifetime,
     // Do not rely on session-bound prepared statement state.
     prepare: false,
     // Drizzle maps declared bigint columns, but money locking deliberately

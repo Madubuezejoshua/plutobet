@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { pooledSettings } from "./pool-config";
 
 type PooledSql = ReturnType<typeof postgres>;
 
@@ -16,17 +17,37 @@ function requireDatabaseUrl(): string {
  *
  * `prepare: false` is required with transaction-mode pooling. Money paths do
  * not import this module; they use the wallet-private unpooled direct client.
- * A single connection per serverless instance avoids multiplying connection
- * pressure during scale-out while PgBouncer handles database-side pooling.
+ *
+ * THE POOL SIZE IS NOT 1 ANY MORE. It was, justified as "a single connection
+ * per serverless instance" — right for Vercel-style serverless, wrong for
+ * Railway, which runs ONE persistent container for every request. There a
+ * single connection means the whole application serialises: one slow query on a
+ * cold Neon compute blocks every unrelated request behind it, health check
+ * included. See `pool-config.ts` for the sizing and its limits.
+ *
+ * THE SINGLETON MATTERS MORE NOW. Next.js re-evaluates modules on hot reload,
+ * so a per-module client would create a NEW pool on every edit and quietly
+ * multiply connections until Neon refused them. Stashing it on `globalThis`
+ * survives reloads; with `max: 1` this leaked slowly, and with a real pool it
+ * would leak ten times faster.
  */
-let pooledSqlClient: PooledSql | undefined;
+const POOL_SINGLETON = Symbol.for("plutobet.pooledSql");
+
+type GlobalWithPool = typeof globalThis & { [POOL_SINGLETON]?: PooledSql };
 
 export function getPooledSql(): PooledSql {
-  pooledSqlClient ??= postgres(requireDatabaseUrl(), {
-    max: 1,
-    prepare: false,
-  });
-  return pooledSqlClient;
+  const holder = globalThis as GlobalWithPool;
+  if (!holder[POOL_SINGLETON]) {
+    const settings = pooledSettings();
+    holder[POOL_SINGLETON] = postgres(requireDatabaseUrl(), {
+      max: settings.max,
+      prepare: false,
+      connect_timeout: settings.connectTimeout,
+      idle_timeout: settings.idleTimeout,
+      max_lifetime: settings.maxLifetime,
+    });
+  }
+  return holder[POOL_SINGLETON];
 }
 
 function createPooledDatabase() {
