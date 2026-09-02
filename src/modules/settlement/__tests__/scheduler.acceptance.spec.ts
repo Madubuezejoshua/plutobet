@@ -90,8 +90,73 @@ async function loadFunctions(providerImpl: OddsProvider, alwaysDue = true) {
   const mod = await import("@/inngest/functions/settlement");
   return {
     pollMatchResults: mod.pollMatchResults,
-    registry: [mod.pollMatchResults, mod.settleEvent, mod.settleBet],
+    dispatchSettlementOutbox: mod.dispatchSettlementOutbox,
+    recoverStrandedSettlements: mod.recoverStrandedSettlements,
+    registry: [
+      mod.pollMatchResults,
+      mod.dispatchSettlementOutbox,
+      mod.recoverStrandedSettlements,
+      mod.settleEvent,
+      mod.settleBet,
+    ],
   };
+}
+
+/**
+ * Runs the poller and then the dispatcher — the full chain as it now works.
+ *
+ * SETTLEMENT IS TWO SCHEDULED STEPS NOW, on purpose. The poller ingests the
+ * result and records the intent to settle it in the SAME transaction; a
+ * separate dispatcher drains that outbox. The split is what makes settlement
+ * survive a crash between the two, and what lets it run when the odds
+ * provider's budget is exhausted — the state the system was in while a real
+ * customer went unpaid.
+ *
+ * These tests previously asserted that one call to the poller paid the bet.
+ * That is no longer true, and the change is deliberate rather than a
+ * regression: what must remain true is that the customer ends up paid, exactly
+ * once, without a human intervening.
+ */
+async function settleThroughScheduler(
+  fns: { pollMatchResults: unknown; dispatchSettlementOutbox: unknown; registry: unknown[] },
+) {
+  const poll = await runScheduledFunction(
+    fns.pollMatchResults as never,
+    fns.registry as never,
+  );
+
+  /*
+   * DRAIN the outbox rather than claiming one batch.
+   *
+   * The outbox is a single shared queue and the dispatcher takes a bounded
+   * batch, so with a suite-wide database another file's work items can fill
+   * that batch and this test's event never gets dispatched. It passed alone
+   * and failed in the full run, which is the signature of exactly that.
+   *
+   * Production drains it too — the dispatcher runs every minute until the
+   * queue is empty. Looping here models that instead of assuming one batch is
+   * always enough. Bounded, because a queue that never empties is a bug rather
+   * than a reason to spin.
+   */
+  const steps: string[] = [...poll.steps];
+  const events = [...poll.events];
+  const returns: Record<string, unknown> = { ...poll.returns };
+
+  for (let round = 0; round < 10; round += 1) {
+    const dispatch = await runScheduledFunction(
+      fns.dispatchSettlementOutbox as never,
+      fns.registry as never,
+    );
+    steps.push(...dispatch.steps);
+    events.push(...dispatch.events);
+    Object.assign(returns, dispatch.returns);
+    const outcome = dispatch.returns["settlement-dispatch-outbox"] as
+      | { dispatched?: number }
+      | undefined;
+    if (!outcome?.dispatched) break;
+  }
+
+  return { steps, events, returns };
 }
 
 async function finishedEventWithBet(
@@ -175,12 +240,13 @@ describe("the registered settlement scheduler", () => {
     const before = await cashBalance(seeded.walletId);
 
     const { impl } = provider(name, new Map([[seeded.providerId, seeded.result]]));
-    const { pollMatchResults, registry } = await loadFunctions(impl);
+    const fns = await loadFunctions(impl);
 
-    const run = await runScheduledFunction(pollMatchResults, registry);
+    const run = await settleThroughScheduler(fns);
 
     // The chain, proven by the steps that actually executed.
     expect(run.steps.some((s) => s.includes("ingest-results"))).toBe(true);
+    expect(run.steps.some((s) => s.includes("claim-outbox"))).toBe(true);
     expect(run.steps.some((s) => s.includes("find-pending-bets"))).toBe(true);
     expect(run.steps.some((s) => s.includes("close-markets"))).toBe(true);
     expect(run.events.some((e) => e.name === "settlement/event.finished")).toBe(true);
@@ -198,8 +264,7 @@ describe("the registered settlement scheduler", () => {
     const before = await cashBalance(seeded.walletId);
 
     const { impl } = provider(name, new Map([[seeded.providerId, seeded.result]]));
-    const { pollMatchResults, registry } = await loadFunctions(impl);
-    await runScheduledFunction(pollMatchResults, registry);
+    await settleThroughScheduler(await loadFunctions(impl));
 
     expect(await betStatus(seeded.betId)).toBe("LOST");
     expect(await payoutLegs(seeded.betId)).toBe(0);
@@ -214,8 +279,7 @@ describe("the registered settlement scheduler", () => {
 
     const cancelled: EventResult = { ...seeded.result, status: "CANCELLED", periods: {} };
     const { impl } = provider(name, new Map([[seeded.providerId, cancelled]]));
-    const { pollMatchResults, registry } = await loadFunctions(impl);
-    await runScheduledFunction(pollMatchResults, registry);
+    await settleThroughScheduler(await loadFunctions(impl));
 
     expect(await betStatus(seeded.betId)).toBe("VOID");
     // Stake back, exactly — not the 200,000 it would have won.
@@ -229,12 +293,13 @@ describe("the registered settlement scheduler", () => {
     const before = await cashBalance(seeded.walletId);
 
     const { impl } = provider(name, new Map([[seeded.providerId, seeded.result]]));
-    const { pollMatchResults, registry } = await loadFunctions(impl);
+    const fns = await loadFunctions(impl);
 
     // Inngest retries. A scheduler that pays twice on a retry is worse than
-    // one that never runs, because the loss is silent and cumulative.
+    // one that never runs, because the loss is silent and cumulative. Both
+    // stages are replayed, because both can be.
     for (let i = 0; i < 4; i += 1) {
-      await runScheduledFunction(pollMatchResults, registry);
+      await settleThroughScheduler(fns);
     }
 
     expect(await betStatus(seeded.betId)).toBe("WON");
@@ -275,7 +340,7 @@ describe("the registered settlement scheduler", () => {
     const { heartbeatService } = await import("@/modules/reporting/heartbeat.service");
     const beat = await heartbeatService.read("results");
     expect(beat?.lastSuccessAt).not.toBeNull();
-    expect(beat!.processedCount).toBeGreaterThanOrEqual(1);
+    expect(beat!.ingestedResults).toBeGreaterThanOrEqual(1);
   });
 
   it("does not run at all when the cadence slot is already claimed", async () => {

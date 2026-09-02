@@ -212,3 +212,25 @@ export async function operationEvidence(context: WalletTestContext, idempotencyK
     { isolationLevel: "read committed", accessMode: "read only" },
   );
 }
+
+/**
+ * Removes settlement outbox rows for one event, as the OWNER.
+ *
+ * The runtime role deliberately has no DELETE on `settlement_outbox`: a failed
+ * work item is evidence that somebody's money did not move, and the application
+ * has no business making that evidence disappear.
+ *
+ * Tests still need to construct the legacy stranded state — a final result with
+ * pending bets and NO work item — because that is exactly the shape the real
+ * production bet was in, from before the outbox existed. Doing it through the
+ * owner connection keeps the production restriction real rather than loosening
+ * it for the convenience of a test.
+ */
+export async function deleteSettlementOutboxAsOwnerForTest(eventId: string): Promise<void> {
+  const ownerSql = createDirectSqlClient(ownerUrl());
+  try {
+    await ownerSql`DELETE FROM settlement_outbox WHERE event_id = ${eventId}::uuid`;
+  } finally {
+    await ownerSql.end({ timeout: 5 });
+  }
+}
