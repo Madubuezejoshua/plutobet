@@ -824,3 +824,67 @@ describe("surviving a transient database outage", () => {
     expect(await ledgerBalanced()).toBe(true);
   });
 });
+
+describe("a stored error never publishes infrastructure", () => {
+  it("scrubs the hostname out of a connection failure", async () => {
+    const { HeartbeatService } = await import("@/modules/reporting/heartbeat.service");
+    const beats = new HeartbeatService(wallet);
+    const job = `scrub-${randomUUID().slice(0, 8)}`;
+
+    /*
+     * THE EXACT MESSAGE OBSERVED IN PRODUCTION. An earlier fix improved these
+     * errors from blank to useful and, in doing so, wrote the database endpoint
+     * into a table an operator screenshots. Useful and safe are separate
+     * properties and both are required.
+     */
+    const real = Object.assign(
+      new Error("write CONNECT_TIMEOUT ep-steep-mode-ayb18t58.c-5.us-east-2.aws.neon.tech:5432"),
+      { code: "CONNECT_TIMEOUT" },
+    );
+
+    await expect(beats.track(job, async () => { throw real; })).rejects.toBeDefined();
+
+    const beat = await beats.read(job);
+    expect(beat!.lastError).not.toMatch(/neon\.tech/);
+    expect(beat!.lastError).not.toMatch(/ep-steep-mode/);
+    // The failure CLASS survives, which is the part an operator acts on.
+    expect(beat!.lastError).toMatch(/CONNECT_TIMEOUT/);
+    expect(beat!.lastError).toMatch(/<host>/);
+  });
+
+  it.each([
+    ["a connection URL", "could not connect to postgresql://user:pw@db.example.com:5432/app", /postgresql:\/\//],
+    ["a bare IPv4", "connect ETIMEDOUT 18.226.144.228:5432", /18\.226/],
+    ["an IPv6 address", "connect ENETUNREACH 2600:1f16:1c2b:410f:3d8e:8eff:5156:b718", /2600:1f16/],
+  ])("scrubs %s", async (_label, message, mustNotAppear) => {
+    const { HeartbeatService } = await import("@/modules/reporting/heartbeat.service");
+    const beats = new HeartbeatService(wallet);
+    const job = `scrub-${randomUUID().slice(0, 8)}`;
+
+    await expect(
+      beats.track(job, async () => { throw new Error(message); }),
+    ).rejects.toBeDefined();
+
+    const beat = await beats.read(job);
+    expect(beat!.lastError).not.toMatch(mustNotAppear);
+    // Never scrubbed into uselessness.
+    expect(beat!.lastError!.length).toBeGreaterThan(5);
+  });
+
+  it("leaves an ordinary message alone", async () => {
+    const { HeartbeatService } = await import("@/modules/reporting/heartbeat.service");
+    const beats = new HeartbeatService(wallet);
+    const job = `scrub-${randomUUID().slice(0, 8)}`;
+
+    await expect(
+      beats.track(job, async () => {
+        throw new Error("odds provider budget exhausted for the day");
+      }),
+    ).rejects.toBeDefined();
+
+    // Over-aggressive scrubbing would make every alert unreadable, which is its
+    // own way of hiding a failure.
+    const beat = await beats.read(job);
+    expect(beat!.lastError).toContain("odds provider budget exhausted for the day");
+  });
+});

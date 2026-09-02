@@ -98,13 +98,48 @@ export class StagedError extends Error {
  * better than no alert.
  *
  * The name and any `code` are included, and an AggregateError's first inner
- * error is unwrapped, because that is where the useful part lives. Still
- * truncated, and still no URL: a driver error can carry a connection string,
- * which is why this never interpolates anything but a name, a code and a
- * message.
+ * error is unwrapped, because that is where the useful part lives.
+ *
+ * THE MESSAGE ITSELF IS THE LEAK. An earlier version of this comment claimed it
+ * "never interpolates anything but a name, a code and a message" and treated
+ * that as sufficient. It is not: postgres-js writes the host into the message,
+ * so a stored heartbeat read
+ *
+ *   code CONNECT_TIMEOUT - write CONNECT_TIMEOUT ep-steep-mode-xxxx.c-5.us-east-2...
+ *
+ * publishing the database endpoint into a table an operator screenshots. So the
+ * message is scrubbed of hostnames, IP addresses, ports and anything
+ * credential-shaped before it is stored. The failure CLASS is what an operator
+ * needs; the address of the thing that failed is never part of it.
  */
-function describeError(error: unknown): string {
-  if (!(error instanceof Error)) return String(error);
+/**
+ * Removes anything that identifies WHERE, keeping what says WHAT.
+ *
+ * Deliberately aggressive: a false positive costs a little detail in a log
+ * line, and a false negative publishes infrastructure. Ordered longest-pattern
+ * first so a URL is redacted whole rather than leaving its host behind.
+ */
+export function scrub(message: string): string {
+  return (
+    message
+      // Whole connection URLs, credentials and all.
+      .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, "<url>")
+      // Hostnames with at least two dots: ep-xxx.c-5.us-east-2.aws.neon.tech
+      .replace(/\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.){2,}[a-z]{2,}\b/gi, "<host>")
+      // Bare IPv4, with or without a port.
+      .replace(/\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?/g, "<ip>")
+      // IPv6 in brackets, and long bare IPv6 runs.
+      .replace(/\[[0-9a-f:]+\](?::\d+)?/gi, "<ip>")
+      .replace(/\b(?:[0-9a-f]{1,4}:){4,}[0-9a-f]{0,4}\b/gi, "<ip>")
+      // A port left dangling once its host was replaced.
+      .replace(/<host>:\d+/g, "<host>")
+      .replace(/<ip>:\d+/g, "<ip>")
+  );
+}
+
+
+export function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return scrub(String(error));
 
   const parts: string[] = [];
   if (error.name && error.name !== "Error") parts.push(error.name);
@@ -112,7 +147,7 @@ function describeError(error: unknown): string {
   const code = (error as { code?: unknown }).code;
   if (typeof code === "string" || typeof code === "number") parts.push(`code ${code}`);
 
-  if (error.message) parts.push(error.message);
+  if (error.message) parts.push(scrub(error.message));
 
   /*
    * Unwrap when there is no MESSAGE, not when there is nothing at all.

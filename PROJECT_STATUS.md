@@ -501,7 +501,7 @@ Every figure below is from the final run on the pushed commit.
 |---|---|
 | `npx tsc --noEmit` | exit 0 |
 | `npm run lint` | exit 0 — 0 errors, 15 pre-existing warnings |
-| `npx vitest run` | **64 files, 810 passed, 0 failed, 1 skipped, 0 todo**, exit 0 |
+| `npx vitest run` | **64 files, 815 passed, 0 failed, 1 skipped, 0 todo**, exit 0 |
 | The 1 skip | the opt-in live provider contract (`ODDS_LIVE_CONTRACT`) — **not counted as passing** |
 | `npm run build` | exit 0 |
 | `node scripts/check-migrations.mjs` | 27 of 27 applied to a **clean** database, 62 tables |
