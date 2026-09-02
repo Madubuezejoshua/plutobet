@@ -202,7 +202,12 @@ Four independent layers, each of which alone would be enough on a good day:
 1. `settlement_outbox.idempotency_key` is unique per event.
 2. `claimBatch` uses `FOR UPDATE SKIP LOCKED`, so two dispatchers take disjoint
    batches.
-3. Event ids on dispatched messages are stable, so the scheduler deduplicates.
+3. Dispatched messages carry an id of `settle-event:<eventId>:<attempt>`. The
+   attempt is part of it deliberately: with a stable id the scheduler
+   deduplicated every re-dispatch of a stale item, so `settleEvent` never ran
+   again and the item could never complete — six finished events were observed
+   climbing toward a false FAILED alert. A replay of the SAME attempt is still
+   deduplicated, which is the property that was wanted.
 4. `settleBet` reads the bet `FOR UPDATE`, returns early if terminal, and keys
    its payout credit off the bet id.
 

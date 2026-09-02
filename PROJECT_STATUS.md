@@ -165,6 +165,24 @@ By the pipeline, with no human in the loop:
 | Remaining recovery candidates | **0** |
 | Same sweep, wider effect | 21 stranded events recovered, 0 failures |
 
+### A fourth fault, found by watching it run
+
+After the bet was paid, six fully-settled events sat in the outbox at
+`DISPATCHED` with `attempts` climbing past seven — no pending bets, no open
+markets, the work demonstrably done — heading for the give-up threshold and an
+alert about a payout that had already happened.
+
+The dispatch event id was the work item's idempotency key, which is stable for
+the item's whole life. Inngest deduplicates by event id, so every re-dispatch of
+a stale item was silently dropped, `settleEvent` never ran again, and the step
+that COMPLETES the row never ran either. The stale-item re-claim — whose entire
+purpose is retrying a lost hand-off — was a no-op that incremented a counter.
+
+The id now includes the attempt, so a re-dispatch is a real delivery while a
+replay of the same attempt is still deduplicated. Verified in production: all six
+cleared to `COMPLETED`, and the recovered bet is still `WON` with exactly one
+payout after 79 dispatcher runs and 42 recovery runs.
+
 **One residue, reported not repaired.** That market still holds ₦230 of
 liability from the duplicate submit that predates the fix. It is historical data
 in a money-adjacent table, so correcting it is an owner decision rather than
