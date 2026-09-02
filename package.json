@@ -33,7 +33,12 @@
     "settle:watch": "tsx scripts/watch-settlement.ts",
     "dev:local": "node scripts/dev-app-inngest-mode.mjs",
     "db:clean-benchmark": "tsx scripts/clean-benchmark-data.ts",
-    "db:verify-restore": "tsx scripts/verify-restore.ts"
+    "db:verify-restore": "tsx scripts/verify-restore.ts",
+    "db:audit-roles": "tsx scripts/audit-db-roles.ts",
+    "readiness:demo": "tsx scripts/production-check.ts",
+    "readiness:real-money": "tsx scripts/production-check.ts --mode=real-money",
+    "db:verify-cleanup": "tsx scripts/verify-benchmark-cleanup.ts",
+    "db:repair-exposure": "tsx scripts/repair-residual-exposure.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",

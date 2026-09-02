@@ -1,8 +1,24 @@
 /**
  * Launch readiness, reported without ever printing a value.
  *
- *   npm run production:check                 # check the local environment
+ *   npm run production:check                      # DEMO readiness (default)
+ *   npm run production:check -- --mode=real-money # REAL-MONEY readiness
  *   npm run production:check -- --remote=https://your-app.up.railway.app
+ *
+ * TWO MODES, BECAUSE THEY ARE DIFFERENT QUESTIONS
+ * -----------------------------------------------
+ * `demo` asks: can this serve a test account end to end — real fixtures, real
+ * odds, a QA-credited bet, automatic settlement — with no real money involved?
+ *
+ * `real-money` asks: may this take a stranger's money? That needs payment
+ * credentials, notification delivery, identity verification, credential
+ * rotation, a proven restore, error reporting and a gaming licence. None of it
+ * is implied by the demo passing.
+ *
+ * The distinction exists because a report once said "NEXTAUTH_URL is the only
+ * remaining launch blocker". It was the only blocker THIS CHECKER COULD SEE,
+ * which is a very different sentence, and the gap between them is where a
+ * platform gets launched before it is legal to operate.
  *
  * WHAT IT IS FOR
  * --------------
@@ -30,12 +46,25 @@ import "dotenv/config";
 
 type State = "PRESENT" | "MISSING" | "INVALID" | "UNVERIFIED";
 
+/** Which question is being asked. See the header. */
+type Mode = "demo" | "real-money";
+
+const MODE: Mode = process.argv.includes("--mode=real-money") ? "real-money" : "demo";
+
 interface Finding {
   name: string;
   state: State;
   /** Safe for a stranger. Never contains a value or an upstream message. */
   note: string;
+  /** Blocks a DEMO launch: the thing cannot serve a test account without it. */
   blocking: boolean;
+  /**
+   * Blocks a REAL-MONEY launch only.
+   *
+   * Kept separate so a demo is not held up by a payment credential, and a
+   * real-money launch is never waved through because the demo was green.
+   */
+  realMoneyBlocking?: boolean;
 }
 
 const findings: Finding[] = [];
@@ -320,6 +349,120 @@ async function checkSchedulerHeartbeat(): Promise<void> {
 }
 
 /**
+ * What taking a stranger's money actually requires.
+ *
+ * None of this is implied by the demo passing, and every line is something a
+ * regulator, a payment provider or a customer would ask about first. They are
+ * recorded as findings rather than prose so the command can REFUSE, instead of
+ * printing advice somebody has to remember to read.
+ *
+ * Several cannot be settled by inspecting an environment variable at all — a
+ * licence, a real deposit proof, a restore drill. Those are reported
+ * UNVERIFIED and still block, because "we have not checked" and "it is fine"
+ * are not the same claim.
+ */
+function realMoneyRequirements(): void {
+  const needsKey = (
+    label: string,
+    names: string[],
+    whenMissing: string,
+  ): void => {
+    const found = firstSet(names);
+    record({
+      name: label,
+      state: found ? "PRESENT" : "MISSING",
+      note: found ? `set via ${found.name}` : whenMissing,
+      blocking: false,
+      realMoneyBlocking: !found,
+    });
+  };
+
+  needsKey("Paystack (deposits)", ["PAYSTACK_SECRET_KEY"], "no payment provider — deposits impossible");
+  needsKey("Paystack (payouts)", ["PAYSTACK_SECRET_KEY"], "no payment provider — withdrawals impossible");
+  needsKey("Termii (SMS)", ["TERMII_API_KEY"], "no SMS provider — phone verification cannot be delivered");
+  needsKey("Resend (email)", ["RESEND_API_KEY"], "no email provider — password reset cannot be delivered");
+  needsKey("KYC provider", ["KYC_PROVIDER_KEY", "KYC_API_KEY"], "no identity provider — customers cannot be verified");
+  needsKey("Sentry DSN", ["SENTRY_DSN", "NEXT_PUBLIC_SENTRY_DSN"], "runtime errors are reported nowhere");
+
+  /*
+   * Facts no environment variable can establish. Each stays UNVERIFIED and
+   * blocking until a human records that it was actually done — which is the
+   * honest state, and the reason this command cannot be the sole gate.
+   */
+  const attested = (label: string, note: string): void => {
+    record({ name: label, state: "UNVERIFIED", note, blocking: false, realMoneyBlocking: true });
+  };
+
+  attested("real deposit proof", "no recorded end-to-end deposit with real money");
+  attested("real withdrawal proof", "no recorded end-to-end payout with real money");
+  attested("credential rotation", "the exposed credentials have not been rotated — see OWNER_LAUNCH_CHECKLIST.md");
+  attested("restore drill", "no restore has been performed and verified — see docs/restore-runbook.md");
+  attested("gaming licence", "no licence or independent certification on record");
+  attested("settlement bank account", "no registered business bank account on record for payouts");
+}
+
+/**
+ * Does a compromised web request inherit the ability to drop the ledger?
+ *
+ * All three configured URLs were found connecting as `neondb_owner`, which
+ * owns the ledger tables. The money paths issue `SET LOCAL ROLE app_role` in
+ * every transaction and are safe; the pooled READ client does no role handling
+ * at all, and every public route uses it.
+ *
+ * Blocking, and deliberately so. This was previously reported as a NOTE beside
+ * a passing check, which is how a privilege problem survives a review.
+ */
+async function checkRuntimeRole(): Promise<void> {
+  try {
+    const { auditRoles, isDangerousRuntimeRole } = await import("./audit-db-roles");
+    const [runtime, money] = await auditRoles();
+
+    if (!runtime?.configured) {
+      record({ name: "runtime db role", state: "MISSING", note: "no runtime database URL", blocking: true });
+      return;
+    }
+    if (runtime.error) {
+      record({ name: "runtime db role", state: "UNVERIFIED", note: runtime.error, blocking: false });
+      return;
+    }
+
+    const dangerous = isDangerousRuntimeRole(runtime);
+    record({
+      name: "runtime db role",
+      state: dangerous ? "INVALID" : "PRESENT",
+      // The ROLE NAME is configuration, not a credential, and naming it is the
+      // whole point of the finding.
+      note: dangerous
+        ? `connects as "${runtime.currentUser}", which owns the ledger tables — a compromised ` +
+          `read path could DROP, ALTER or TRUNCATE them. Give DATABASE_URL its own ` +
+          `least-privilege role (see OWNER_LAUNCH_CHECKLIST.md)`
+        : `connects as "${runtime.currentUser}", which owns nothing and cannot alter the ledger`,
+      blocking: dangerous,
+    });
+
+    if (money?.configured && !money.error) {
+      record({
+        name: "money db role",
+        state: money.isSuperuser ? "INVALID" : "PRESENT",
+        note:
+          `connects as "${money.currentUser}"` +
+          (money.ownsLedgerTables
+            ? " (owns ledger tables; every money transaction still issues SET LOCAL ROLE app_role)"
+            : ""),
+        blocking: money.isSuperuser,
+      });
+    }
+  } catch (error) {
+    record({
+      name: "runtime db role",
+      state: "UNVERIFIED",
+      note: error instanceof Error ? error.message.slice(0, 120) : "audit failed",
+      blocking: false,
+    });
+  }
+}
+
+/**
  * Is anybody's money stuck?
  *
  * The single most important production question, and the one nothing could
@@ -433,7 +576,7 @@ async function checkRemote(baseUrl: string): Promise<void> {
 async function main(): Promise<number> {
   const remote = process.argv.find((a) => a.startsWith("--remote="))?.slice("--remote=".length);
 
-  console.log("PLUTOBET PRODUCTION READINESS");
+  console.log(`PLUTOBET READINESS — mode: ${MODE.toUpperCase()}`);
   console.log("No configuration value is printed by this script, by design.");
   console.log("");
 
@@ -515,6 +658,8 @@ async function main(): Promise<number> {
   await checkDatabase("database (migration/owner)", ["MIGRATION_DATABASE_URL", "DATABASE_URL_UNPOOLED"], true);
   await checkMigrations();
   await checkRedis();
+  if (MODE === "real-money") realMoneyRequirements();
+  await checkRuntimeRole();
   await checkSchedulerHeartbeat();
   await checkSettlementConsistency();
   await checkAdminBootstrap();
@@ -534,21 +679,51 @@ async function main(): Promise<number> {
     console.log(`${mark} ${finding.name.padEnd(width)}  ${finding.state.padEnd(10)}  ${finding.note}`);
   }
 
-  const blocking = findings.filter((f) => f.blocking && f.state !== "PRESENT");
+  const demoBlocking = findings.filter((f) => f.blocking && f.state !== "PRESENT");
+  const moneyBlocking = findings.filter((f) => f.realMoneyBlocking && f.state !== "PRESENT");
+
   console.log("");
-  if (blocking.length > 0) {
-    console.error(`NOT LAUNCH READY — ${blocking.length} blocking item(s):`);
-    for (const finding of blocking) console.error(`  - ${finding.name}: ${finding.note}`);
+  if (MODE === "demo") {
+    if (demoBlocking.length > 0) {
+      console.error(`NOT DEMO READY — ${demoBlocking.length} blocking item(s):`);
+      for (const f of demoBlocking) console.error(`  - ${f.name}: ${f.note}`);
+      console.error("");
+      console.error("See OWNER_LAUNCH_CHECKLIST.md for the order these should be fixed in.");
+      return 1;
+    }
+    console.log("DEMO_READY — test identities, QA ledger credit, real fixtures and odds,");
+    console.log("test bet placement, automatic ingestion and settlement. No real money.");
+    console.log("");
+    console.log("This says NOTHING about taking real money. Run:");
+    console.log("  npm run production:check -- --mode=real-money");
+    return 0;
+  }
+
+  /*
+   * Real-money mode fails on EITHER list. A payment credential does not excuse
+   * a missing database, and a healthy database does not excuse an unlicensed
+   * sportsbook.
+   */
+  const all = [...demoBlocking, ...moneyBlocking];
+  if (all.length > 0) {
+    console.error(`NOT REAL_MONEY_READY — ${all.length} blocking item(s):`);
+    if (demoBlocking.length > 0) {
+      console.error("");
+      console.error("  Infrastructure:");
+      for (const f of demoBlocking) console.error(`    - ${f.name}: ${f.note}`);
+    }
+    if (moneyBlocking.length > 0) {
+      console.error("");
+      console.error("  Payments, identity, security and regulation:");
+      for (const f of moneyBlocking) console.error(`    - ${f.name}: ${f.note}`);
+    }
     console.error("");
-    console.error("See OWNER_LAUNCH_CHECKLIST.md for the order these should be fixed in.");
+    console.error("QA ledger credit is NOT a deposit and must never be presented as one.");
+    console.error("See OWNER_LAUNCH_CHECKLIST.md.");
     return 1;
   }
-  const unverified = findings.filter((f) => f.state === "UNVERIFIED");
-  console.log(
-    unverified.length > 0
-      ? `Launch-blocking checks all pass. ${unverified.length} item(s) UNVERIFIED — see above.`
-      : "Launch-blocking checks all pass.",
-  );
+
+  console.log("REAL_MONEY_READY — every checked requirement is satisfied.");
   return 0;
 }
 
