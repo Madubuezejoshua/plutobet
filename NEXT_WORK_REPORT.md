@@ -21,6 +21,8 @@
 > | CI absent | **Green on both remotes** | `PROJECT_STATUS.md` §7 |
 > | Scheduler never observed running | **Ran unattended; ingested a real result** | §33 below |
 > | §33.3 settlement chain broken, cause unknown | **Four faults found and fixed; the real bet is WON and paid** | §34 below |
+> | §34 "NEXTAUTH_URL is the only remaining blocker" | **Wrong framing.** Demo and real-money readiness are separate; neither passes | §35 below |
+> | §34.9 residual exposure ₦230 on one market | **₦630 across TWO markets** | §35 below |
 >
 > **The real match result and ₦600 payout were genuine, but the earlier
 > settlement services were manually invoked through QA scripts. Automatic
@@ -915,9 +917,10 @@ clean.
 Eleven commits, `de3eb16..4445c6e`, pushed fast-forward to both remotes with no
 force-push. CI passing on both.
 
-**That is not the project's final commit.** It was followed by `363c937` (report
-accuracy) and a launch-hygiene pass ending at `5faedfb`. The current tip is
-always recorded in `PROJECT_STATUS.md` §7c, which is the file to trust.
+**That is not the project's final commit.** It was followed by `363c937`
+(report accuracy) and then the launch-hygiene pass in §35. Rather than naming a
+hash that goes stale the moment anything lands, read it from the repository:
+`git rev-parse --short HEAD`. `PROJECT_STATUS.md` §7c is the source of truth.
 
 GitHub push protection blocked the first attempt: a guard test used a fake
 `sk_live_`-shaped fixture that GitHub classified as a Stripe API Key. It was
@@ -937,6 +940,200 @@ every commit, verified with `git log --all -S`.
   money-adjacent table, so correcting it is an owner decision rather than a
   quiet `UPDATE`. Now visible as `unreleasedExposureMarkets`.
 - `NEXTAUTH_URL` is the only remaining launch blocker in `production:check`.
+
+---
+
+---
+
+## 35. Launch-hygiene and truthfulness pass — 2026-09-02
+
+A safety pass over the now-proven money path: production privilege, database
+hygiene and accurate launch status. **The money path was not rewritten** — the
+recovered bet is still `WON` with exactly one ₦430 payout after 433 dispatcher
+and 228 recovery runs.
+
+Authoritative status: `PROJECT_STATUS.md` §2c and §7c. Owner actions:
+`OWNER_LAUNCH_CHECKLIST.md` §13–§16.
+
+### 35.1 The most serious finding: the runtime database role
+
+`npm run db:audit-roles` — read-only, no credential printed — reports the same
+answer for all three configured URLs:
+
+```
+session_user / current_user / current_role   neondb_owner
+superuser  no          bypasses RLS  YES
+owns ledger tables     YES (ledger_entries, ledger_transactions, wallets)
+can DROP / ALTER / TRUNCATE ledger  YES
+can grant itself more  YES
+```
+
+A previous pass recorded this as a NOTE beside a passing check. It is not a
+note. It is the difference between "a compromised read route leaks data" and "a
+compromised read route can drop the ledger".
+
+The money paths issue `SET LOCAL ROLE app_role` inside every transaction and are
+safe. **The pooled READ client does no role handling at all**, and thirty-four
+files import it — every board query, every admin page, every public route.
+
+`SET ROLE` on that connection would not fix it reliably: the pooled URL goes
+through Neon's transaction-mode pooler, where a session-level role does not
+dependably survive to the next transaction. **The fix is a separate
+least-privilege credential for `DATABASE_URL`**, with the exact SQL in the owner
+checklist §13. `production:check` now FAILS while the runtime role owns the
+ledger.
+
+12 tests attempt real DDL through the real runtime client against a real
+PostgreSQL, each in a transaction that is rolled back regardless. As `app_role`,
+PostgreSQL refuses `DROP`, `ALTER`, `TRUNCATE`, `DELETE`, disabling the balance
+trigger, replacing the trigger function and creating tables in `public`; a
+self-`GRANT` returns successfully and changes nothing. Two of those tests were
+wrong at first and both taught something: they matched Drizzle's "Failed query"
+wrapper rather than PostgreSQL's own words — which would have passed on a syntax
+error — and `GRANT` without grant option emits a WARNING rather than an error, so
+the assertion had to be about whether privileges actually changed.
+
+The permitted side is pinned too: `app_role` holds **column-level** UPDATE on
+`wallets`, so it can write the balance and version columns and **cannot** write
+`user_id` or `kind`. It cannot move a balance between people, and widening that
+to a table-level grant now fails a test.
+
+### 35.2 "The only remaining launch blocker" was the wrong sentence
+
+§34 and earlier reports said `NEXTAUTH_URL` was the only remaining blocker. It
+was the only blocker the infrastructure checker could SEE, which is a different
+claim, and the gap between them is where a platform gets launched before it is
+legal to operate.
+
+Two modes now:
+
+```bash
+npm run readiness:demo          # can this serve a test account, end to end?
+npm run readiness:real-money    # may this take a stranger's money?
+```
+
+| | Result |
+|---|---|
+| **DEMO_READY** | **NOT satisfied** — 2 blockers: `NEXTAUTH_URL`, runtime DB role |
+| **REAL_MONEY_READY** | **NOT satisfied** — 14 blockers |
+
+The other twelve: Paystack deposits, Paystack payouts, Termii SMS, Resend email,
+a KYC provider, `SENTRY_DSN`, a real deposit proof, a real withdrawal proof,
+credential rotation, a verified restore drill, a gaming licence, and a settlement
+bank account.
+
+Several cannot be settled by reading an environment variable. Those report
+`UNVERIFIED` and still block, because "we have not checked" and "it is fine" are
+not the same claim. **QA ledger credit is never presented as a deposit.**
+
+### 35.3 `NEXTAUTH_URL` — `BLOCKED_BY_OWNER_CONFIGURATION`
+
+The Railway CLI is installed but **not authenticated**, and `railway login` is
+interactive. The domain used as an example in `scripts/push-env-railway.ts`
+returns Railway's *"Application not found"*, so it is not a live deployment.
+
+**No hostname was invented and nothing is claimed fixed.** Set `NEXTAUTH_URL` to
+the real public HTTPS origin with no trailing path, then run
+`npm run production:check -- --remote=<url>`.
+
+### 35.4 Corrected: the residual exposure is ₦630, not ₦230
+
+§34.9 reported one market. A full audit found **two**:
+
+| Market | Fixture | Residual |
+|---|---|---|
+| `701daa4f-8b00-4d36-bf97-5ef236a3e52a` | Dinthar FC v Saikhamakawn FC | ₦400.00 |
+| `822cfe03-f701-4251-86e4-3a3e7842baed` | Fortaleza FC v CD Once Caldas | ₦230.00 |
+
+Each equals `potential_return - stake` for its single bet. **No money is
+involved**, verified before any repair was written: exposure is a risk LIMIT, the
+ledger nets to zero, each bet has exactly one payout, and both markets are
+already `SETTLED`.
+
+`npm run db:repair-exposure` is dry-run by default and **refuses `--confirm`
+without a fingerprint from a dry run**, and again if the data has since changed.
+**Not applied** — approval block in the checklist §16.
+
+### 35.5 Synthetic fixtures — evidence gathered, nothing deleted
+
+`npm run db:verify-cleanup` re-derives the target list INDEPENDENTLY of the
+cleanup script, because a safety review performed by the thing being reviewed
+agrees with itself. 11 of 11 checks pass: 400 events across two `bench-` tags,
+zero markets, selections, snapshots, results, bets or audit rows referencing
+them, `odds-api.io` present and **not matched** by the filter, and 1,697 teams
+and 212 competitions preserved. **Not deleted** — approval block §15.
+
+### 35.6 Neon reliability, and two defects in my own fix
+
+§34.6 improved failure messages from blank to useful. Doing so **published the
+database endpoint** into a table an operator screenshots:
+
+```
+code CONNECT_TIMEOUT - write CONNECT_TIMEOUT ep-steep-mode-xxxx...neon.tech:5432
+```
+
+Its own comment claimed it interpolated "only a name, a code and a message" and
+treated that as sufficient. The MESSAGE is where postgres-js writes the host.
+Useful and safe are separate properties and both are required.
+
+**The first scrub silently did nothing.** Its regexes were written through a
+Python heredoc that turned `\b` into a literal BACKSPACE character, so every
+pattern matched a control character that is never present. It typechecked and
+looked correct in review. The tests caught it; a repo-wide scan confirms no other
+file carries the same corruption.
+
+Retries now use bounded exponential backoff with jitter. The stale window was a
+flat 600 seconds, so a stuck item burned all ten attempts in under two hours and
+a backlog became eligible in one instant — a thundering herd against a database
+already struggling. A transient failure returns an item to `PENDING` with its
+error kept, never to `COMPLETED`.
+
+**Assessment: the free Neon plan is NOT suitable for real-money operation.**
+11 of 228 recovery runs failed on compute suspension. They self-heal and no
+payout was affected, but a paid plan without auto-suspend is required before
+taking deposits. `max_connections` is 901, so the 10/5 pools are conservative.
+
+### 35.7 Backlog corrected against the code, not against the report
+
+**The cash-out contradiction is resolved, and both sides were half right.**
+`cashout.service.ts` implements FULL and PARTIAL cash-out with tests — and there
+is **no API route and no caller anywhere outside those tests**. So it is
+`IMPLEMENTED_NOT_REACHABLE`: a finished feature no customer can use, which is
+neither "implemented" nor "not implemented".
+
+| Item | Audited status |
+|---|---|
+| Cash out (full and partial) | `IMPLEMENTED_NOT_REACHABLE` — no route, no caller |
+| Edit bet | `NOT_IMPLEMENTED` — no code of any kind |
+| `liveVersion` Redis cache | `NOT_IMPLEMENTED` — confirmed: a three-table aggregate on every `/api/live` request |
+| DOB capture and enforcement | `VERIFIED_WORKING` — registration refuses underage with 403 |
+| DOB backfill | `NOT_IMPLEMENTED` — column is NULLABLE and **1 of 7 accounts has none** |
+| Homepage / live load tests | `PARTIAL` — a 500-reader test covers the odds path, nothing covers HTTP |
+| Prompt-injection tests | `PARTIAL` — guardrail tests exist, no injection corpus |
+| Fantasy | `NOT_IMPLEMENTED` — a `ComingSoon` stub and a nav entry |
+| Lucky Numbers, Personalisation, Admin AI, Bet Builder | `NOT_IMPLEMENTED` — no code |
+
+### 35.8 Exact next developer backlog, in priority order
+
+1. **Least-privilege `DATABASE_URL`** — blocks both readiness modes (§35.1).
+2. **`NEXTAUTH_URL`** — blocks both (§35.3).
+3. **Expose cash-out over HTTP** — a finished, tested feature nobody can reach.
+4. **DOB backfill, then `NOT NULL`** — enforcement is not structural until then.
+5. **Redis-cache `liveVersion`** — the board's hottest query, uncached.
+6. **HTTP-level load tests** for the homepage and `/api/live`.
+7. **Prompt-injection corpus** for the AI surfaces.
+8. Edit bet, then personalisation, admin AI, fantasy, lucky numbers.
+
+### 35.9 Verification
+
+64 files · **815 passed · 0 failed · 1 skipped · 0 todo**. Typecheck 0, lint 0
+errors, build 0, migrations 27/27 against a clean database, ledger
+₦2,035.00 = ₦2,035.00, admin smoke clean, secret scan clean, `git diff --check`
+clean. CI **completed / success on both remotes**, verified per-SHA rather than
+by reading a badge.
+
+**Nothing destructive was run.** The 400 synthetic fixtures are still present and
+the ₦630 residual exposure is still there, both awaiting owner approval.
 
 ---
 
