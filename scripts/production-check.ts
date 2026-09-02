@@ -319,6 +319,61 @@ async function checkSchedulerHeartbeat(): Promise<void> {
   }
 }
 
+/**
+ * Is anybody's money stuck?
+ *
+ * The single most important production question, and the one nothing could
+ * answer while a real winning bet sat PENDING for hours behind a green
+ * dashboard. Reads only stored state; needs no provider call.
+ */
+async function checkSettlementConsistency(): Promise<void> {
+  const found = firstSet(["DIRECT_DATABASE_URL", "DATABASE_URL_UNPOOLED", "DATABASE_URL"]);
+  if (!found) {
+    record({ name: "settlement consistency", state: "UNVERIFIED", note: "no database URL", blocking: false });
+    return;
+  }
+  const result = await connectOnce(found.value, async (client) => {
+    const [row] = await client<{ pending: number; unpaid: number; stuck: number }[]>`
+      SELECT
+        (SELECT count(DISTINCT b.id)::int
+           FROM bets b
+           JOIN bet_legs bl ON bl.bet_id = b.id
+           JOIN selections s ON s.id = bl.selection_id
+           JOIN markets m ON m.id = s.market_id
+           JOIN event_results r ON r.event_id = m.event_id
+          WHERE b.status = 'PENDING') AS pending,
+        (SELECT count(*)::int FROM bets b
+          WHERE b.status = 'WON'
+            AND NOT EXISTS (
+              SELECT 1 FROM ledger_transactions t
+               WHERE t.type = 'PAYOUT'
+                 AND (t.reference = b.id::text OR t.metadata->>'betId' = b.id::text)
+            )) AS unpaid,
+        (SELECT count(*)::int FROM settlement_outbox WHERE status = 'FAILED') AS stuck
+    `;
+    return row;
+  });
+
+  if (!result.ok) {
+    record({ name: "settlement consistency", state: "UNVERIFIED", note: result.note, blocking: false });
+    return;
+  }
+  const pending = Number(result.value?.pending ?? 0);
+  const unpaid = Number(result.value?.unpaid ?? 0);
+  const stuck = Number(result.value?.stuck ?? 0);
+  const clean = pending === 0 && unpaid === 0 && stuck === 0;
+  record({
+    name: "settlement consistency",
+    state: clean ? "PRESENT" : "INVALID",
+    note: clean
+      ? "no bet is waiting on a result we already have"
+      : `${pending} bet(s) pending on a final result, ${unpaid} won bet(s) unpaid, ${stuck} abandoned work item(s)`,
+    // Blocking: customer money stuck behind a known result is not a soft
+    // warning, and treating it as one is how it went unnoticed for hours.
+    blocking: true,
+  });
+}
+
 async function checkAdminBootstrap(): Promise<void> {
   const found = firstSet(["DIRECT_DATABASE_URL", "DATABASE_URL_UNPOOLED", "DATABASE_URL"]);
   if (!found) {
@@ -428,6 +483,28 @@ async function main(): Promise<number> {
     blocking: false,
     whenMissing: "not set — runtime errors are not reported anywhere",
   });
+  /*
+   * Pool sizing. `max: 1` on a persistent Railway container makes the whole
+   * application serialise on one connection, so this reports what is actually
+   * configured — sizes are configuration, not secrets.
+   */
+  try {
+    const { describePoolConfiguration } = await import("@/db/pool-config");
+    record({
+      name: "connection pools",
+      state: "PRESENT",
+      note: describePoolConfiguration(),
+      blocking: false,
+    });
+  } catch (error) {
+    record({
+      name: "connection pools",
+      state: "INVALID",
+      note: error instanceof Error ? error.message : "invalid pool configuration",
+      blocking: true,
+    });
+  }
+
   envFinding("APP_DATABASE_ROLE", ["APP_DATABASE_ROLE"], {
     blocking: false,
     whenMissing: "not set — the runtime role defaults, so ownership separation is unverified",
@@ -439,6 +516,7 @@ async function main(): Promise<number> {
   await checkMigrations();
   await checkRedis();
   await checkSchedulerHeartbeat();
+  await checkSettlementConsistency();
   await checkAdminBootstrap();
   if (remote) await checkRemote(remote);
   else {

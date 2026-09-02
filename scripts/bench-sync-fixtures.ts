@@ -43,6 +43,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import EmbeddedPostgres from "embedded-postgres";
 import postgres from "postgres";
+import { assertEphemeralDatabase } from "@/db/ephemeral-guard";
 import { createDirectDatabase } from "@/modules/wallet/db-direct";
 import { BatchClassifier, type FixtureToClassify } from "@/modules/sports/classify-batch";
 import { TaxonomyService } from "@/modules/sports/taxonomy.service";
@@ -172,7 +173,17 @@ async function main() {
   let environment: string;
 
   if (appUrl) {
-    environment = "external database (--url)";
+    /*
+     * A supplied target must PROVE it is disposable.
+     *
+     * An earlier version of this script wrote its generated catalogue into
+     * production Neon, because it imported the shared pooled client and
+     * `DATABASE_URL` was whatever the shell had loaded. 400 invented fixtures
+     * are still in that database. Starting our own cluster fixes the default;
+     * this stops the next person aiming --url somewhere expensive.
+     */
+    assertEphemeralDatabase(appUrl);
+    environment = "external database (--url), verified disposable";
   } else {
     const port = await availablePort();
     dataDir = path.resolve(ROOT, `.pgdata-bench-${process.pid}`);
