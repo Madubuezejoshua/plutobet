@@ -88,6 +88,48 @@ export class StagedError extends Error {
   }
 }
 
+/**
+ * Turns any thrown value into something an operator can act on.
+ *
+ * `error.message` alone is not enough. Node's `AggregateError` for a failed
+ * connection — several ETIMEDOUT attempts across a host's addresses — has an
+ * EMPTY message, so the recovery job recorded seven failures with a blank
+ * `last_error` and nothing to go on. An alert that says nothing is barely
+ * better than no alert.
+ *
+ * The name and any `code` are included, and an AggregateError's first inner
+ * error is unwrapped, because that is where the useful part lives. Still
+ * truncated, and still no URL: a driver error can carry a connection string,
+ * which is why this never interpolates anything but a name, a code and a
+ * message.
+ */
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+
+  const parts: string[] = [];
+  if (error.name && error.name !== "Error") parts.push(error.name);
+
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === "string" || typeof code === "number") parts.push(`code ${code}`);
+
+  if (error.message) parts.push(error.message);
+
+  /*
+   * Unwrap when there is no MESSAGE, not when there is nothing at all.
+   *
+   * An AggregateError supplies a name, so keying off "parts is empty" left the
+   * description as the bare word "AggregateError" — technically not blank, and
+   * exactly as useless as the blank it replaced. The useful part is always in
+   * the first inner error.
+   */
+  const inner = (error as { errors?: unknown }).errors;
+  if (!error.message && Array.isArray(inner) && inner.length > 0) {
+    parts.push(`${inner.length} attempt(s) failed: ${describeError(inner[0])}`);
+  }
+
+  return parts.length > 0 ? parts.join(" — ") : "unknown error with no message";
+}
+
 function zeroed(counts: HeartbeatCounts): Required<HeartbeatCounts> {
   return {
     ingestedResults: counts.ingestedResults ?? 0,
@@ -172,10 +214,7 @@ export class HeartbeatService {
     error: unknown,
     meta: { runId: string; startedAt: Date; stage: RunStage },
   ): Promise<void> {
-    const message = (error instanceof Error ? error.message : String(error)).slice(
-      0,
-      MAX_ERROR_LENGTH,
-    );
+    const message = describeError(error).slice(0, MAX_ERROR_LENGTH);
     await this.wallet.withMoneyTransaction(async ({ tx }) => {
       await tx.execute(sql`
         INSERT INTO job_heartbeats (

@@ -687,3 +687,49 @@ describe("re-dispatching a stale work item", () => {
     expect(idOf(second)).not.toBe(idOf(first));
   });
 });
+
+describe("an alert that says something", () => {
+  it("records a usable message for an error that has none", async () => {
+    const { HeartbeatService } = await import("@/modules/reporting/heartbeat.service");
+    const beats = new HeartbeatService(wallet);
+    const job = `probe-${randomUUID().slice(0, 8)}`;
+
+    /*
+     * Node's AggregateError for a failed connection carries several inner
+     * ETIMEDOUT errors and an EMPTY message. The recovery job recorded seven
+     * failures with a blank last_error and nothing to diagnose from, which is
+     * barely better than not alerting at all.
+     */
+    const connectionFailure = new AggregateError(
+      [Object.assign(new Error("connect ETIMEDOUT 10.0.0.1:5432"), { code: "ETIMEDOUT" })],
+      "",
+    );
+
+    await expect(
+      beats.track(job, async () => {
+        throw connectionFailure;
+      }),
+    ).rejects.toBeDefined();
+
+    const beat = await beats.read(job);
+    expect(beat!.lastError).not.toBe("");
+    expect(beat!.lastError).toMatch(/ETIMEDOUT/);
+    // Never blank, whatever was thrown.
+    expect(beat!.lastError!.length).toBeGreaterThan(5);
+  });
+
+  it("never stores an empty message even for a bare throw", async () => {
+    const { HeartbeatService } = await import("@/modules/reporting/heartbeat.service");
+    const beats = new HeartbeatService(wallet);
+    const job = `probe2-${randomUUID().slice(0, 8)}`;
+
+    await expect(
+      beats.track(job, async () => {
+        throw new Error("");
+      }),
+    ).rejects.toBeDefined();
+
+    const beat = await beats.read(job);
+    expect(beat!.lastError).toBe("unknown error with no message");
+  });
+});
