@@ -559,7 +559,7 @@ chose the rewrite. The string is now absent from every commit, verified with
 
 ## 7c. Launch-hygiene pass — 2026-09-02
 
-Four further commits, `363c937..5faedfb`, pushed fast-forward to both remotes.
+Pushed fast-forward to both remotes.
 
 | Hash | Commit |
 |---|---|
@@ -567,9 +567,20 @@ Four further commits, `363c937..5faedfb`, pushed fast-forward to both remotes.
 | `781574a` | Back off from a struggling database instead of stampeding it |
 | `2f51a1f` | Prepare two destructive operations without performing either |
 | `5faedfb` | Separate "can it demo" from "may it take money", and correct the backlog |
+| `0516b38` | Stop two reports calling an older commit the final one |
 
-**Current tip: `5faedfb`**, identical on `origin/main` and `plutobet/main` —
-verified by comparing both remotes' tree hashes, not just their commit ids.
+**The tip is the last row above**, plus one further commit carrying this
+correction — a commit cannot quote its own hash, which is the reason a
+hard-coded "final commit" goes stale the moment anything else lands. To read it
+from the repository rather than from a document:
+
+```bash
+git rev-parse --short HEAD
+git rev-parse origin/main plutobet/main        # must match each other
+git rev-parse origin/main^{tree} plutobet/main^{tree}   # and so must the TREES
+```
+
+Both remotes were verified identical by tree hash, not only by commit id.
 
 Nothing destructive was run: the synthetic fixtures are still present and the
 residual exposure is still there, both awaiting the approval blocks in
