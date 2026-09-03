@@ -15,3 +15,8 @@ coverage/
 # Throwaway clusters started by the benchmark and the migration checker.
 .pgdata-bench-*/
 .pgdata-migcheck-*/
+
+# Review screenshots. Evidence for one visual review, not repository content:
+# they go stale the moment the interface changes, and a binary that nobody
+# diffs does not belong in git history.
+artifacts/
