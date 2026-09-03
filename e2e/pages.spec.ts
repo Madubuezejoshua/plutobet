@@ -152,3 +152,48 @@ test.describe("the pages that do not exist", () => {
     expect(text).not.toMatch(/postgres:\/\/|redis:\/\/|rediss:\/\/|sk_live|npg_/);
   });
 });
+
+test.describe("the measured column", () => {
+  /*
+   * WHY THIS EXISTS. `.sb-page` is the container every non-board page sits in.
+   * Its rules were defined in `legacy-bridge.css`, and deleting that file took
+   * them with it: headings went hard against the left edge and tables spanned
+   * the full 1440px. Nothing failed. Not the typecheck, not the linter, not
+   * `next build`, and not the browser suite above — because that suite measures
+   * horizontal OVERFLOW, and a full-bleed page does not overflow. It was caught
+   * by a person looking at a screenshot, which is not a control.
+   *
+   * So the container is asserted directly. The board and the auth pages are
+   * deliberately edge to edge and simply do not use `.sb-page`; this only
+   * checks pages that claim the class, which is exactly the set that broke.
+   */
+  const COLUMNED = ["/live", "/results", "/jackpot", "/promotions", "/livescore", "/fantasy"];
+
+  for (const path of COLUMNED) {
+    test(`${path} is held in a measured column`, async ({ page }, testInfo) => {
+      test.skip(testInfo.project.name !== "desktop", "a phone viewport is narrower than the column");
+
+      await page.goto(path, { waitUntil: "networkidle" });
+
+      const measured = await page.evaluate(() => {
+        const el = document.querySelector(".sb-page");
+        if (!el) return null;
+        const style = window.getComputedStyle(el);
+        return {
+          width: el.getBoundingClientRect().width,
+          maxWidth: style.maxWidth,
+          viewport: window.innerWidth,
+        };
+      });
+
+      expect(measured, `${path} has no .sb-page container`).not.toBeNull();
+      expect(measured?.maxWidth, `${path} container has no max-width`).not.toBe("none");
+      // The reported symptom, stated as the assertion: content the full width
+      // of a 1440px window is the defect, whatever the rule that caused it.
+      expect(
+        measured!.width,
+        `${path} spans the whole viewport — the page container is not applying`,
+      ).toBeLessThan(measured!.viewport);
+    });
+  }
+});

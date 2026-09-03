@@ -86,9 +86,9 @@ browser during this pass — not that it looks right in the source.
 | | |
 |---|---|
 | Branch | `ui/plutobet-sportsbook-redesign` |
-| HEAD | `41713ab` — "Repair a checkpoint line the shell ate" |
-| Working tree | **NOT clean** — 16 entries |
-| Commits ahead of `main` | **16** (read from `git rev-list`, not from memory) |
+| HEAD | `c94d7e2` — "Delete the style bridge, and open a real browser at the result" |
+| Working tree | **NOT clean** — 11 entries (stage 3/4 work, committed next) |
+| Commits ahead of `main` | **17** (read from `git rev-list`, not from memory) |
 | Behind `main` | 0 |
 | `origin/main` | `83cb633` |
 | `plutobet/main` | `83cb633` |
@@ -105,8 +105,8 @@ browser during this pass — not that it looks right in the source.
 |---|---|---|
 | 1 | Read every instruction, report and runbook; inspect git state | **DONE** |
 | 2 | Repository audit + task matrix | **DONE** |
-| 3 | Redesign verification in a real browser | **IN PROGRESS** — Playwright wired, desktop suite running |
-| 4 | Interaction audit of every enabled control | NOT STARTED |
+| 3 | Redesign verification in a real browser | **DONE** — 118 passed, 6 skipped, desktop + Pixel 7 |
+| 4 | Interaction audit of every enabled control | **DONE** — 32 rows, generated from the run |
 | 5a | Cash-out: repair partial cash-out and exposure | **DONE** |
 | 5b | Cash-out: eligibility gate, replay, concurrency | **DONE** |
 | 5c | Cash-out: authenticated route, UI, audit, admin visibility | **DONE** |
@@ -383,26 +383,123 @@ First run: **28 passed, 12 failed**, and both causes were real.
    without a session — a 404 that reads the database turns an unreachable
    database into a 500 on every wrong URL.
 
+### Stage 3 finished — and the page container had been deleted with the bridge
+
+The desktop and Pixel 7 projects both pass: **118 passed, 6 skipped** (the six
+skips are the column check below, which is meaningless on a phone). Two defects
+beyond the ones already recorded:
+
+3. `FAILED` → fixed. **The mobile header overflowed.** The signed-in header
+   measured 446px inside a 412px viewport, so every authenticated page scrolled
+   sideways on a phone. Below 900px the deposit label is hidden (the icon keeps
+   its `aria-label`) and the account icon is dropped, because the bottom bar
+   already carries it.
+4. `FAILED` → fixed. **Competition favouriting was unreachable.** With eight or
+   fewer leagues the "Popular" group is hidden, and the country groups had no
+   star — so on a normal seeded database there was no way to favourite anything.
+   Country rows use `leagueRow` now.
+
+And one the browser suite did **not** catch, which matters more than the two it
+did:
+
+5. `FAILED` → fixed. **Deleting `legacy-bridge.css` deleted `.sb-page`.** The
+   page container — the measured 1040px column every non-board page sits in —
+   was defined in the bridge file, and stage 5h removed the file. Headings went
+   hard against the left edge and tables spanned the full 1440px.
+
+   **Every gate passed.** Typecheck, lint, `next build`, 913 unit tests, and the
+   40-per-project browser suite. The browser suite measures horizontal
+   *overflow*, and a full-bleed page does not overflow. It was found by looking
+   at a screenshot, which is not a control.
+
+   The rules now live in `surfaces.css`, and `e2e/pages.spec.ts` asserts the
+   container directly: `.sb-page` must have a real `max-width` and must measure
+   narrower than the viewport at 1440px. **That test was proved to fail**: the
+   rules were removed, the app rebuilt, and all six checks failed before the
+   rules were restored and they passed again. A regression test that has never
+   failed is not evidence.
+
+### Stage 4 — the interaction audit, generated rather than written
+
+`artifacts/ui-review/INTERACTION_AUDIT.md`: **32 rows**, 16 controls in each of
+two projects, every one clicked or submitted in a real browser against a
+disposable local database. `artifacts/ui-review/00-contact-sheet.png`: **28
+labelled thumbnails**, desktop and 390px mobile, visually inspected.
+
+Both are produced by `scripts/build-ui-review.mjs` from what the run actually
+did. Nothing in that table is written from reading the source — if a control is
+missing from it, it was not tested.
+
+Three defects in the reporting machinery itself, all of which made the evidence
+quietly wrong rather than absent:
+
+- `beforeAll` truncated a single shared audit file **once per project**, so only
+  the last browser's rows survived. Per-project files, merged afterwards.
+- `capture-ui-screenshots.mjs` deleted the whole output directory, taking the
+  audit rows written moments earlier. It removes only PNGs now.
+- The merge glued the project into the page cell, leaving every row one column
+  short of its header — which Markdown renders as a quietly shifted table, not
+  an error.
+
+### The review server no longer inherits production secrets
+
+`scripts/review-server.mjs`. `next start` loads `.env`, and in this repository
+`.env` holds **production** credentials. The review server was started by
+exporting a local `DATABASE_URL` in front of the command, which works and is one
+forgotten export away from pointing a browser — and the destructive interaction
+tests — at the real database. The app comes up perfectly either way.
+
+The script sets every connection string explicitly, **refuses to start** if any
+of them names a host that is not loopback, and generates review-only
+`AUTH_SECRET` and `IDENTITY_PEPPER` values into a gitignored file. Previously
+the review process inherited the production pair from `.env`: local browser
+sessions were signed with the production secret and local identity numbers
+hashed into the production keyspace. Neither is needed to photograph a screen.
+
+`playwright.config.ts` still does not spawn it. Pointing the suite at a base URL
+stays a deliberate act.
+
 ### Exact next action
 
 
-Finish stage 3, then stage 4.
+**Stage 5i — the prompt-injection corpus for Pluto AI.**
 
-1. Re-run the desktop Playwright suite and confirm 40/40 after the two fixes.
-2. Run the mobile (Pixel 7) project and fix what it finds.
-3. Add the remaining viewports the owner named — 430×932, 768×1024, 1024×768,
-   1366×768, 1920×1080 — as a responsive sweep.
-4. Then stage 4: the interaction audit. Every enabled control clicked or
-   submitted in the browser, recorded in
-   `artifacts/ui-review/INTERACTION_AUDIT.md` with the route each one calls.
-   `e2e/support.ts` already has `enabledControls(page)`, which enumerates what
-   is actually rendered so the audit covers that rather than a remembered list.
-5. Regenerate screenshots and the contact sheet after the fixes, not before.
+Build the adversarial corpus against the tool registry and safety layer. Cover
+attempts to: override system rules; call an unregistered tool; supply another
+user's id; place a bet or withdraw without confirmation; reveal secrets; modify
+a balance; fabricate odds or probabilities; bypass responsible-gambling limits,
+self-exclusion or KYC; execute a dynamic tool name; inject through match names,
+team names, documents or retrieved text; hide instructions in Unicode or
+encoding; and repeat or replay a money action.
+
+No LLM key exists, so live model behaviour stays `BLOCKED_BY_KEY`. The registry
+and the safety layer are testable now and that is what this stage covers — the
+corpus asserts what the layer refuses, not what a model would say.
+
+Then, still outstanding for stage 3: the remaining viewports the owner named —
+430×932, 768×1024, 1024×768, 1366×768, 1920×1080 — as a responsive sweep, plus
+the accessibility pass (0 critical/serious violations) and keyboard navigation.
+Recorded here because stage 3 is marked DONE for the two profiles actually run,
+and that distinction must not be lost.
 
 ### Files being modified right now
 
 
-None in flight. The working tree is clean at the commit named above.
+Eleven entries, all stage 3/4 work, committed together with this checkpoint:
+
+| File | Why |
+|---|---|
+| `src/styles/surfaces.css` | the restored `.sb-page` container |
+| `e2e/pages.spec.ts` | the measured-column regression test |
+| `e2e/interactions.spec.ts` | per-project audit files (new) |
+| `scripts/build-ui-review.mjs` | merges the audit, builds the contact sheet (new) |
+| `scripts/review-server.mjs` | the guarded review server (new) |
+| `scripts/capture-ui-screenshots.mjs` | stop deleting the audit |
+| `src/components/sportsbook/header.tsx` | mobile overflow |
+| `src/styles/sportsbook.css` | mobile overflow |
+| `src/components/sportsbook/league-rail.tsx` | reachable favouriting |
+| `.gitignore` | admit the two review deliverables, exclude `.env.review.local` |
+| `artifacts/ui-review/` | the two deliverables themselves |
 
 ### Decisions and assumptions made
 
@@ -439,21 +536,40 @@ None in flight. The working tree is clean at the commit named above.
 - Playwright is a dev dependency: the browser, interaction and accessibility
   audits need a real driver, and the previous pass proved a one-shot headless
   capture reports a viewport it did not use.
+- Two review artefacts are **committed** — the contact sheet and the interaction
+  audit — and the 27 full-page screenshots behind them are not. The two are the
+  evidence that the interface was checked in a browser; the rest is ~4MB that
+  `scripts/capture-ui-screenshots.mjs` regenerates. `artifacts/` is excluded as
+  `artifacts/*` rather than `artifacts/`, because a trailing slash makes git skip
+  the directory and no negation can re-include what git never descended into.
+- The review server refuses to start against a non-loopback host rather than
+  documenting that it should only be pointed at one. The failure being prevented
+  is silent — the application comes up perfectly against production — so a
+  convention would not have caught it.
 
 ### Latest gate results
 
 
 | Gate | Result | When |
 |---|---|---|
-| `npx tsc --noEmit` | **0 errors** | after 5d |
-| `npx eslint .` | **0 errors, 0 warnings** | after 5d |
-| `npx next build` | **exit 0**; `/account/date-of-birth`, `/api/account/date-of-birth` and `/api/bets/[id]/cashout` all emitted | after 5d |
-| `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, 62 tables | after 5d |
-| `npx vitest run` on betting, settlement, payments, users | **28 files, 345 passed, 0 failed** | after 5d |
-| `npx vitest run` on odds | **9 files, 117 passed, 1 skipped, 0 failed** | after 5e |
-| `npx vitest run` on payments | **5 files, 67 passed, 0 failed** | after 5f |
-| `npx playwright test --project=desktop` | first run **28 passed, 12 failed**; both causes fixed, re-run in progress | stage 3 |
-| `node scripts/secret-scan.mjs` | clean | baseline, `4b65c02` |
+All of these were run at this checkpoint, in this order, against the restored
+build. Every one is a full run, not a subset.
+
+| Gate | Result | When |
+|---|---|---|
+| `npx tsc --noEmit` | **exit 0**, 0 errors | this checkpoint |
+| `npx eslint .` | **exit 0**, 0 errors, 0 warnings | this checkpoint |
+| `npx next build` | **Compiled successfully** | this checkpoint |
+| `npx vitest run` | **74 files, 913 passed, 1 skipped, 0 failed**, exit 0 | this checkpoint |
+| `npx playwright test` | **118 passed, 6 skipped, 0 failed** (desktop + Pixel 7) | this checkpoint |
+| `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, exit 0 | this checkpoint |
+| `node scripts/secret-scan.mjs` | **clean**, 441 files, 15 rules | this checkpoint |
+
+The six Playwright skips are the measured-column check, which `test.skip`s on
+the mobile project because a phone viewport is narrower than the column. They
+are skips by design, not failures being hidden.
+
+The full suite is re-run from a clean state in stage 9, twice, as instructed.
 
 The full suite is re-run from a clean state in stage 9; totals will rise because
 this pass adds tests, and any figure that changes is corrected here.
@@ -481,9 +597,19 @@ this pass adds tests, and any figure that changes is corrected here.
 | 13 | The sign-in password field's accessible name included the "Forgot password?" link | **FIXED**, stage 3 |
 | 14 | No `not-found.tsx` — Next served an unbranded 404 with no way out | **FIXED**, stage 3 |
 | 15 | Edit bet has no product rules anywhere in the repository | **BLOCKED_BY_PRODUCT_DECISION** — not built, by instruction |
+| 16 | The signed-in mobile header measured 446px in a 412px viewport | **FIXED**, stage 3 |
+| 17 | Competition favouriting was unreachable with ≤8 leagues | **FIXED**, stage 3 |
+| 18 | `.sb-page` was deleted with the style bridge; every non-board page went full-bleed | **FIXED**, stage 3 — and now has a regression test proved to fail without it |
+| 19 | The audit file was truncated once per project, keeping only the last browser's rows | **FIXED**, stage 4 |
+| 20 | The screenshot capture deleted the audit it was meant to sit beside | **FIXED**, stage 4 |
+| 21 | The merged audit table was one column short of its header | **FIXED**, stage 4 |
+| 22 | The review server inherited production `AUTH_SECRET` and `IDENTITY_PEPPER` from `.env` | **FIXED** — review-only values, and a loopback check that refuses to start otherwise |
 
-Cash-out and the date-of-birth flow are not yet `VERIFIED_IN_REAL_BROWSER`;
-stage 4 covers that. Blockers inherited from the previous pass are in §23.
+Cash-out and the date-of-birth flow still are **not** `VERIFIED_IN_REAL_BROWSER`
+as complete money journeys. The date-of-birth *control* is audited (row:
+`/register`, date of birth); the cash-out journey needs a placed bet with a
+priced offer and is covered by stage 7, not stage 4. Blockers inherited from the
+previous pass are in §23.
 
 ### Deliberately not performed
 
@@ -616,13 +742,15 @@ described at the top of this file.
 | Gate | Command | Result |
 |---|---|---|
 | Types | `npx tsc --noEmit` | **exit 0** |
-| Lint | `npm run lint` | **exit 0** — 0 errors, 15 pre-existing warnings (unused imports in modules untouched by this pass) |
-| Tests | `npx vitest run` | **68 files, 844 passed, 1 skipped, 0 failed** |
+| Lint | `npm run lint` | **exit 0** — 0 errors, **0 warnings** |
+| Tests | `npx vitest run` | **74 files, 913 passed, 1 skipped, 0 failed** |
 | The 1 skip | — | the opt-in live provider contract (`ODDS_LIVE_CONTRACT`) — **not counted as passing** |
+| Browser | `npx playwright test` | **118 passed, 6 skipped, 0 failed** — desktop 1440×900 and a Pixel 7 profile |
+| The 6 skips | — | the measured-column check, which is meaningless on a viewport narrower than the column |
 | Build | `npx next build` | **exit 0** |
-| Secret scan | `node scripts/secret-scan.mjs` | clean |
+| Secret scan | `node scripts/secret-scan.mjs` | clean — 441 files, 15 rules |
 | Whitespace | `git diff --check` | clean |
-| Migrations | `node scripts/check-migrations.mjs` | 27 of 27 applied to a clean database, 62 tables |
+| Migrations | `node scripts/check-migrations.mjs` | **29 of 29** applied to a clean database |
 | Restore verifier | `npm run db:verify-restore` | 8 of 8 pass; ledger balanced, 0 negative wallets |
 | Admin queries | `npm run admin:smoke` | clean |
 | Sync benchmark | `npm run bench:sync` | completed at 200 and 775 events — §21 |
@@ -631,10 +759,16 @@ described at the top of this file.
 | Database roles | `npm run db:audit-roles` | **exit 1**, correctly — §20 |
 | CI | GitHub Actions | green on both remotes for `main`. **This branch has not been pushed**, so no CI run exists for it |
 
-Test count rose from 815 to 844 in this pass: +29 covering the betslip
-arithmetic, the sign-in redirect guard, the navigation registry (§6) and the
-stylesheet-import ordering that hid the whole redesign (§5 of
-`UI_REDESIGN_REPORT.md`).
+Test count is **913**, from 844 at the start of this pass: +69 covering cash-out
+exposure, eligibility and its HTTP surface, the date-of-birth gate, the
+live-version cache, the withdrawal bank list, and the browser suite's own
+fixtures. The 15 lint warnings the previous run recorded are gone — 14 were dead
+imports and one duplicated a policy the SQL restated as a literal.
+
+The browser row is new and is the only gate here that opens one. It is listed
+because five defects in this pass were invisible to every other gate: an
+accessible name, a missing 404, a mobile overflow, an unreachable control, and a
+page container deleted along with the file that happened to define it.
 
 ---
 
@@ -674,7 +808,7 @@ Status: **redesigned, complete for review, not merged and not deployed.**
 
 | Area | Files |
 |---|---|
-| Tokens and surfaces | `src/styles/tokens.css`, `src/styles/sportsbook.css`, `src/styles/surfaces.css`, `src/styles/legacy-bridge.css` |
+| Tokens and surfaces | `src/styles/tokens.css`, `src/styles/sportsbook.css`, `src/styles/surfaces.css` |
 | Shell | `src/components/sportsbook/shell.tsx`, `header.tsx`, `footer.tsx`, `mobile-bar.tsx`, `page-shell.tsx` |
 | Board | `board-page.tsx`, `match-board.tsx`, `odds-button.tsx`, `league-rail.tsx`, `date-strip.tsx` |
 | Betslip | `betslip-store.tsx`, `betslip-panel.tsx`, `slip-math.ts`, `browser-store.ts` |
@@ -690,14 +824,28 @@ security controls. This was a frontend pass. The one server-side addition is a
 read-only query, `getEventView`, which the new event page needs and which
 touches none of the above.
 
-### The legacy bridge, and its end date
+### The legacy bridge is gone
 
-`src/styles/legacy-bridge.css` re-points the old design system's variables at
-the new tokens, scoped to the `.sb` shell, so pages still carrying legacy
-classes render in the new palette without a find-and-replace across money
-forms. It is a migration aid with an end date: **delete it when no page inside
-`.sb` uses a legacy class.** It is deliberately scoped so the admin console,
-which renders outside that shell, is untouched.
+`src/styles/legacy-bridge.css` is **deleted**. It re-pointed the old design
+system's variables at the new tokens so pages still carrying legacy classes
+rendered in the new palette during the migration, and it had a stated end date:
+delete it when no page inside `.sb` uses a legacy class. Seven files still did —
+`kyc-form`, `responsible/controls`, `account/preferences`, `account/security`,
+`account/verify-email`, `pluto-chat`, and one stray class in `results` — and all
+seven were converted before it went.
+
+The legacy rules further down `globals.css` **stay**. They serve the admin
+console, which renders outside the `.sb` shell and keeps the dark system on
+purpose. Re-skinning the screens that approve withdrawals is not a side effect
+to accept from a customer-facing pass.
+
+One thing came out with it that should not have. `.sb-page`, the measured column
+every non-board page sits in, was defined in the bridge file rather than
+alongside the rest of the layout, and deleting the file made every one of those
+pages full-bleed. No gate caught it. The rules live in `surfaces.css` now, and
+`e2e/pages.spec.ts` asserts the container directly — see §0. Layout the whole
+site depends on does not belong in a file whose stated purpose is to be
+deleted.
 
 ---
 

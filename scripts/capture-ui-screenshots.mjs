@@ -27,7 +27,7 @@
  * DevTools without a client library.
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -158,9 +158,21 @@ async function main() {
   const browser = findBrowser();
   const profileDir = await mkdtemp(join(tmpdir(), "plutobet-shots-"));
 
-  // A stale shot of a page that has since changed is worse than no shot.
-  if (existsSync(outDir)) rmSync(outDir, { recursive: true, force: true });
+  /*
+   * Clear the SCREENSHOTS, not the directory.
+   *
+   * This used to `rmSync` the whole folder, on the reasoning that a stale shot
+   * of a page that has since changed is worse than no shot. That is still true
+   * — but the folder also holds the interaction audit the browser suite writes,
+   * and wiping it deleted rows that had just been recorded. The audit then
+   * built empty and looked like nothing had been tested.
+   */
   mkdirSync(outDir, { recursive: true });
+  for (const file of readdirSync(outDir)) {
+    if (file.endsWith(".png") && file !== "00-contact-sheet.png") {
+      rmSync(resolve(outDir, file), { force: true });
+    }
+  }
 
   console.info(`browser  ${browser}`);
   console.info(`base     ${base}`);

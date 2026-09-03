@@ -360,3 +360,62 @@
 .sb-notfound__text { margin: 0 0 var(--sb-6); color: var(--sb-shell-muted); line-height: 1.55; }
 .sb-notfound__actions { display: flex; gap: var(--sb-2); justify-content: center; flex-wrap: wrap; }
 .sb-notfound__brand:focus-visible { outline: none; box-shadow: var(--sb-focus-dark); border-radius: var(--sb-r-sm); }
+
+/* ==========================================================================
+   PAGE CONTAINER
+
+   The shell hands its children the full width, because the match board manages
+   its own three-column grid and the auth pages are deliberately edge to edge.
+   Every other page opts into a measured column instead.
+
+   THESE RULES USED TO LIVE IN `legacy-bridge.css`. Deleting that file took them
+   with it, and every non-board page went full-bleed: a heading hard against the
+   left edge and a table spanning 1440px. Nothing failed — not the typecheck,
+   not the linter, not the browser suite, which measures horizontal OVERFLOW and
+   a full-bleed page does not overflow. It was caught by looking at a screenshot.
+
+   The lesson is in where they now live: layout that the whole site depends on
+   does not belong in a file whose stated purpose is to be deleted.
+   ========================================================================== */
+
+.sb-page {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: var(--sb-5) var(--sb-3) var(--sb-8);
+}
+.sb-page--narrow { max-width: 660px; }
+.sb-page--wide { max-width: var(--sb-max); }
+
+.sb-pagehead { margin-bottom: var(--sb-4); }
+.sb-pagehead__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--sb-t-sm);
+  font-weight: 600;
+  color: var(--sb-muted);
+  text-decoration: none;
+  margin-bottom: var(--sb-2);
+}
+.sb-pagehead__back:hover { color: var(--sb-ink); }
+.sb-pagehead__back:focus-visible {
+  outline: none;
+  box-shadow: var(--sb-focus);
+  border-radius: var(--sb-r-sm);
+}
+.sb-pagehead h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sb-ink);
+}
+.sb-pagehead__sub { margin: 4px 0 0; color: var(--sb-muted); font-size: var(--sb-t-md); }
+.sb-pagehead__row { display: flex; align-items: flex-end; gap: var(--sb-3); flex-wrap: wrap; }
+.sb-pagehead__aside { margin-left: auto; }
+
+@media (max-width: 600px) {
+  .sb-page { padding: var(--sb-4) var(--sb-3) var(--sb-6); }
+  .sb-pagehead h1 { font-size: 19px; }
+}

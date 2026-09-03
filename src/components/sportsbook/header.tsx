@@ -215,14 +215,33 @@ export function SportsbookHeader({ signedIn, balanceMinor, sports = [], activeSp
 
         {signedIn ? (
           <>
+            {/*
+              THE SIGNED-IN HEADER OVERFLOWED ON A PHONE. Brand, search,
+              balance, Deposit and an account icon came to 446px in a 412px
+              viewport, and the page scrolled sideways on every authenticated
+              route. Found by a Pixel 7 profile, not by narrowing a desktop
+              window.
+
+              Below 900px the balance keeps its figure — it is the thing a
+              signed-in customer looks at — Deposit becomes icon-only with its
+              label still read out, and the account icon goes entirely because
+              the bottom bar already carries Account. Nothing is removed that
+              is not reachable in one tap from what remains.
+            */}
             <Link href="/wallet" className="sb-navlink" style={{ gap: 6 }}>
               <Wallet size={15} aria-hidden="true" />
               <span className="sb-num">{balanceMinor ? naira(balanceMinor) : "—"}</span>
             </Link>
-            <Link href="/deposit" className="sb-btn sb-btn--primary" style={{ height: 32 }}>
-              <CircleDollarSign size={15} aria-hidden="true" /> Deposit
+            <Link
+              href="/deposit"
+              className="sb-btn sb-btn--primary sb-header__deposit"
+              style={{ height: 32 }}
+              aria-label="Deposit"
+            >
+              <CircleDollarSign size={15} aria-hidden="true" />
+              <span className="sb-header__depositlabel">Deposit</span>
             </Link>
-            <Link href="/account" className="sb-navlink" aria-label="Your account">
+            <Link href="/account" className="sb-navlink sb-header__account" aria-label="Your account">
               <User size={16} aria-hidden="true" />
             </Link>
           </>

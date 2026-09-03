@@ -96,7 +96,17 @@
  */
 @media (max-width: 900px) {
   .sb-header__nav { display: none; }
-  .sb-header__bar { gap: var(--sb-2); }
+  .sb-header__bar { gap: var(--sb-2); padding: 0 var(--sb-2); }
+
+  /*
+   * The signed-in header used to reach 446px in a 412px viewport, so every
+   * authenticated page scrolled sideways on a phone. The balance keeps its
+   * figure; Deposit loses its word but not its accessible name; the account
+   * icon goes, because the bottom bar already carries Account.
+   */
+  .sb-header__depositlabel { display: none; }
+  .sb-navlink.sb-header__account { display: none; }
+  .sb-btn.sb-header__deposit { padding: 0 10px; }
 }
 
 .sb-navlink {

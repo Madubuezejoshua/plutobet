@@ -179,18 +179,18 @@ export function LeagueRail({
             <span className="sb-truncate">{country}</span>
             <span className="sb-railitem__count">{list.length}</span>
           </summary>
-          {list.map((l) => (
-            <Link
-              key={l.league}
-              href={`/sports?league=${encodeURIComponent(l.league)}`}
-              className="sb-railitem"
-              style={{ paddingLeft: 28 }}
-              aria-current={activeLeague === l.league ? "true" : undefined}
-            >
-              <span className="sb-truncate">{l.name}</span>
-              <span className="sb-railitem__count">{l.count}</span>
-            </Link>
-          ))}
+          {/*
+            The country list uses the same row as the groups above, so it
+            carries a star too.
+
+            It did not, and that made favouriting unreachable whenever the board
+            had eight or fewer competitions: "Popular" is deliberately hidden at
+            that size — it would be the same list printed twice — and the country
+            list was the only place left, with no star in it. A control that
+            exists only when there is enough data is a control customers cannot
+            learn.
+          */}
+          {list.map((l) => leagueRow(l, `country-${country}`))}
         </details>
       ))}
 
