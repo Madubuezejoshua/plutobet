@@ -1,0 +1,138 @@
+/*
+ * PlutoBet design tokens.
+ *
+ * ONE PLACE. Components reference these names and never a hex value, so a
+ * palette change is a change to this file and nothing else. The previous
+ * system was all-dark; a sportsbook needs a dark CHROME and a light, dense
+ * CANVAS, because a wall of white match rows is what makes odds scannable.
+ *
+ * Names are semantic (`--sb-odds-bg`) rather than descriptive (`--green-500`).
+ * A descriptive name tells you what it looks like; a semantic one tells you
+ * when to use it, which is the question a component author actually has.
+ */
+
+:root {
+  /* ---------------------------------------------------------------- brand */
+  --sb-brand: #00c968;
+  --sb-brand-strong: #00a957;
+  --sb-brand-ink: #04140c; /* text ON brand — meets AA against both greens */
+  --sb-brand-wash: rgb(0 201 104 / 12%);
+  --sb-brand-ring: rgb(0 201 104 / 40%);
+
+  /* ------------------------------------------------------ dark app chrome */
+  --sb-shell: #07111a;
+  --sb-shell-2: #0d1b2a;
+  --sb-shell-3: #132537;
+  --sb-shell-line: #1b2f44;
+  --sb-shell-ink: #e8eef5;
+  --sb-shell-muted: #8fa3b8;
+
+  /* ---------------------------------------------- light sportsbook canvas */
+  --sb-canvas: #f3f5f7;
+  --sb-surface: #ffffff;
+  --sb-surface-2: #f8fafb;
+  --sb-surface-3: #eef1f4;
+  --sb-border: #dde2e8;
+  --sb-border-strong: #c6ced8;
+
+  /* ----------------------------------------------------------------- text */
+  --sb-ink: #17202a;
+  --sb-ink-2: #3d4a58;
+  --sb-muted: #697586;
+  --sb-faint: #93a0b0;
+
+  /* --------------------------------------------------------------- status */
+  --sb-live: #e5233d;
+  --sb-live-wash: rgb(229 35 61 / 10%);
+  --sb-warn: #b7791f;
+  --sb-warn-wash: rgb(183 121 31 / 12%);
+  --sb-danger: #c2283b;
+  --sb-danger-wash: rgb(194 40 59 / 10%);
+  --sb-up: #067647;
+  --sb-down: #c2283b;
+
+  /* ------------------------------------------------------------ odds tile */
+  --sb-odds-bg: #eef1f4;
+  --sb-odds-bg-hover: #e2e7ec;
+  --sb-odds-ink: #17202a;
+  --sb-odds-selected-bg: var(--sb-brand-strong);
+  --sb-odds-selected-ink: #ffffff;
+  --sb-odds-disabled-bg: #f2f4f6;
+  --sb-odds-disabled-ink: #a8b2be;
+
+  /* ---------------------------------------------------------------- shape */
+  --sb-r-xs: 3px;
+  --sb-r-sm: 5px;
+  --sb-r-md: 8px;
+  --sb-r-lg: 12px;
+  --sb-r-pill: 999px;
+
+  /*
+   * Depth. Deliberately shallow. A sportsbook row is not a floating card, and
+   * heavy shadows on a dense list read as noise at a glance.
+   */
+  --sb-shadow-sm: 0 1px 2px rgb(23 32 42 / 6%);
+  --sb-shadow: 0 2px 8px rgb(23 32 42 / 8%);
+  --sb-shadow-lg: 0 8px 24px rgb(23 32 42 / 12%);
+  --sb-shadow-up: 0 -4px 16px rgb(23 32 42 / 10%);
+
+  /* ------------------------------------------- spacing, a 4px/8px rhythm */
+  --sb-1: 4px;
+  --sb-2: 8px;
+  --sb-3: 12px;
+  --sb-4: 16px;
+  --sb-5: 20px;
+  --sb-6: 24px;
+  --sb-8: 32px;
+  --sb-10: 40px;
+
+  /* --------------------------------------------------------------- layout */
+  --sb-max: 1440px;
+  --sb-rail: 232px;   /* left league navigation */
+  --sb-slip: 320px;   /* right betslip */
+  --sb-header: 56px;
+  --sb-subnav: 42px;
+  --sb-bottombar: 58px;
+
+  /* ----------------------------------------------------------- typography */
+  --sb-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --sb-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /*
+   * A deliberately small scale. Six sizes is enough for a sportsbook and
+   * removes the argument about whether something is 13px or 13.5px.
+   */
+  --sb-t-xs: 11px;
+  --sb-t-sm: 12px;
+  --sb-t-base: 13px;
+  --sb-t-md: 14px;
+  --sb-t-lg: 16px;
+  --sb-t-xl: 20px;
+  --sb-t-2xl: 26px;
+
+  /* ------------------------------------------------------------- controls */
+  --sb-h-sm: 28px;
+  --sb-h-md: 34px;
+  --sb-h-lg: 42px;
+  --sb-h-touch: 44px; /* the mobile minimum, never go under this */
+
+  /* Focus. One ring everywhere, visible on both dark chrome and light canvas. */
+  --sb-focus: 0 0 0 2px #ffffff, 0 0 0 4px var(--sb-brand-strong);
+  --sb-focus-dark: 0 0 0 2px var(--sb-shell), 0 0 0 4px var(--sb-brand);
+
+  --sb-ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --sb-fast: 120ms;
+  --sb-slow: 220ms;
+}
+
+/*
+ * Motion is decoration here, never information. Everything below can be turned
+ * off without losing meaning, so honouring the preference costs nothing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --sb-fast: 0ms;
+    --sb-slow: 0ms;
+  }
+}

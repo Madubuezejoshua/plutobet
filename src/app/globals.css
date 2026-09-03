@@ -1,6 +1,31 @@
 /*
  * PlutoBet design system.
  *
+ * The sportsbook stylesheets are imported rather than merged into this file, so
+ * the redesign's tokens and surfaces can be reviewed as one unit. The legacy
+ * variables below still power pages not yet migrated; both sets coexist
+ * deliberately rather than half-converting every page at once.
+ */
+
+/*
+ * EVERY `@import` MUST STAY IN THIS BLOCK, ABOVE `@source`.
+ *
+ * CSS requires `@import` to precede every other rule except `@charset` and
+ * `@layer`. `@source` is neither, so an `@import` written after it is invalid
+ * and is silently dropped — no warning from the bundler, no error in the
+ * build, just a stylesheet that is missing whole files.
+ *
+ * That happened: the four sportsbook stylesheets sat below `@source`, none of
+ * them reached the browser, and the entire redesign rendered as unstyled HTML
+ * while the build reported success. If you add a stylesheet, add it here.
+ */
+@import "tailwindcss" source(none);
+@import "../styles/tokens.css";
+@import "../styles/sportsbook.css";
+@import "../styles/surfaces.css";
+@import "../styles/legacy-bridge.css";
+
+/*
  * Automatic content detection is DISABLED, and the sources are declared.
  *
  * Tailwind v4 otherwise walks the project directory looking for class names,
@@ -10,7 +35,6 @@
  * the build with a crash that looks unrelated to CSS. Declaring the sources
  * makes the scan deterministic.
  */
-@import "tailwindcss" source(none);
 @source "../**/*.{ts,tsx}";
 
 /* ==========================================================================

@@ -10,7 +10,14 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: false,
-    include: ["src/modules/**/*.spec.ts"],
+    // Modules hold the money logic; lib and components hold the pure helpers
+    // the interface is built from. Both are plain TypeScript, so both run in
+    // the same node environment against the same ephemeral cluster.
+    include: [
+      "src/modules/**/*.spec.ts",
+      "src/lib/**/*.spec.ts",
+      "src/components/**/*.spec.ts",
+    ],
     globalSetup: ["./vitest.global-setup.ts"],
     setupFiles: ["./src/test-setup.ts"],
     // Every file shares one real ephemeral cluster. Sequential files avoid

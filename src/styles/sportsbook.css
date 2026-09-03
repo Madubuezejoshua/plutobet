@@ -1,0 +1,1060 @@
+/*
+ * The sportsbook surface: header, rails, match board, odds, betslip.
+ *
+ * Written as plain CSS against the tokens rather than utility soup, because
+ * an odds tile has nine states and expressing those as class strings in JSX
+ * makes the states impossible to review side by side.
+ */
+
+/* ==========================================================================
+   SHELL
+   ========================================================================== */
+
+.sb {
+  --gap: var(--sb-3);
+  min-height: 100dvh;
+  background: var(--sb-canvas);
+  color: var(--sb-ink);
+  font-family: var(--sb-font);
+  font-size: var(--sb-t-base);
+  line-height: 1.45;
+}
+
+.sb-shellgrid {
+  max-width: var(--sb-max);
+  margin: 0 auto;
+  padding: var(--sb-3);
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: var(--sb-rail) minmax(0, 1fr) var(--sb-slip);
+  align-items: start;
+}
+
+/* Below 1180 the betslip becomes a sheet; below 900 the rail collapses too. */
+@media (max-width: 1180px) {
+  .sb-shellgrid { grid-template-columns: var(--sb-rail) minmax(0, 1fr); }
+  .sb-slipcol { display: none; }
+}
+@media (max-width: 900px) {
+  .sb-shellgrid { grid-template-columns: minmax(0, 1fr); padding: var(--sb-2); }
+  .sb-railcol { display: none; }
+}
+
+.sb-railcol,
+.sb-slipcol {
+  position: sticky;
+  top: calc(var(--sb-header) + var(--sb-subnav) + var(--sb-3));
+  max-height: calc(100dvh - var(--sb-header) - var(--sb-subnav) - var(--sb-6));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ==========================================================================
+   HEADER
+   ========================================================================== */
+
+.sb-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--sb-shell);
+  color: var(--sb-shell-ink);
+  border-bottom: 1px solid var(--sb-shell-line);
+}
+
+.sb-header__bar {
+  max-width: var(--sb-max);
+  margin: 0 auto;
+  height: var(--sb-header);
+  padding: 0 var(--sb-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sb-4);
+  /*
+   * `min-width: 0` on the flex children is what stops the header growing past
+   * the viewport when a long balance or a long product name appears. The old
+   * header overflowed horizontally for exactly this reason.
+   */
+  min-width: 0;
+}
+
+.sb-header__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-1);
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+}
+
+.sb-header__spacer { flex: 1 1 auto; min-width: 0; }
+
+/*
+ * Below 900px the primary row is dropped entirely: the bottom bar carries
+ * navigation on a phone, and a horizontally clipped "Spo" is worse than no
+ * row at all. The brand, search and the account controls stay.
+ */
+@media (max-width: 900px) {
+  .sb-header__nav { display: none; }
+  .sb-header__bar { gap: var(--sb-2); }
+}
+
+.sb-navlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--sb-h-md);
+  padding: 0 10px;
+  border-radius: var(--sb-r-md);
+  color: var(--sb-shell-muted);
+  font-size: var(--sb-t-md);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background var(--sb-fast) var(--sb-ease),
+    color var(--sb-fast) var(--sb-ease);
+}
+.sb-navlink:hover { background: var(--sb-shell-3); color: var(--sb-shell-ink); }
+.sb-navlink[aria-current="page"] {
+  color: var(--sb-shell-ink);
+  background: var(--sb-shell-3);
+  box-shadow: inset 0 -2px 0 var(--sb-brand);
+}
+.sb-navlink:focus-visible { outline: none; box-shadow: var(--sb-focus-dark); }
+
+/* Second level: sport tabs. Scrolls horizontally on narrow screens. */
+.sb-subnav {
+  background: var(--sb-shell-2);
+  border-bottom: 1px solid var(--sb-shell-line);
+}
+.sb-subnav__inner {
+  max-width: var(--sb-max);
+  margin: 0 auto;
+  height: var(--sb-subnav);
+  padding: 0 var(--sb-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sb-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sb-subnav__inner::-webkit-scrollbar { display: none; }
+
+.sb-sporttab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--sb-r-pill);
+  color: var(--sb-shell-muted);
+  font-size: var(--sb-t-base);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+.sb-sporttab:hover { color: var(--sb-shell-ink); background: var(--sb-shell-3); }
+.sb-sporttab[aria-current="page"] {
+  background: var(--sb-brand);
+  color: var(--sb-brand-ink);
+}
+.sb-sporttab:focus-visible { outline: none; box-shadow: var(--sb-focus-dark); }
+
+/* ==========================================================================
+   PANELS
+   ========================================================================== */
+
+.sb-panel {
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-lg);
+  overflow: hidden;
+}
+.sb-panel + .sb-panel { margin-top: var(--sb-3); }
+
+.sb-panel__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-2);
+  padding: 10px var(--sb-3);
+  border-bottom: 1px solid var(--sb-border);
+  background: var(--sb-surface-2);
+}
+.sb-panel__title {
+  font-size: var(--sb-t-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* ==========================================================================
+   LEFT RAIL
+   ========================================================================== */
+
+.sb-rail__group + .sb-rail__group { margin-top: var(--sb-3); }
+
+.sb-rail__label {
+  padding: 8px var(--sb-3) 4px;
+  font-size: var(--sb-t-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sb-faint);
+}
+
+.sb-railitem {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-2);
+  width: 100%;
+  padding: 7px var(--sb-3);
+  border: 0;
+  background: none;
+  color: var(--sb-ink-2);
+  font-size: var(--sb-t-base);
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.sb-railitem:hover { background: var(--sb-surface-3); color: var(--sb-ink); }
+.sb-railitem[aria-current="true"],
+.sb-railitem[aria-current="page"] {
+  background: var(--sb-brand-wash);
+  border-left-color: var(--sb-brand-strong);
+  color: var(--sb-ink);
+  font-weight: 700;
+}
+.sb-railitem:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+.sb-railitem__count {
+  margin-left: auto;
+  font-size: var(--sb-t-xs);
+  color: var(--sb-faint);
+  font-variant-numeric: tabular-nums;
+}
+.sb-railitem__icon { color: var(--sb-muted); flex: none; }
+
+/* ==========================================================================
+   MATCH BOARD
+   ========================================================================== */
+
+.sb-league {
+  border-bottom: 1px solid var(--sb-border);
+}
+.sb-league:last-child { border-bottom: 0; }
+
+.sb-league__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-2);
+  width: 100%;
+  padding: 8px var(--sb-3);
+  background: var(--sb-surface-3);
+  border: 0;
+  border-top: 1px solid var(--sb-border);
+  color: var(--sb-ink);
+  font-size: var(--sb-t-sm);
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+.sb-league__head:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+.sb-league__country { color: var(--sb-muted); font-weight: 600; }
+.sb-league__count {
+  margin-left: auto;
+  color: var(--sb-faint);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Column headings. Sticky so the meaning of a price column survives a long
+ * scroll — without this you are looking at three numbers with no labels.
+ */
+.sb-cols {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: var(--sb-boardcols);
+  gap: var(--sb-1);
+  align-items: center;
+  padding: 6px var(--sb-3);
+  background: var(--sb-surface-2);
+  border-bottom: 1px solid var(--sb-border);
+  font-size: var(--sb-t-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sb-faint);
+}
+.sb-cols__odds { text-align: center; }
+
+.sb-board { --sb-boardcols: 1fr repeat(3, 58px) repeat(2, 58px) 44px; }
+
+/* ==========================================================================
+   RESPONSIVE BOARD — and why these selectors look heavier than they need to
+
+   Two rules that read as obviously correct both lost silently, and the symptom
+   was the same both times: the board wider than the phone it was on.
+
+   1. `.sb-row__ou { display: none }` lost to `.sb-odd { display: flex }`,
+      which is declared further down this file. Equal specificity, later rule
+      wins. It is now `.sb-odd.sb-row__ou`.
+
+   2. Overriding `--sb-boardcols` inside a media query lost to the base
+      `.sb-board` declaration, because a minifier is free to emit rules in an
+      order that makes the unconditional one last. Equal specificity again. So
+      the responsive templates are now set ON THE GRID ELEMENTS through
+      `.sb-board`, which outranks the bare `.sb-cols` / `.sb-row` rules no
+      matter what order they end up in.
+
+   The failure mode both share is worth remembering: a losing CSS rule produces
+   no warning anywhere. Not from the bundler, not from the type checker, not
+   from a test. It produces a layout that is wrong.
+   ========================================================================== */
+
+@media (max-width: 720px) {
+  /* 1X2 only: the Over/Under pair is dropped, and so are its tracks. */
+  .sb-board .sb-cols,
+  .sb-board .sb-row { grid-template-columns: 1fr repeat(3, 48px) 30px; }
+
+  .sb-cols .sb-cols__ou,
+  .sb-odd.sb-row__ou { display: none; }
+
+  /*
+   * The statistics icon goes too. It leads to the same place as the chevron at
+   * the end of the row, and two controls with one destination is 26px a phone
+   * cannot spare next to three prices.
+   */
+  .sb-fixture .sb-fixture__stats { display: none; }
+  .sb-fixture__time { width: 40px; }
+
+  /*
+   * Narrower gutters on the row, so the space goes to the team names instead.
+   * "Rivers United" truncating to "Rivers U..." on the widest phone in common
+   * use is a legibility problem, not a styling preference.
+   */
+  .sb-board .sb-row,
+  .sb-board .sb-cols { padding-left: var(--sb-2); padding-right: var(--sb-2); }
+
+  /*
+   * The chip has a 40px minimum on desktop and the phone track is 30px.
+   * Scoped through `.sb-board` because the base rule is declared later in this
+   * file — the fourth time that ordering has bitten in this stylesheet, and the
+   * reason every responsive override here now carries a parent selector.
+   */
+  .sb-board .sb-odd__more { min-width: 0; width: 100%; }
+}
+
+@media (max-width: 380px) {
+  .sb-board .sb-cols,
+  .sb-board .sb-row { grid-template-columns: 1fr repeat(3, 44px) 26px; }
+}
+
+.sb-row {
+  display: grid;
+  grid-template-columns: var(--sb-boardcols);
+  gap: var(--sb-1);
+  align-items: center;
+  padding: 8px var(--sb-3);
+  border-bottom: 1px solid var(--sb-border);
+  background: var(--sb-surface);
+}
+.sb-row:last-child { border-bottom: 0; }
+.sb-row:hover { background: var(--sb-surface-2); }
+
+.sb-fixture { min-width: 0; display: flex; align-items: center; gap: var(--sb-2); }
+.sb-fixture__time {
+  flex: none;
+  width: 46px;
+  font-size: var(--sb-t-xs);
+  font-weight: 600;
+  color: var(--sb-muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+.sb-fixture__teams { min-width: 0; flex: 1; }
+.sb-fixture__team {
+  display: block;
+  font-size: var(--sb-t-base);
+  font-weight: 600;
+  color: var(--sb-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-fixture__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: var(--sb-t-xs);
+  color: var(--sb-faint);
+}
+
+.sb-score {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--sb-ink);
+  font-size: var(--sb-t-base);
+  text-align: right;
+  min-width: 20px;
+}
+
+/* Live pill. Red is reserved for genuinely live data and nothing else. */
+.sb-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: var(--sb-r-xs);
+  background: var(--sb-live-wash);
+  color: var(--sb-live);
+  font-size: var(--sb-t-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.sb-live__dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--sb-live);
+  animation: sb-pulse 1.6s var(--sb-ease) infinite;
+}
+@keyframes sb-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .sb-live__dot { animation: none; } }
+
+/* ==========================================================================
+   ODDS TILE — nine states, all defined together so they can be reviewed
+   ========================================================================== */
+
+.sb-odd {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 38px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-odds-bg);
+  color: var(--sb-odds-ink);
+  font-family: var(--sb-font);
+  font-size: var(--sb-t-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background var(--sb-fast) var(--sb-ease),
+    color var(--sb-fast) var(--sb-ease);
+  position: relative;
+}
+.sb-odd__label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--sb-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.sb-odd:hover:not(:disabled) { background: var(--sb-odds-bg-hover); }
+.sb-odd:focus-visible { outline: none; box-shadow: var(--sb-focus); z-index: 1; }
+
+.sb-odd[aria-pressed="true"] {
+  background: var(--sb-odds-selected-bg);
+  color: var(--sb-odds-selected-ink);
+}
+.sb-odd[aria-pressed="true"] .sb-odd__label { color: rgb(255 255 255 / 80%); }
+
+/*
+ * Movement. The arrow is the signal; the colour only reinforces it, so a
+ * colour-blind reader loses nothing.
+ */
+.sb-odd--up::after,
+.sb-odd--down::after {
+  content: "";
+  position: absolute;
+  top: 2px; right: 2px;
+  border: 3px solid transparent;
+}
+.sb-odd--up::after { border-bottom-color: var(--sb-up); }
+.sb-odd--down::after { border-top-color: var(--sb-down); }
+
+.sb-odd:disabled,
+.sb-odd[data-state="suspended"],
+.sb-odd[data-state="closed"],
+.sb-odd[data-state="unavailable"] {
+  background: var(--sb-odds-disabled-bg);
+  color: var(--sb-odds-disabled-ink);
+  cursor: not-allowed;
+}
+.sb-odd[data-state="suspended"] .sb-odd__value,
+.sb-odd[data-state="closed"] .sb-odd__value { text-decoration: line-through; }
+
+.sb-odd__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  min-width: 40px;
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface);
+  color: var(--sb-muted);
+  font-size: var(--sb-t-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+.sb-odd__more:hover { background: var(--sb-surface-3); color: var(--sb-ink); }
+.sb-odd__more:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+
+/* ==========================================================================
+   BETSLIP
+   ========================================================================== */
+
+.sb-slip { display: flex; flex-direction: column; }
+
+.sb-slip__tabs {
+  display: flex;
+  border-bottom: 1px solid var(--sb-border);
+  background: var(--sb-surface-2);
+}
+.sb-slip__tab {
+  flex: 1;
+  height: 38px;
+  border: 0;
+  background: none;
+  color: var(--sb-muted);
+  font-size: var(--sb-t-base);
+  font-weight: 700;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.sb-slip__tab[aria-selected="true"] {
+  color: var(--sb-ink);
+  border-bottom-color: var(--sb-brand-strong);
+  background: var(--sb-surface);
+}
+.sb-slip__tab:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+
+.sb-pick {
+  padding: var(--sb-3);
+  border-bottom: 1px solid var(--sb-border);
+}
+.sb-pick__top { display: flex; align-items: start; gap: var(--sb-2); }
+.sb-pick__sel { font-weight: 700; font-size: var(--sb-t-md); }
+.sb-pick__market { color: var(--sb-muted); font-size: var(--sb-t-xs); }
+.sb-pick__fixture {
+  color: var(--sb-ink-2);
+  font-size: var(--sb-t-sm);
+  margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sb-pick__odds {
+  margin-left: auto;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--sb-t-md);
+}
+.sb-pick__x {
+  flex: none;
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: var(--sb-r-sm);
+  background: none; color: var(--sb-faint); cursor: pointer;
+}
+.sb-pick__x:hover { background: var(--sb-danger-wash); color: var(--sb-danger); }
+.sb-pick__x:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+
+.sb-note {
+  display: flex;
+  align-items: start;
+  gap: 6px;
+  padding: 8px var(--sb-3);
+  font-size: var(--sb-t-sm);
+  line-height: 1.4;
+}
+.sb-note--warn { background: var(--sb-warn-wash); color: var(--sb-warn); }
+.sb-note--error { background: var(--sb-danger-wash); color: var(--sb-danger); }
+.sb-note--ok { background: var(--sb-brand-wash); color: var(--sb-brand-strong); }
+
+.sb-stake {
+  width: 100%;
+  height: var(--sb-h-lg);
+  padding: 0 var(--sb-3);
+  border: 1px solid var(--sb-border-strong);
+  border-radius: var(--sb-r-md);
+  background: var(--sb-surface);
+  color: var(--sb-ink);
+  font-size: var(--sb-t-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.sb-stake:focus-visible { outline: none; box-shadow: var(--sb-focus); border-color: var(--sb-brand-strong); }
+
+.sb-quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.sb-quick button {
+  height: var(--sb-h-sm);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface-2);
+  color: var(--sb-ink-2);
+  font-size: var(--sb-t-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+.sb-quick button:hover { background: var(--sb-surface-3); }
+.sb-quick button:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+
+.sb-total {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: var(--sb-t-base);
+}
+.sb-total dt { color: var(--sb-muted); }
+.sb-total dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sb-total--major dd { font-size: var(--sb-t-lg); }
+
+/* ==========================================================================
+   BUTTONS
+   ========================================================================== */
+
+.sb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--sb-h-md);
+  padding: 0 var(--sb-4);
+  border: 1px solid transparent;
+  border-radius: var(--sb-r-md);
+  font-family: var(--sb-font);
+  font-size: var(--sb-t-md);
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--sb-fast) var(--sb-ease);
+}
+.sb-btn:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+.sb-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.sb-btn--primary { background: var(--sb-brand); color: var(--sb-brand-ink); }
+.sb-btn--primary:hover:not(:disabled) { background: var(--sb-brand-strong); }
+.sb-btn--lg { height: var(--sb-h-lg); font-size: var(--sb-t-lg); width: 100%; }
+.sb-btn--ghost {
+  background: transparent;
+  border-color: var(--sb-border-strong);
+  color: var(--sb-ink-2);
+}
+.sb-btn--ghost:hover:not(:disabled) { background: var(--sb-surface-3); }
+.sb-btn--dark { background: var(--sb-shell-3); color: var(--sb-shell-ink); }
+.sb-btn--dark:hover:not(:disabled) { background: var(--sb-shell-line); }
+.sb-btn--danger { background: transparent; color: var(--sb-danger); }
+.sb-btn--danger:hover:not(:disabled) { background: var(--sb-danger-wash); }
+
+/* ==========================================================================
+   CHIPS, SKELETONS, EMPTY STATES
+   ========================================================================== */
+
+.sb-chips { display: flex; gap: 6px; overflow-x: auto; padding: var(--sb-2) var(--sb-3); scrollbar-width: none; }
+.sb-chips::-webkit-scrollbar { display: none; }
+.sb-chip {
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-surface);
+  color: var(--sb-ink-2);
+  font-size: var(--sb-t-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.sb-chip:hover { background: var(--sb-surface-3); }
+.sb-chip[aria-pressed="true"], .sb-chip[aria-current="true"] {
+  background: var(--sb-shell-2);
+  border-color: var(--sb-shell-2);
+  color: #fff;
+}
+.sb-chip:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+
+.sb-skel {
+  background: linear-gradient(90deg, var(--sb-surface-3) 25%, var(--sb-surface-2) 37%, var(--sb-surface-3) 63%);
+  background-size: 400% 100%;
+  animation: sb-shimmer 1.4s ease infinite;
+  border-radius: var(--sb-r-sm);
+}
+@keyframes sb-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@media (prefers-reduced-motion: reduce) { .sb-skel { animation: none; } }
+
+.sb-empty {
+  padding: var(--sb-8) var(--sb-4);
+  text-align: center;
+  color: var(--sb-muted);
+}
+.sb-empty__icon { color: var(--sb-faint); margin-bottom: var(--sb-2); }
+.sb-empty__title { font-size: var(--sb-t-md); font-weight: 700; color: var(--sb-ink); margin: 0 0 4px; }
+
+/* ==========================================================================
+   MOBILE: bottom bar and betslip sheet
+   ========================================================================== */
+
+.sb-bottombar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 45;
+  height: calc(var(--sb-bottombar) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  display: none;
+  background: var(--sb-shell);
+  border-top: 1px solid var(--sb-shell-line);
+}
+@media (max-width: 900px) { .sb-bottombar { display: flex; } .sb { padding-bottom: var(--sb-bottombar); } }
+
+.sb-bottombar__item {
+  flex: 1;
+  min-height: var(--sb-h-touch);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--sb-shell-muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  position: relative;
+}
+.sb-bottombar__item[aria-current="page"] { color: var(--sb-brand); }
+.sb-bottombar__item:focus-visible { outline: none; box-shadow: var(--sb-focus-dark); }
+
+.sb-badge {
+  position: absolute;
+  top: 4px;
+  left: calc(50% + 6px);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-brand);
+  color: var(--sb-brand-ink);
+  font-size: 10px;
+  font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+.sb-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 60;
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--sb-surface);
+  border-radius: var(--sb-r-lg) var(--sb-r-lg) 0 0;
+  box-shadow: var(--sb-shadow-up);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.sb-sheet__grab {
+  width: 36px; height: 4px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-border-strong);
+  margin: 8px auto;
+}
+.sb-scrim {
+  position: fixed; inset: 0; z-index: 55;
+  background: rgb(7 17 26 / 55%);
+  border: 0;
+}
+
+/* ==========================================================================
+   UTILITIES — kept few on purpose
+   ========================================================================== */
+
+.sb-pad { padding: var(--sb-3); }
+.sb-stack > * + * { margin-top: var(--sb-2); }
+.sb-stack-3 > * + * { margin-top: var(--sb-3); }
+.sb-row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--sb-2); }
+.sb-muted { color: var(--sb-muted); }
+.sb-small { font-size: var(--sb-t-sm); }
+.sb-xs { font-size: var(--sb-t-xs); }
+.sb-bold { font-weight: 700; }
+.sb-num { font-variant-numeric: tabular-nums; }
+.sb-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Screen-reader only, for the live regions the odds board announces through. */
+.sb-sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ==========================================================================
+   AUTH — sign in, register, password reset
+
+   One layout serves all three. On a wide screen it is two balanced panels:
+   a dark supporting panel that carries the brand and the few facts a new
+   customer actually wants, and a light form panel. Below 860px the supporting
+   panel is dropped entirely rather than stacked — on a phone it is a screen of
+   scrolling between the customer and the password field, and the phone is
+   where most of this product's sign-ins happen.
+   ========================================================================== */
+
+.sb-auth {
+  min-height: calc(100dvh - var(--sb-header) - var(--sb-bottombar));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  background: var(--sb-canvas);
+}
+/*
+ * On a phone the two panels stack: the supporting panel becomes a short
+ * introduction above the form.
+ *
+ * It was written to disappear below 860px, on the reasoning that it is only
+ * distance between the customer and the password field. Seeing it rendered
+ * changed the decision — it is four short lines, it reads as a header, and it
+ * is the only place a signed-out visitor is told what the account is for. The
+ * padding is cut instead so the form still starts near the top of the screen.
+ */
+@media (max-width: 860px) {
+  .sb-auth { grid-template-columns: 1fr; min-height: 0; }
+  .sb-auth__aside { padding: var(--sb-5) var(--sb-4); }
+  .sb-auth__asideinner { max-width: none; margin-left: 0; }
+  .sb-auth__lede { font-size: 22px; }
+  .sb-auth__main { padding: var(--sb-4) var(--sb-3) var(--sb-6); }
+}
+
+.sb-auth__aside {
+  background: linear-gradient(160deg, var(--sb-shell) 0%, var(--sb-shell-2) 100%);
+  color: var(--sb-shell-muted);
+  padding: var(--sb-8) var(--sb-6);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sb-5);
+}
+.sb-auth__asideinner { max-width: 420px; margin-left: auto; width: 100%; }
+.sb-auth__lede {
+  color: var(--sb-shell-ink);
+  font-size: 26px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--sb-3);
+}
+.sb-auth__points { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sb-3); }
+.sb-auth__point { display: flex; gap: var(--sb-3); align-items: flex-start; }
+.sb-auth__point svg { color: var(--sb-brand); flex: none; margin-top: 2px; }
+.sb-auth__pointtitle {
+  display: block;
+  color: var(--sb-shell-ink);
+  font-weight: 700;
+  font-size: var(--sb-t-md);
+}
+
+.sb-auth__main {
+  padding: var(--sb-6) var(--sb-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.sb-auth__card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-lg);
+  box-shadow: var(--sb-shadow);
+  padding: var(--sb-5) var(--sb-4);
+}
+.sb-auth__card--wide { max-width: 460px; }
+.sb-auth__title {
+  margin: 0 0 4px;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sb-ink);
+}
+.sb-auth__sub { margin: 0 0 var(--sb-4); color: var(--sb-muted); font-size: var(--sb-t-base); }
+.sb-auth__foot {
+  margin: var(--sb-4) 0 0;
+  padding-top: var(--sb-3);
+  border-top: 1px solid var(--sb-border);
+  font-size: var(--sb-t-base);
+  color: var(--sb-muted);
+  text-align: center;
+}
+.sb-auth__foot a { color: var(--sb-brand-strong); font-weight: 700; }
+
+/* ------------------------------------------------------------------ fields */
+
+.sb-field { display: block; margin-bottom: var(--sb-3); }
+.sb-field__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sb-2);
+  font-size: var(--sb-t-sm);
+  font-weight: 700;
+  color: var(--sb-ink);
+  margin-bottom: 5px;
+}
+.sb-field__optional { font-weight: 500; color: var(--sb-muted); font-size: var(--sb-t-xs); }
+.sb-input {
+  width: 100%;
+  height: var(--sb-h-lg);
+  padding: 0 12px;
+  border: 1px solid var(--sb-border-strong);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface);
+  color: var(--sb-ink);
+  font: inherit;
+  font-size: 16px; /* 16px or iOS Safari zooms the page on focus */
+}
+.sb-input:focus-visible {
+  outline: none;
+  border-color: var(--sb-brand-strong);
+  box-shadow: var(--sb-focus);
+}
+.sb-input[aria-invalid="true"] { border-color: var(--sb-danger); }
+.sb-input::placeholder { color: var(--sb-faint); }
+.sb-hint { display: block; margin-top: 5px; font-size: var(--sb-t-xs); color: var(--sb-muted); }
+
+.sb-inputwrap { position: relative; }
+.sb-inputwrap .sb-input { padding-right: 46px; }
+.sb-reveal {
+  position: absolute;
+  right: 4px; top: 50%;
+  transform: translateY(-50%);
+  min-width: var(--sb-h-touch); height: var(--sb-h-touch);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: none; cursor: pointer;
+  color: var(--sb-muted); border-radius: var(--sb-r-sm);
+}
+.sb-reveal:hover { color: var(--sb-ink); }
+.sb-reveal:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+
+.sb-otp {
+  letter-spacing: 0.5em;
+  text-align: center;
+  font-weight: 700;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-steps {
+  display: flex; align-items: center; gap: var(--sb-2);
+  margin-bottom: var(--sb-4);
+  font-size: var(--sb-t-xs); font-weight: 700; color: var(--sb-muted);
+}
+.sb-steps__dot {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--sb-surface-3); color: var(--sb-muted);
+}
+.sb-steps__dot[data-on="true"] { background: var(--sb-brand); color: var(--sb-brand-ink); }
+.sb-steps__line { flex: 1; height: 2px; background: var(--sb-border); }
+
+.sb-legal { margin: var(--sb-3) 0 0; font-size: var(--sb-t-xs); color: var(--sb-muted); line-height: 1.5; }
+.sb-legal a { color: var(--sb-brand-strong); }
+
+/* The one spinner. Only ever shown for work that is genuinely in flight. */
+.sb-spin { animation: sb-rotate 900ms linear infinite; }
+@keyframes sb-rotate { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sb-spin { animation-duration: 2.4s; } }
+
+/* Two fields on one row where they belong together. Collapses on a phone. */
+.sb-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sb-3); }
+@media (max-width: 440px) { .sb-grid2 { grid-template-columns: 1fr; gap: 0; } }
+
+/*
+ * A three-price board: the live page, which shows 1X2 only. Declared as its
+ * own column template rather than reusing the pre-match one, because a grid
+ * with four filled cells out of seven leaves three empty columns and the
+ * fixture name collapses to nothing.
+ */
+.sb-board--3 .sb-cols,
+.sb-board--3 .sb-row { grid-template-columns: 1fr repeat(3, 58px); }
+@media (max-width: 720px) {
+  .sb-board--3 .sb-cols,
+  .sb-board--3 .sb-row { grid-template-columns: 1fr repeat(3, 50px); }
+}
+
+/* Header search. Expands in place rather than opening a page: the customer is
+   already looking at the board they want to filter. */
+.sb-headersearch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 6px 0 8px;
+  border-radius: var(--sb-r-md);
+  background: var(--sb-shell-3);
+  border: 1px solid var(--sb-shell-line);
+  min-width: 0;
+  flex: 0 1 260px;
+}
+.sb-headersearch__icon { color: var(--sb-shell-muted); flex: none; }
+.sb-headersearch input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--sb-shell-ink);
+  font: inherit;
+  font-size: var(--sb-t-md);
+}
+.sb-headersearch input:focus { outline: none; }
+.sb-headersearch input::placeholder { color: var(--sb-shell-muted); }
+.sb-headersearch button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; flex: none;
+  border: 0; background: none; cursor: pointer;
+  color: var(--sb-shell-muted); border-radius: var(--sb-r-sm);
+}
+.sb-headersearch button:hover { color: var(--sb-shell-ink); }
+.sb-headersearch:focus-within { border-color: var(--sb-brand); }
+
+/* The favourite toggle in the rail. Its own class rather than borrowing the
+   betslip remove button, which is red on hover and means "delete". */
+.sb-star {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; flex: none; margin-right: 4px;
+  border: 0; background: none; cursor: pointer;
+  color: var(--sb-faint); border-radius: var(--sb-r-sm);
+}
+.sb-star:hover { color: var(--sb-warn); background: var(--sb-surface-3); }
+.sb-star[aria-pressed="true"] { color: var(--sb-warn); }
+.sb-star:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+
+/* Selections inside one market on the event page. Wraps rather than scrolls:
+   a correct-score market has thirty prices and a horizontal scroller hides
+   most of them behind a gesture people do not discover. */
+.sb-marketgrid {
+  display: grid;
+  gap: var(--sb-1);
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  padding: var(--sb-3);
+}
+.sb-marketgrid .sb-odd { justify-content: space-between; padding: 0 10px; }
+@media (max-width: 480px) {
+  .sb-marketgrid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); padding: var(--sb-2); }
+}

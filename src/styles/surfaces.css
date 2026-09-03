@@ -1,0 +1,259 @@
+/*
+ * Account surfaces: balance headers, statistic strips, tables, ticket rows.
+ *
+ * Kept apart from `sportsbook.css`, which is about the odds board. These are
+ * the pieces the signed-in pages are built from — wallet, bets, account — and
+ * they are shared rather than restyled per page, so a figure means the same
+ * thing wherever it appears.
+ */
+
+/* ==========================================================================
+   BALANCE HEADER
+   ========================================================================== */
+
+.sb-balance {
+  background: linear-gradient(150deg, var(--sb-shell) 0%, var(--sb-shell-2) 100%);
+  color: var(--sb-shell-ink);
+  border-radius: var(--sb-r-lg);
+  padding: var(--sb-5) var(--sb-4);
+  margin-bottom: var(--sb-3);
+}
+.sb-balance__label {
+  margin: 0;
+  font-size: var(--sb-t-sm);
+  font-weight: 600;
+  color: var(--sb-shell-muted);
+  letter-spacing: 0.02em;
+}
+.sb-balance__value {
+  margin: 2px 0 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.sb-balance__actions { display: flex; flex-wrap: wrap; gap: var(--sb-2); margin-top: var(--sb-4); }
+
+/* A button that sits on the dark balance panel rather than the light canvas. */
+.sb-btn--onshell {
+  background: var(--sb-shell-3);
+  color: var(--sb-shell-ink);
+  border: 1px solid var(--sb-shell-line);
+}
+.sb-btn--onshell:hover:not(:disabled) { background: var(--sb-shell-line); }
+.sb-btn--onshell:focus-visible { outline: none; box-shadow: var(--sb-focus-dark); }
+
+@media (max-width: 480px) {
+  .sb-balance__value { font-size: 28px; }
+  .sb-balance__actions .sb-btn { flex: 1 1 auto; }
+}
+
+/* ==========================================================================
+   STAT STRIP
+   ========================================================================== */
+
+.sb-stats {
+  display: grid;
+  gap: var(--sb-2);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-bottom: var(--sb-3);
+}
+.sb-stat {
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-md);
+  padding: var(--sb-3);
+  display: grid;
+  gap: 2px;
+}
+.sb-stat__label {
+  font-size: var(--sb-t-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sb-muted);
+}
+.sb-stat__value {
+  font-size: var(--sb-t-xl);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--sb-ink);
+}
+
+/* ==========================================================================
+   TABLE
+
+   Wrapped so a wide statement scrolls inside its own box. A page that scrolls
+   sideways on a phone because of one table is a page nobody can read.
+   ========================================================================== */
+
+.sb-tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.sb-table { width: 100%; border-collapse: collapse; font-size: var(--sb-t-md); }
+.sb-table th {
+  text-align: left;
+  font-size: var(--sb-t-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sb-muted);
+  padding: var(--sb-2) var(--sb-3);
+  border-bottom: 1px solid var(--sb-border);
+  white-space: nowrap;
+}
+.sb-table td {
+  padding: 10px var(--sb-3);
+  border-bottom: 1px solid var(--sb-border);
+  vertical-align: middle;
+}
+.sb-table tr:last-child td { border-bottom: 0; }
+.sb-table__num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ==========================================================================
+   TICKETS — a placed bet, on the bets page and in the slip's history
+   ========================================================================== */
+
+.sb-ticket {
+  border-bottom: 1px solid var(--sb-border);
+  padding: var(--sb-3);
+}
+.sb-ticket:last-child { border-bottom: 0; }
+.sb-ticket__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--sb-2);
+}
+.sb-ticket__ref {
+  font-family: var(--sb-mono);
+  font-size: var(--sb-t-xs);
+  color: var(--sb-muted);
+}
+.sb-ticket__leg {
+  display: flex;
+  gap: var(--sb-2);
+  align-items: baseline;
+  padding: 5px 0;
+  border-top: 1px dashed var(--sb-border);
+}
+.sb-ticket__leg:first-of-type { border-top: 0; }
+.sb-ticket__legodds { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sb-ticket__foot {
+  display: flex;
+  gap: var(--sb-3);
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin-top: var(--sb-2);
+  padding-top: var(--sb-2);
+  border-top: 1px solid var(--sb-border);
+  font-size: var(--sb-t-sm);
+}
+
+/* ==========================================================================
+   STATUS PILL
+
+   Colour is never the only signal — every pill carries its own word, so it
+   survives greyscale, colour blindness and a bad phone screen in daylight.
+   ========================================================================== */
+
+.sb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--sb-r-pill);
+  font-size: var(--sb-t-xs);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: var(--sb-surface-3);
+  color: var(--sb-ink-2);
+  white-space: nowrap;
+}
+.sb-pill--won { background: var(--sb-brand-wash); color: var(--sb-brand-strong); }
+.sb-pill--lost { background: var(--sb-danger-wash); color: var(--sb-danger); }
+.sb-pill--open { background: rgb(13 27 42 / 8%); color: var(--sb-ink-2); }
+.sb-pill--void { background: var(--sb-warn-wash); color: var(--sb-warn); }
+.sb-pill--live { background: var(--sb-live-wash); color: var(--sb-live); }
+
+/* ==========================================================================
+   TILES — used by the account hub and the promotions list
+   ========================================================================== */
+
+.sb-tiles {
+  display: grid;
+  gap: var(--sb-2);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.sb-tile {
+  display: flex;
+  gap: var(--sb-3);
+  align-items: flex-start;
+  padding: var(--sb-3);
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-md);
+  color: inherit;
+  text-decoration: none;
+  min-height: var(--sb-h-touch);
+}
+.sb-tile:hover { border-color: var(--sb-border-strong); background: var(--sb-surface-2); }
+.sb-tile:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+.sb-tile__icon { color: var(--sb-brand-strong); flex: none; margin-top: 1px; }
+.sb-tile__title { display: block; font-weight: 700; font-size: var(--sb-t-md); color: var(--sb-ink); }
+.sb-tile__sub { display: block; font-size: var(--sb-t-sm); color: var(--sb-muted); margin-top: 2px; }
+
+/* An account number, made easy to read back digit by digit. */
+.sb-accountnumber {
+  font-family: var(--sb-mono);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--sb-ink);
+  margin: 2px 0 var(--sb-3);
+  word-break: break-all;
+}
+
+/* ==========================================================================
+   PROGRESS
+
+   Always paired with the two figures it represents in text. A bar on its own
+   tells a customer their wagering is "about two thirds", which is not a
+   number anyone can check against their own bet history.
+   ========================================================================== */
+
+.sb-progress {
+  height: 6px;
+  border-radius: var(--sb-r-pill);
+  background: var(--sb-surface-3);
+  overflow: hidden;
+}
+.sb-progress__fill { height: 100%; background: var(--sb-brand); border-radius: inherit; }
+.sb-progress--onshell { background: var(--sb-shell-3); }
+
+/* A grid of equal cards: casino games, account shortcuts. */
+.sb-cards { display: grid; gap: var(--sb-2); grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+.sb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sb-3);
+  min-height: 76px;
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-md);
+  color: var(--sb-ink);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: var(--sb-t-md);
+}
+.sb-card:hover { border-color: var(--sb-border-strong); background: var(--sb-surface-2); }
+.sb-card:focus-visible { outline: none; box-shadow: var(--sb-focus); }
+.sb-card__meta { font-weight: 500; font-size: var(--sb-t-xs); color: var(--sb-muted); margin-top: auto; }
+
+/* A card that is information, not a control. Used where a real destination
+   does not exist yet, so it must not look tappable. */
+.sb-card--inert { cursor: default; color: var(--sb-ink-2); }
+.sb-card--inert:hover { border-color: var(--sb-border); background: var(--sb-surface); }
