@@ -65,6 +65,24 @@ export const bets = pgTable(
       onUpdate: "restrict",
     }),
     cashoutValueMinor: bigint("cashout_value_minor", { mode: "bigint" }),
+
+    // How much of the ORIGINAL stake has been bought back, across however many
+    // partial cash-outs. Settlement pays on what remains, so a bet half cashed
+    // out settles for half. A full cash-out sets it to the whole stake.
+    cashedOutStakeMinor: bigint("cashed_out_stake_minor", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
+
+    // How much of this bet's exposure claim has already been given back.
+    //
+    // The claim is `potential_return_minor - stake_minor` per market. Every
+    // release adds what it released, and the final one returns the remainder,
+    // so the total is exactly the claim however many instalments it took.
+    // Without this a partial cash-out's slice was released twice — once by the
+    // cash-out and again by settlement.
+    releasedLiabilityMinor: bigint("released_liability_minor", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
   },
   (table) => [
     uniqueIndex("bets_stake_txn_unique").on(table.stakeTxnId),

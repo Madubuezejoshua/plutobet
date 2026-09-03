@@ -246,18 +246,28 @@ export class SettlementService {
         .set({ status: resolution.outcome, settledAt })
         .where(and(eq(bets.id, betId), eq(bets.status, "PENDING")));
 
-      // Release the liability this bet reserved at placement.
-      //
-      // The amount is recomputed from the bet's own immutable columns rather
-      // than from the current payout: placement claimed
-      // (potential_return - stake) against every market on the slip, so
-      // releasing anything else — the actual payout, say — would leave the
-      // market's exposure permanently skewed after every void or upset.
+      /*
+       * Release the liability this bet reserved at placement.
+       *
+       * The amount is recomputed from the bet's own immutable columns rather
+       * than from the current payout: placement claimed
+       * (potential_return - stake) against every market on the slip, so
+       * releasing anything else — the actual payout, say — would leave the
+       * market's exposure permanently skewed after every void or upset.
+       *
+       * MINUS what has already been given back. A bet that was partially cashed
+       * out has had part of its claim released once already; releasing the whole
+       * claim here would return that slice a second time. `GREATEST` floors the
+       * result at zero rather than raising, so the double release would not
+       * fail — the market would simply report less liability than it holds,
+       * which is the direction that lets a ceiling admit risk it should refuse.
+       */
       await tx.execute(sql`
         UPDATE exposure e
         SET total_liability_minor = GREATEST(
               0,
-              e.total_liability_minor - (b.potential_return_minor - b.stake_minor)
+              e.total_liability_minor
+                - (b.potential_return_minor - b.stake_minor - b.released_liability_minor)
             ),
             updated_at = now()
         FROM bets b
@@ -268,6 +278,21 @@ export class SettlementService {
             JOIN selections s ON s.id = bl.selection_id
             WHERE bl.bet_id = ${betId}::uuid
           )
+      `);
+
+      /*
+       * Record that the whole claim is now released.
+       *
+       * `settleBet` returns early for a bet that is no longer PENDING, so this
+       * is belt and braces rather than the primary guard — but the recovery
+       * sweep re-runs this path deliberately, and a column that says "nothing
+       * left to release" is a fact a later reader can check. It is also what
+       * the `bets_released_liability_valid` bound is measured against.
+       */
+      await tx.execute(sql`
+        UPDATE bets
+        SET released_liability_minor = potential_return_minor - stake_minor
+        WHERE id = ${betId}::uuid
       `);
 
       if (payoutMinor > 0n) {

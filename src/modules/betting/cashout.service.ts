@@ -107,14 +107,23 @@ export class CashOutService {
         );
       }
 
-      // Release the liability before touching the wallet, keeping the global
-      // exposure-then-wallet order that stops placement and settlement
-      // deadlocking against each other.
+      /*
+       * Release the liability before touching the wallet, keeping the global
+       * exposure-then-wallet order that stops placement and settlement
+       * deadlocking against each other.
+       *
+       * What is released is the claim MINUS what earlier partial cash-outs
+       * already gave back. Releasing the whole claim here would return a slice
+       * twice; `GREATEST` would floor it at zero rather than raise, so the
+       * market would quietly report no liability while other customers' bets on
+       * it still carried some.
+       */
       await tx.execute(sql`
         UPDATE exposure e
         SET total_liability_minor = GREATEST(
               0,
-              e.total_liability_minor - (b.potential_return_minor - b.stake_minor)
+              e.total_liability_minor
+                - (b.potential_return_minor - b.stake_minor - b.released_liability_minor)
             ),
             updated_at = now()
         FROM bets b
@@ -140,15 +149,26 @@ export class CashOutService {
         metadata: { kind: "BET_CASHOUT", betId: params.betId },
       });
 
-      await tx
-        .update(bets)
-        .set({
-          status: "CASHED_OUT",
-          settledAt: new Date(),
-          cashoutTxnId: paid.transactionId,
-          cashoutValueMinor: quote.offerMinor,
-        })
-        .where(eq(bets.id, params.betId));
+      /*
+       * `cashed_out_stake_minor` becomes the whole stake because that is what a
+       * full cash-out is: none of it is still at risk. It also keeps one
+       * invariant true for both routes into CASHED_OUT — the one taken here and
+       * the one reached by a last partial instalment — which the database now
+       * checks rather than trusting.
+       *
+       * `released_liability_minor` becomes the whole claim, so nothing can
+       * release any part of it again.
+       */
+      await tx.execute(sql`
+        UPDATE bets
+        SET status = 'CASHED_OUT',
+            settled_at = now(),
+            cashout_txn_id = ${paid.transactionId}::uuid,
+            cashout_value_minor = COALESCE(cashout_value_minor, 0) + ${quote.offerMinor},
+            cashed_out_stake_minor = stake_minor,
+            released_liability_minor = potential_return_minor - stake_minor
+        WHERE id = ${params.betId}::uuid
+      `);
 
       return {
         betId: params.betId,
@@ -193,10 +213,19 @@ export class CashOutService {
         );
       }
 
-      const [state] = await tx.execute<{ cashed_out: string }>(sql`
-        SELECT cashed_out_stake_minor::text AS cashed_out FROM bets WHERE id = ${params.betId}::uuid
+      const [state] = await tx.execute<{
+        cashed_out: string;
+        released: string;
+        claim: string;
+      }>(sql`
+        SELECT cashed_out_stake_minor::text            AS cashed_out,
+               released_liability_minor::text          AS released,
+               (potential_return_minor - stake_minor)::text AS claim
+        FROM bets WHERE id = ${params.betId}::uuid
       `);
       const alreadyOut = BigInt(state?.cashed_out ?? "0");
+      const alreadyReleased = BigInt(state?.released ?? "0");
+      const claimMinor = BigInt(state?.claim ?? "0");
       const liveStake = bet.stakeMinor - alreadyOut;
 
       if (params.stakePortionMinor > liveStake) {
@@ -240,18 +269,29 @@ export class CashOutService {
       const remainingStake = liveStake - params.stakePortionMinor;
       const takingEverything = remainingStake === 0n;
 
-      // Release only the liability being bought back, in proportion to the
-      // stake retired. Releasing all of it would understate what the book
-      // still stands to pay on the part still running.
+      /*
+       * Release only the liability being bought back, in proportion to the
+       * stake retired. Releasing all of it would understate what the book still
+       * stands to pay on the part still running.
+       *
+       * The division truncates, which is deliberate: it releases at most the
+       * exact share and never more, so a sequence of partials can only ever
+       * leave a market holding slightly TOO MUCH liability. Under-releasing
+       * costs a little ceiling headroom; over-releasing admits risk the ceiling
+       * exists to refuse. Whatever truncation leaves behind is returned by the
+       * final release, which gives back the remainder rather than a proportion.
+       *
+       * `takingEverything` releases the remainder directly, so a bet closed by
+       * instalments ends at exactly zero even when thirds do not divide evenly.
+       */
+      const releaseMinor = takingEverything
+        ? claimMinor - alreadyReleased
+        : ((claimMinor * params.stakePortionMinor) / bet.stakeMinor);
+
       await tx.execute(sql`
         UPDATE exposure e
-        SET total_liability_minor = GREATEST(
-              0,
-              e.total_liability_minor
-                - ((b.potential_return_minor - b.stake_minor) * ${params.stakePortionMinor})
-                  / b.stake_minor
-            ),
-            updated_at = now()
+        SET total_liability_minor = GREATEST(0, e.total_liability_minor - ${releaseMinor})
+        , updated_at = now()
         FROM bets b
         WHERE b.id = ${params.betId}::uuid
           AND e.market_id IN (
@@ -299,14 +339,16 @@ export class CashOutService {
               status = 'CASHED_OUT',
               settled_at = now(),
               cashout_txn_id = ${paid.transactionId}::uuid,
-              cashout_value_minor = COALESCE(cashout_value_minor, 0) + ${offerMinor}
+              cashout_value_minor = COALESCE(cashout_value_minor, 0) + ${offerMinor},
+              released_liability_minor = potential_return_minor - stake_minor
           WHERE id = ${params.betId}::uuid
         `);
       } else {
         await tx.execute(sql`
           UPDATE bets
           SET cashed_out_stake_minor = cashed_out_stake_minor + ${params.stakePortionMinor},
-              cashout_value_minor = COALESCE(cashout_value_minor, 0) + ${offerMinor}
+              cashout_value_minor = COALESCE(cashout_value_minor, 0) + ${offerMinor},
+              released_liability_minor = released_liability_minor + ${releaseMinor}
           WHERE id = ${params.betId}::uuid
         `);
       }

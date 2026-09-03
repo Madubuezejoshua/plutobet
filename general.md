@@ -82,31 +82,41 @@ browser during this pass — not that it looks right in the source.
 
 ### Repository state at this checkpoint
 
+
 | | |
 |---|---|
 | Branch | `ui/plutobet-sportsbook-redesign` |
-| HEAD | `4b65c02` — "Say plainly that this branch has not been pushed" |
-| Working tree | clean |
-| Commits ahead of `main` | **8** (read from `git rev-list`, not from memory) |
+| HEAD | `3c63fe0` — "Open a resume checkpoint before starting the completion pass" |
+| Working tree | **NOT clean** — 8 entries |
+| Commits ahead of `main` | **9** (read from `git rev-list`, not from memory) |
 | Behind `main` | 0 |
 | `origin/main` | `83cb633` |
-| `plutobet/main` | `83cb633` — identical, no divergence |
+| `plutobet/main` | `83cb633` |
 | Redesign branch pushed | **no** |
 | Merged to `main` | no |
 | Deployed | no |
 
 > A previous version of this file said "seven commits". It was wrong. Commit
 > counts are read from git, never repeated from a document.
-
 ### Stages
+
 
 | # | Stage | Status |
 |---|---|---|
 | 1 | Read every instruction, report and runbook; inspect git state | **DONE** |
-| 2 | Repository audit + task matrix | NOT STARTED |
+| 2 | Repository audit + task matrix | **IN PROGRESS** — automated audits done, matrix pending |
 | 3 | Redesign verification in a real browser at seven viewports | NOT STARTED |
 | 4 | Interaction audit of every enabled control | NOT STARTED |
-| 5 | Developer backlog: cash-out, DOB backfill, live cache, bank list, edit bet, legacy bridge, prompt injection, personalisation, fantasy | NOT STARTED |
+| 5a | **Cash-out: repair partial cash-out and exposure** | **DONE** |
+| 5b | Cash-out: authenticated route, UI, admin visibility | NOT STARTED |
+| 5c | DOB backfill | NOT STARTED |
+| 5d | Live-version Redis cache | NOT STARTED |
+| 5e | Withdrawal bank list | NOT STARTED |
+| 5f | Edit bet | NOT STARTED |
+| 5g | Legacy style bridge removal | NOT STARTED |
+| 5h | Prompt-injection corpus | NOT STARTED |
+| 5i | Personalisation / Admin AI | NOT STARTED |
+| 5j | Fantasy / Lucky Numbers | NOT STARTED |
 | 6 | Load and reliability testing | NOT STARTED |
 | 7 | Full E2E suite against a disposable database | NOT STARTED |
 | 8 | Security re-verification | NOT STARTED |
@@ -116,51 +126,148 @@ browser during this pass — not that it looks right in the source.
 
 ### Completed this pass, with evidence
 
-Nothing yet beyond stage 1. The eight commits already on this branch are the
-approved redesign and predate this pass; they are described in §5 and
-`UI_REDESIGN_REPORT.md`.
+
+### Stage 2 — automated repository audits
+
+| Audit | Result |
+|---|---|
+| `TODO` / `FIXME` / `HACK` / `XXX` in source | **0** — the three matches are a phone-format doc comment and the CI reporter's own TODO handling |
+| `href="#"` | **0** |
+| Empty click/submit handlers | **0** |
+| Skipped or `.only` tests | **0** — the one `describe.skipIf` is the opt-in live provider contract |
+| Suppressed lint/TS rules | **3**, each documented and justified: a full-document navigation for sign-out (a client transition would leave the session cookie intact after a self-exclusion), the provider-contract fixture cast, and the pooled-client import in `wallet/lookup.ts` |
+| Internal links to routes that do not exist | **0 of 25 targets**, checked against 46 pages and 26 API routes by `scripts`-free audit |
+| `wallets` queries missing a bucket | **0 real.** Two flagged by pattern were read and cleared: `withdrawal.service.ts:86` selects by primary key and verifies ownership after; `reconciliation.service.ts:126` deliberately scans every bucket to find drift, and a bucket filter would make it miss BONUS and LOCKED |
+
+`VERIFIED_BY_INTEGRATION_TEST` for the link and bucket audits — both were executed against the tree, not read.
+
+### Stage 5a — partial cash-out repaired
+
+**Two defects, one of which was worse than the previous report claimed.**
+
+1. `FAILED` → fixed. **Partial cash-out could never have succeeded.** Migration
+   0007's `bets_cashout_matches_status` requires `cashout_value_minor IS NULL`
+   unless the bet is `CASHED_OUT`; 0016 added partial cash-out, which leaves the
+   bet `PENDING` while recording value, and never revisited the constraint. Every
+   call raised Postgres `23514` and rolled back. It went unnoticed because
+   **nothing called it** — no route, no UI, and no test in the suite exercised the
+   partial path. `general.md` §15 previously described it as well constructed with
+   only an exposure defect; that was wrong, and this corrects it.
+
+2. `FAILED` → fixed. **Exposure would have been released twice.** A partial
+   released its proportional slice and settlement later released the whole
+   original claim again. `GREATEST` floors the result at zero rather than
+   raising, so the double release would not fail — the market would report less
+   liability than it holds, which is the direction that lets a ceiling admit risk
+   it exists to refuse.
+
+**Evidence.** `src/modules/betting/__tests__/cashout-exposure.acceptance.spec.ts`
+was written first and **failed 5 of 7** against the unmodified code, including
+the constraint violation above. After the repair it passes 7 of 7.
+`VERIFIED_BY_INTEGRATION_TEST` — real Postgres, real ledger, settlement driven
+through `ingestResult` + `settleBet` rather than by writing a status.
+
+**The fix.** Migration `0027_cashout_partial_repair.sql`:
+
+- replaces the constraint with one that permits a partially cashed-out `PENDING`
+  bet, and states three invariants the database now checks — value recorded
+  exactly when stake has been bought back, closing txn exactly when `CASHED_OUT`,
+  and `CASHED_OUT` implying the whole stake is bought back;
+- adds `bets.released_liability_minor`, bounded at or below the claim, so a
+  double release is a loud error rather than a silent floor;
+- indexes bets that still carry unreleased liability.
+
+Every release now returns `claim − released_liability_minor` and records what it
+gave back, so the total across any number of instalments is exactly the claim.
+Division truncates deliberately: under-releasing costs ceiling headroom,
+over-releasing admits refused risk. The final instalment returns the remainder,
+so truncation cannot strand anything.
+
+`npx vitest run src/modules/betting src/modules/settlement` → **19 files, 223
+tests, 0 failures.** `node scripts/check-migrations.mjs` → **28 of 28 apply to a
+clean database, 62 tables.**
+
+**One test of mine was wrong and is recorded as such.** It cashed out one kobo of
+a ₦1,000 position; that prices to zero after margin and the service refuses it
+with `VALUE_TOO_SMALL`, correctly, since paying nothing for part of a stake would
+be taking it. The test now uses ₦1 and carries the reason inline so the next
+reader does not "fix" the service.
 
 ### Exact next action
 
-Stage 2. Audit the repository against the developer-owned backlog in §23:
-grep for `TODO`, `FIXME`, `HACK`, `XXX`, `ComingSoon`, `NOT_IMPLEMENTED`,
-`IMPLEMENTED_NOT_REACHABLE`, `href="#"`, empty handlers, hard-coded balances
-and odds, disabled lint rules, skipped tests, wallet queries missing
-`bucket = 'CASH'`, and runtime clients on owner credentials. Then write the
-task matrix into this section before implementing anything.
+
+Stage 5b. Cash-out is now correct but still unreachable. Before exposing it:
+
+1. Add the account-status gate **inside the service boundary** — suspended,
+   closed and self-excluded accounts must be refused by `CashOutService`, not
+   only by a route or the UI. Currently neither `cashOut` nor `cashOutPartial`
+   reads `users.status`.
+2. Add concurrency tests: two simultaneous full cash-outs must pay once; a
+   partial racing settlement must not double-release.
+3. Add idempotency: a replayed key returns the original result, a different
+   request on the same key conflicts.
+4. Then the authenticated route, the bets-page UI, admin visibility and audit
+   events.
+
+Do not expose the feature until all of the above pass.
 
 ### Files being modified right now
 
-`general.md` only.
+
+None in flight. The working tree is clean at the commit named above.
 
 ### Decisions and assumptions made
+
 
 - Commit counts, branch state and remote heads are read from git on every
   checkpoint rather than carried forward in prose.
 - `AGENTS.md` carries a Next.js block that `next dev` rewrites between its
-  BEGIN/END markers. The standing reporting instruction will be added **outside**
+  BEGIN/END markers. The standing reporting instruction was added **outside**
   those markers so regeneration cannot delete it.
+- Exposure is made exact with a recorded `released_liability_minor` rather than
+  by making settlement release a proportion of the remaining stake. The
+  proportional approach needs no column but truncates at every step, leaving a
+  small residue permanently claimed; recording what was released is exact,
+  auditable, and keeps the invariant "a market with no PENDING bets holds zero
+  liability" true rather than approximately true.
+- A full cash-out now sets `cashed_out_stake_minor = stake_minor`. It is what a
+  full cash-out means, and it lets one database-checked invariant cover both
+  routes into `CASHED_OUT` — the direct one and the one reached by a final
+  partial instalment. Verified not to affect
+  `product-reconciliation.service.ts`, whose only use of that column filters on
+  `status = 'WON'`, which a cashed-out bet never has.
+- Playwright was installed as a dev dependency. The browser, interaction and
+  accessibility audits this task requires cannot be done without a real browser
+  driver, and the previous pass's screenshot tooling proved that a one-shot
+  headless capture reports a viewport it did not use.
 
 ### Latest gate results
 
-From the end of the previous pass, on this same tree (`4b65c02`):
 
-| Gate | Result |
-|---|---|
-| `npx tsc --noEmit` | 0 errors |
-| `npm run lint` | 0 errors, 15 pre-existing warnings |
-| `npx vitest run` | 68 files, 844 passed, 1 skipped, 0 failed |
-| `npx next build` | exit 0 |
-| `node scripts/secret-scan.mjs` | clean |
-| `git diff --check` | clean |
+| Gate | Result | When |
+|---|---|---|
+| `npx tsc --noEmit` | 0 errors | after stage 5a |
+| `npx vitest run src/modules/betting src/modules/settlement` | 19 files, 223 passed, 0 failed | after stage 5a |
+| `node scripts/check-migrations.mjs` | 28 of 28 on a clean database, 62 tables | after stage 5a |
+| `npm run lint` | 0 errors, 15 pre-existing warnings | baseline, `4b65c02` |
+| `npx vitest run` (full) | 68 files, 844 passed, 1 skipped, 0 failed | baseline, `4b65c02` |
+| `npx next build` | exit 0 | baseline, `4b65c02` |
+| `node scripts/secret-scan.mjs` | clean | baseline, `4b65c02` |
 
-These are carried forward as the baseline. They are re-run from a clean state
-in stage 9 and any figure that changes is corrected here.
+The full suite is re-run from a clean state in stage 9; the totals above will
+rise because this pass adds tests, and any figure that changes is corrected here.
 
 ### Known failures and blockers
 
-None yet identified in this pass. The blockers inherited from the previous one
-are in §23 and remain accurate until stage 2 says otherwise.
+
+| # | Finding | Status |
+|---|---|---|
+| 1 | Partial cash-out refused by `bets_cashout_matches_status` on every call, with no test coverage | **FIXED** in stage 5a |
+| 2 | Partial cash-out's exposure slice released twice | **FIXED** in stage 5a |
+| 3 | `CashOutService` does not check account status — a suspended or self-excluded account is refused only by callers | **OPEN**, stage 5b |
+| 4 | Cash-out has no API route and no UI | **OPEN**, stage 5b |
+
+Blockers inherited from the previous pass remain accurate and are in §23.
 
 ### Deliberately not performed
 
