@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { walletService, WalletService } from "../wallet/wallet.service";
 import { responsibleService, ResponsibleService } from "../responsible/responsible.service";
+import { appendAuditLog } from "../audit/append";
 import type { WalletTransaction } from "../wallet/types";
 import {
   CashOutUnavailableError,
@@ -92,7 +93,49 @@ export class CashOutService {
     await this.responsible.assertNotExcluded(tx, userId);
   }
 
-  /** Prices a cash-out without taking it. Read-only. */
+  /**
+   * Prices a cash-out for its owner, without taking it. Read-only.
+   *
+   * The ownership and eligibility checks are here rather than only on the
+   * take, because a quote is information about somebody's position: what a bet
+   * is worth right now, and therefore that it exists and is still running.
+   * Handing that to any caller who guesses a bet id is a small leak that costs
+   * nothing to close.
+   *
+   * The remaining stake is priced, not the original, so a partially cashed-out
+   * bet quotes what is still at risk.
+   */
+  async quoteFor(betId: string, userId: string): Promise<CashOutQuote> {
+    return this.wallet.withMoneyTransaction(async ({ tx }) => {
+      const bet = await this.loadBet(tx, betId, false);
+
+      if (bet.userId !== userId) {
+        throw new CashOutUnavailableError("ACCOUNT_NOT_ELIGIBLE", "this account cannot cash out");
+      }
+      if (bet.status !== "PENDING") {
+        throw new CashOutUnavailableError(
+          "BET_NOT_PENDING",
+          `this bet is already ${bet.status.toLowerCase()}`,
+        );
+      }
+      await this.assertMayCashOut(tx, userId);
+
+      const [state] = await tx.execute<{ cashed_out: string }>(sql`
+        SELECT cashed_out_stake_minor::text AS cashed_out
+        FROM bets WHERE id = ${betId}::uuid
+      `);
+      const liveStake = bet.stakeMinor - BigInt(state?.cashed_out ?? "0");
+
+      return quoteCashOut(
+        liveStake,
+        bet.legs,
+        this.config.marginBasisPoints,
+        this.config.minimumOfferMinor,
+      );
+    });
+  }
+
+  /** Prices a cash-out without taking it or checking who is asking. */
   async quote(betId: string): Promise<CashOutQuote> {
     return this.wallet.withMoneyTransaction(async ({ tx }) => {
       const bet = await this.loadBet(tx, betId, false);
@@ -246,6 +289,25 @@ export class CashOutService {
             released_liability_minor = potential_return_minor - stake_minor
         WHERE id = ${params.betId}::uuid
       `);
+
+      /*
+       * The audit row is appended on the SAME transaction as the ledger entries,
+       * so a trail that exists is a trail whose money moved. A row written
+       * afterwards can be missing for a payment that happened, or present for
+       * one that rolled back, and both make the log worse than none.
+       */
+      await appendAuditLog(tx, {
+        actorType: "USER",
+        actorId: params.userId,
+        action: "BET_CASHOUT_FULL",
+        entity: "bet",
+        entityId: params.betId,
+        after: {
+          offerMinor: quote.offerMinor.toString(),
+          stakeMinor: bet.stakeMinor.toString(),
+        },
+        ip: params.ip,
+      });
 
       return {
         betId: params.betId,
@@ -431,6 +493,21 @@ export class CashOutService {
           WHERE id = ${params.betId}::uuid
         `);
       }
+
+      await appendAuditLog(tx, {
+        actorType: "USER",
+        actorId: params.userId,
+        action: takingEverything ? "BET_CASHOUT_FULL" : "BET_CASHOUT_PARTIAL",
+        entity: "bet",
+        entityId: params.betId,
+        after: {
+          offerMinor: offerMinor.toString(),
+          stakePortionMinor: params.stakePortionMinor.toString(),
+          remainingStakeMinor: remainingStake.toString(),
+          releasedLiabilityMinor: releaseMinor.toString(),
+        },
+        ip: params.ip,
+      });
 
       return {
         betId: params.betId,

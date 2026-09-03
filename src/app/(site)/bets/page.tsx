@@ -7,6 +7,7 @@ import { db } from "@/db/pooled";
 import { authOptions } from "@/modules/auth/auth-options";
 import { naira } from "@/lib/money";
 import { PageShell } from "@/components/sportsbook/page-shell";
+import { CashOut } from "./cash-out";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My bets" };
@@ -34,8 +35,10 @@ type BetRow = {
  * recomputed here. A settled bet whose displayed return disagreed with the
  * ledger would be indistinguishable, to the customer, from being underpaid.
  *
- * There is no cash-out control on this page. The service exists but no
- * authenticated route does, so a button would be a promise nothing can keep.
+ * Cash-out is offered on pending tickets only, and the price always comes from
+ * the server. The component asks for an offer when the customer presses the
+ * button rather than pricing every open ticket on page load: ten tickets would
+ * otherwise mean ten pricing requests, most for offers nobody looks at.
  */
 export default async function BetsPage() {
   const session = await getServerSession(authOptions);
@@ -176,6 +179,15 @@ export default async function BetsPage() {
                 </dl>
 
                 <p className="sb-ticket__ref">Reference {bet.id.slice(0, 8)}</p>
+
+                {/*
+                  Only a running bet can be bought back. A settled, voided or
+                  already cashed-out ticket shows nothing here rather than a
+                  disabled control, because there is no action to explain.
+                */}
+                {bet.status === "PENDING" ? (
+                  <CashOut betId={bet.id} stakeMinor={bet.stake_minor} />
+                ) : null}
               </article>
             );
           })}

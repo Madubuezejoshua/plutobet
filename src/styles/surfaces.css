@@ -257,3 +257,34 @@
    does not exist yet, so it must not look tappable. */
 .sb-card--inert { cursor: default; color: var(--sb-ink-2); }
 .sb-card--inert:hover { border-color: var(--sb-border); background: var(--sb-surface); }
+
+/* ==========================================================================
+   CASH-OUT on a ticket
+
+   Sits inside the ticket rather than in a dialog: the customer is deciding
+   about THIS bet, and a modal would hide the selections and the potential
+   return that the decision is being weighed against.
+   ========================================================================== */
+
+.sb-cashout {
+  display: grid;
+  gap: var(--sb-2);
+  margin-top: var(--sb-2);
+  padding-top: var(--sb-2);
+  border-top: 1px dashed var(--sb-border);
+  justify-items: start;
+}
+.sb-cashout__offer { display: flex; align-items: baseline; gap: var(--sb-2); }
+.sb-cashout__value {
+  font-size: var(--sb-t-xl);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--sb-brand-strong);
+}
+.sb-cashout__half { display: flex; gap: var(--sb-2); align-items: flex-start; font-size: var(--sb-t-sm); }
+.sb-cashout__half input { margin-top: 2px; width: 16px; height: 16px; flex: none; accent-color: var(--sb-brand-strong); }
+.sb-cashout__actions { display: flex; gap: var(--sb-2); flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .sb-cashout { justify-items: stretch; }
+  .sb-cashout__actions .sb-btn { flex: 1 1 auto; }
+}

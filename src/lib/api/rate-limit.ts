@@ -77,6 +77,15 @@ export const RATE_RULES = {
   placeBet: { limit: 30, windowSeconds: 60 },
   wallet: { limit: 60, windowSeconds: 60 },
   withdrawal: { limit: 10, windowSeconds: 60 },
+  /*
+   * Cash-out sits between browsing and placing. Quoting a price is cheap and a
+   * customer watching a match will refresh it often; TAKING the offer is a
+   * money movement priced under a row lock, so the budget is nearer placement
+   * than browsing. One number covers both because the quote is the reconnaissance
+   * for the take, and rate-limiting only the take would leave the pricing path
+   * open to being scraped for market data.
+   */
+  cashOut: { limit: 30, windowSeconds: 60 },
   webhook: { limit: 600, windowSeconds: 60 },
   // Tight, and by IP: both endpoints are public and pre-account. Issuing a
   // code costs money in SMS fees, and registration is the surface a bot uses
