@@ -9,6 +9,9 @@ it.** Where a step needs a secret, it says where to paste it, never what it is.
 Run `npm run production:check` after each section. It exits non-zero while a
 launch-blocking dependency is missing and never prints a value.
 
+**For the state of the platform itself, read [`general.md`](general.md).** This
+file is only the list of things that need an account holder.
+
 ---
 
 ## 0. Before anything else — read this

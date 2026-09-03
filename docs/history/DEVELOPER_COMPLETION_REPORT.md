@@ -2,20 +2,17 @@
 
 > ## HISTORICAL — not the current status
 >
+> **For what is true today, read [`general.md`](../../general.md).** That file
+> is the single source of truth; where this one disagrees with it, it is right.
+>
+> This document is kept because the trail from a defect to its fix is worth
+> reading. Nothing has been deleted from it, and findings that were later
+> resolved are still described as they were found.
+>
 > **2026-09-02:** the settlement chain described here was later found to be
 > broken end to end — the dispatch was unreachable because a cadence claim sat
 > outside `step.run()`. A real winning bet stayed PENDING for fourteen hours.
 > Fixed, with a transactional outbox and a recovery sweep; the bet is paid. See
-> `PROJECT_STATUS.md` §2b.
->
-> This document records the developer completion pass that preceded this one. It is kept as evidence and is **not** the
-> current state of the repository.
->
-> **For what works today, read [`PROJECT_STATUS.md`](PROJECT_STATUS.md).**
-> Where this file disagrees with it, that file is right.
->
-> Nothing here has been deleted. Findings that were later resolved are still
-> described as they were found, so the trail from defect to fix stays readable.
 
 
 

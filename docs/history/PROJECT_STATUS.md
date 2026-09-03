@@ -1,11 +1,17 @@
 # PlutoBet — Current Status
 
-**This is the single source of truth for what works today.** Every other status
-document in this repository is historical evidence of a particular pass and is
-banner-marked as such. Where they disagree with this file, this file is right.
+**Recorded 2026-09-02, on branch `main`, after the money-path repair.** It was
+the source of truth on that day and is superseded by `general.md`.
 
-**Last verified:** 2026-09-02 · branch `main` · see §7 for the exact gate output.
-
+> ## HISTORICAL — not the current status
+>
+> **For what is true today, read [`general.md`](../../general.md).** That file
+> is the single source of truth; where this one disagrees with it, it is right.
+>
+> This document is kept because the trail from a defect to its fix is worth
+> reading. Nothing has been deleted from it, and findings that were later
+> resolved are still described as they were found.
+>
 > **Two readiness modes, and they are different questions.** `DEMO_READY` asks
 > whether this can serve a test account end to end. `REAL_MONEY_READY` asks
 > whether it may take a stranger's money. Neither is currently satisfied — §2c.

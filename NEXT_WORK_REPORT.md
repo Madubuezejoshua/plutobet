@@ -2,8 +2,9 @@
 
 > ## STATUS: SUPERSEDED IN PART
 >
-> **For what works today, read [`PROJECT_STATUS.md`](PROJECT_STATUS.md)**, which is
-> the single source of truth. This document remains historical evidence.
+> **For what works today, read [`general.md`](general.md)**, which is the single
+> source of truth. This document is the running log of what each pass did, and
+> the sections below are kept as they were written.
 >
 > This document records the pass that got the first real bet placed and
 > settled. It is kept as historical evidence and is **not** the current state
@@ -17,8 +18,8 @@
 > | Registered scheduler untested | **9 acceptance tests** drive the real handler | §6 |
 > | Defect 6 (poll starvation) open | **Fixed**, 7 tests | §8 |
 > | Defect 1 (non-ASCII team keys) open | **Fixed**, 33 tests | §10 |
-> | Stage 9 target not demonstrated | **45–49× / 7.1–8.8× measured**, both runs completed | `PROJECT_STATUS.md` §4 |
-> | CI absent | **Green on both remotes** | `PROJECT_STATUS.md` §7 |
+> | Stage 9 target not demonstrated | **45–49× / 7.1–8.8× measured**, both runs completed | `docs/history/PROJECT_STATUS.md` §4 |
+> | CI absent | **Green on both remotes** | `docs/history/PROJECT_STATUS.md` §7 |
 > | Scheduler never observed running | **Ran unattended; ingested a real result** | §33 below |
 > | §33.3 settlement chain broken, cause unknown | **Four faults found and fixed; the real bet is WON and paid** | §34 below |
 > | §34 "NEXTAUTH_URL is the only remaining blocker" | **Wrong framing.** Demo and real-money readiness are separate; neither passes | §35 below |
@@ -26,7 +27,7 @@
 >
 > **The real match result and ₦600 payout were genuine, but the earlier
 > settlement services were manually invoked through QA scripts. Automatic
-> scheduling is validated separately** — see `DEVELOPER_COMPLETION_REPORT.md`
+> scheduling is validated separately** — see `docs/history/DEVELOPER_COMPLETION_REPORT.md`
 > §6, where the registered Inngest function is driven end to end.
 >
 > **Update, 2026-09-02:** the scheduler has since run unattended and ingested a
@@ -64,7 +65,7 @@ No secret values, credentials, OTPs or personal data appear in this document.
 |---|---|
 | **Intentional production change** | `scripts/deploy-build.mjs`, `scripts/grant-app-role.ts`, `scripts/seed-admin.ts`, `src/modules/admin/navigation.ts`, `src/modules/odds/sync.service.ts`, `src/modules/wallet/errors.ts`, `src/modules/wallet/wallet.service.ts`, `package.json`, 9 × `src/app/admin/*` |
 | **Intentional QA/test utility** | `scripts/qa-credit.ts`, `scripts/qa-odds-sync.ts`, `scripts/qa-place-bet.ts`, `scripts/qa-register.ts`, `scripts/smoke-admin.ts`, `scripts/push-env-railway.ts`, `src/modules/wallet/__tests__/contention.acceptance.spec.ts` |
-| **Documentation / report** | `GPT.md`, `PLUTOBET_CORE_FLOW_VALIDATION.md`, `PLUTOBET_STATUS.md` |
+| **Documentation / report** | `docs/history/GPT.md`, `docs/history/PLUTOBET_CORE_FLOW_VALIDATION.md`, `docs/history/PLUTOBET_STATUS.md` |
 | **Debugging debris** | `rbac-check.mjs` |
 | **Secret / environment** | None in the tree — `.env` is gitignored (`git check-ignore` confirmed) |
 | **Unknown** | None |
@@ -338,7 +339,7 @@ STAKE       DEBIT   20000  CASH
 >
 > `pollMatchResults` is an Inngest cron, Inngest was not running locally, and
 > the deployment has no database, so that job had **never executed once**.
-> Automatic settlement is addressed in `DEVELOPER_COMPLETION_REPORT.md` §6 and
+> Automatic settlement is addressed in `docs/history/DEVELOPER_COMPLETION_REPORT.md` §6 and
 > is classified `IMPLEMENTED_NOT_LIVE_TESTED` — the scheduler now exists and
 > can be started, but has not been observed settling a bet unattended.
 
@@ -429,7 +430,7 @@ Unchanged and still passing, from
 > scope; the difference is purely WHEN each was taken. This snapshot predates
 > the 60,000-kobo payout. The authoritative figure after settlement is
 > **120,000 debits = 120,000 credits**, and every transaction carries exactly
-> two legs. See `DEVELOPER_COMPLETION_REPORT.md` §5 for the full transaction
+> two legs. See `docs/history/DEVELOPER_COMPLETION_REPORT.md` §5 for the full transaction
 > list.
 
 ---
@@ -486,7 +487,7 @@ per item; the original wording is unchanged.*
 
 *Those were the figures for THIS pass. The suite has since grown to
 **56 files - 712 passed - 1 skipped**, migrations to **26**, with the build and
-typecheck still clean - see `DEVELOPER_COMPLETION_REPORT.md` section 17.*
+typecheck still clean - see `docs/history/DEVELOPER_COMPLETION_REPORT.md` section 17.*
 
 ---
 
@@ -508,7 +509,7 @@ round — the one that resolved most of section 30 — is seven further commits 
 
 **Nothing has been pushed.** Thirteen commits sit ahead of `origin/main` awaiting
 authorisation. Full per-commit contents and the pre-commit secret scan are in
-`DEVELOPER_COMPLETION_REPORT.md` section 19.
+`docs/history/DEVELOPER_COMPLETION_REPORT.md` section 19.
 
 ---
 
@@ -622,7 +623,7 @@ So, in order:
 
 Everything below happened after this document's original pass. It is recorded
 here because §32 asked for exactly this work; the authoritative summary is
-`PROJECT_STATUS.md`.
+`docs/history/PROJECT_STATUS.md`.
 
 ### 33.1 What was completed
 
@@ -633,7 +634,7 @@ here because §32 asked for exactly this work; the authoritative summary is
 | Production readiness audit | **Done.** `npm run production:check` — exits non-zero while a launch-blocker remains, and never prints a value |
 | Owner rotation checklist | **Done.** `OWNER_LAUNCH_CHECKLIST.md`, `IDENTITY_PEPPER` first |
 | Restore drill | **Blocked** — no Neon API key. `docs/restore-runbook.md` written; the verification half is implemented and tested (`npm run db:verify-restore`, 8/8) |
-| Status documents reconciled | **Done.** `PROJECT_STATUS.md` is now the single source of truth; this file and four others are banner-marked historical |
+| Status documents reconciled | **Done.** `docs/history/PROJECT_STATUS.md` is now the single source of truth; this file and four others are banner-marked historical |
 
 ### 33.2 Four defects found by RUNNING the scheduler
 
@@ -752,7 +753,7 @@ human can settle a bet, which was never in question.
 
 §33.3 recorded that the scheduler ingested a real result but the bet on it did
 not settle, and said plainly that the cause was not yet identified. It is now,
-and **the bet is paid**. Authoritative summary: `PROJECT_STATUS.md` §2b.
+and **the bet is paid**. Authoritative summary: `docs/history/PROJECT_STATUS.md` §2b.
 Operational detail: `docs/settlement-operations.md`.
 
 **Four faults, not one.** Two caused the stranded bet; two more were found while
@@ -920,7 +921,7 @@ force-push. CI passing on both.
 **That is not the project's final commit.** It was followed by `363c937`
 (report accuracy) and then the launch-hygiene pass in §35. Rather than naming a
 hash that goes stale the moment anything lands, read it from the repository:
-`git rev-parse --short HEAD`. `PROJECT_STATUS.md` §7c is the source of truth.
+`git rev-parse --short HEAD`. `docs/history/PROJECT_STATUS.md` §7c is the source of truth.
 
 GitHub push protection blocked the first attempt: a guard test used a fake
 `sk_live_`-shaped fixture that GitHub classified as a Stripe API Key. It was
@@ -952,7 +953,7 @@ hygiene and accurate launch status. **The money path was not rewritten** — the
 recovered bet is still `WON` with exactly one ₦430 payout after 433 dispatcher
 and 228 recovery runs.
 
-Authoritative status: `PROJECT_STATUS.md` §2c and §7c. Owner actions:
+Authoritative status: `docs/history/PROJECT_STATUS.md` §2c and §7c. Owner actions:
 `OWNER_LAUNCH_CHECKLIST.md` §13–§16.
 
 ### 35.1 The most serious finding: the runtime database role
@@ -1137,8 +1138,121 @@ by reading a badge. A passing badge reflects the latest COMPLETED run on the
 branch, which is not necessarily the newest commit, and treating the two as the
 same is how a red tip hides behind a green shield.
 
-The commit list lives in `PROJECT_STATUS.md` §7c rather than here, so it has one
+The commit list lives in `docs/history/PROJECT_STATUS.md` §7c rather than here, so it has one
 home instead of two that drift apart.
+
+**Nothing destructive was run.** The 400 synthetic fixtures are still present and
+the ₦630 residual exposure is still there, both awaiting owner approval.
+
+---
+
+## 36. Interface redesign and reporting consolidation — 2026-09-02
+
+Branch `ui/plutobet-sportsbook-redesign`. **Not merged, not deployed.** It stops
+at a review build and screenshots, which is where the instruction said to stop.
+
+Two things changed about reporting, and they matter more than any single fix
+below.
+
+### 36.1 There is now one report
+
+`general.md` at the repository root is the single source of truth. Five status
+documents each answered "what is the state of PlutoBet" as of a different day
+and disagreed with one another; they were read in full, their still-true content
+is in `general.md`, and they now live in `docs/history/` with banners pointing
+at it. Nothing was deleted — the trail from a defect to its fix is worth
+reading, and tidying a directory is not a reason to destroy evidence.
+
+`CLAUDE.md` now carries the standing instruction: after every implementation,
+test, repair, deployment or audit task, update `general.md` with evidence-backed
+current status before reporting completion.
+
+This report stays. It is the running log of what each pass did; `general.md` is
+what is true now.
+
+### 36.2 The customer-facing interface was rebuilt
+
+The homepage is the odds board rather than a marketing hero over product tiles
+that mostly link to products which do not exist. Dark chrome over a light, dense
+canvas. Two header rows instead of seventeen products in one. A three-column
+sportsbook that becomes a bottom sheet at 1180px and a bottom bar at 900px.
+Branded sign-in, registration and password reset. The full detail is in
+`UI_REDESIGN_REPORT.md`.
+
+Removed, deliberately: the footer's **"Nigeria · Licensed operator"** claim
+(there is no licence, and publishing one before it exists is the kind of claim
+that ends an application), every **"arrives in phase N"** label, and the emoji
+navigation icons.
+
+### 36.3 Seven dead controls
+
+Each looked like it worked and did not.
+
+| Was | Now |
+|---|---|
+| Two links per board row to `/sports/event/<id>` — **a route that did not exist** | The event page exists, listing every open market |
+| Header search linked to a query parameter nothing read | A real search that filters the board |
+| League and fixture stars toggled a colour and forgot it | Persist per browser and pin what they mark |
+| "Sign in" after a password reset called `signIn` with **no password** — a call that can only fail | A link to the sign-in form |
+| Casino tiles linked to a launch route that does not exist | Non-linking cards that say why |
+| "+0" on fixtures with no extra markets | A chevron to the event page |
+| The referral link was text to select by hand | Copy and Share buttons |
+
+### 36.4 The redesign was invisible, and every gate passed
+
+The four sportsbook stylesheets were imported **below** Tailwind's `@source`
+directive in `globals.css`. CSS requires `@import` to precede every other rule
+except `@charset` and `@layer`, so all four were invalid and were dropped.
+
+`tsc` clean, `eslint` clean, every test green, `next build` exit 0 — none of them
+reads CSS ordering. The only symptom was a screenshot of unstyled HTML.
+
+Fixed, and pinned by `stylesheet-imports.acceptance.spec.ts`.
+
+Four responsive rules were also losing on source order — the Over/Under column
+hide, the responsive board template, the duplicate statistics icon, and the
+minimum width of the markets chip. All four are equal-specificity conflicts
+where the rule inside the media query came first and lost. Each now carries a
+parent selector so it wins regardless of the order a bundler emits.
+
+**One correction to how this was found.** The screenshots that started the hunt
+showed the board overflowing badly on a phone, and that part was a measurement
+error: Chrome's `--headless --window-size --screenshot` sets the capture size,
+not the layout viewport, so a desktop layout was being cropped to 390px and
+looked like a responsive bug. The capture script now drives DevTools and sets
+device metrics properly. The four CSS conflicts are real and were confirmed by
+reading the cascade — the overflow that prompted the search was not.
+
+**Everything in this section was found by looking at the product, not by running
+the gates.** That is the reusable lesson from this pass.
+
+### 36.5 Cash-out was examined and deliberately not shipped
+
+The instruction was to expose it **only** if every money invariant was complete.
+One is not: a partial cash-out releases a proportional slice of a market's
+liability and settlement later releases the whole of it again, so the liability
+is released twice for the portion already bought back. The service also does not
+check account status, which a route would have to add.
+
+Neither misplaces money — exposure is a risk ceiling, not a balance — but the
+instruction said every invariant. No control was added. `general.md` §15 has the
+detail. This supersedes item 3 of §35.8, which said to expose cash-out next: the
+exposure defect comes first.
+
+### 36.6 Verification
+
+68 files · **844 passed · 0 failed · 1 skipped**. Typecheck 0, lint 0 errors
+(15 pre-existing warnings), build 0, with `/signin` and `/sports/event/[id]`
+emitted. Secret scan clean, `git diff --check` clean.
+
+29 tests added: betslip arithmetic, the sign-in open-redirect guard, the
+navigation registry's honesty rules, and the stylesheet ordering above. **No
+existing test was weakened, skipped or deleted.**
+
+Screenshots were captured against a local disposable database seeded with
+`npm run db:seed-demo`, never against production and never against the 400
+synthetic benchmark fixtures. They are in `artifacts/ui-review/`, which is
+git-ignored.
 
 **Nothing destructive was run.** The 400 synthetic fixtures are still present and
 the ₦630 residual exposure is still there, both awaiting owner approval.

@@ -16,8 +16,8 @@ the only untested part of this document is the Neon console steps themselves.
 
 ## Why this matters more than it looks
 
-"An untested backup is not a backup" has been an open item in `PLUTOBET_STATUS.md`
-(A4) and `GPT.md` (row 6) since the beginning. The failure mode is specific and
+"An untested backup is not a backup" has been an open item in `docs/history/PLUTOBET_STATUS.md`
+(A4) and `docs/history/GPT.md` (row 6) since the beginning. The failure mode is specific and
 nasty: a restore that lands mid-transaction produces a database that *starts*,
 *serves traffic*, and has a ledger that no longer balances. It looks like a
 recovery. Wallet balances are a trigger-maintained denormalisation, so the most

@@ -2,9 +2,10 @@
 
 [![CI](https://github.com/plutobet-ai/plutobet_ai/actions/workflows/ci.yml/badge.svg)](https://github.com/plutobet-ai/plutobet_ai/actions/workflows/ci.yml)
 
-**Current status: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)** — the single source
-of truth for what works, what is waiting on a real event, and what is blocked on
-an owner decision. Other status documents in this repository are historical.
+**Current status: [`general.md`](general.md)** — the single source of truth for
+what works, what is waiting on a real event, and what is blocked on an owner
+decision. Earlier status documents live in [`docs/history/`](docs/history/) and
+are historical evidence, not the current state.
 
 **Before launching: [`OWNER_LAUNCH_CHECKLIST.md`](OWNER_LAUNCH_CHECKLIST.md).**
 
