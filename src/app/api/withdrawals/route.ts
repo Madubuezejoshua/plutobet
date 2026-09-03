@@ -4,6 +4,7 @@ import { ApiError, authedRoute, money, type AuthedRouteContext } from "@/lib/api
 import { RATE_RULES } from "@/lib/api/rate-limit";
 import { withdrawalService } from "@/modules/payments/withdrawal.service";
 import { walletForUser } from "@/modules/wallet/lookup";
+import { bankListService } from "@/modules/payments/bank-list.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,28 @@ export const POST = authedRoute(
 
     const walletId = await walletForUser(userId);
     if (!walletId) throw new ApiError(409, "NO_WALLET", "this account has no NGN wallet");
+
+    /*
+     * Check the bank code against the provider's own list before taking a hold.
+     *
+     * The form offers a select, but a form is a suggestion — the request is what
+     * arrives, and a caller posting directly can put anything in this field. A
+     * code that is merely well-formed reaches the provider and either fails
+     * there, after the customer's balance has already been held, or worse
+     * succeeds against a different institution.
+     *
+     * It passes when the list cannot be established, deliberately: refusing
+     * every withdrawal because a bank list could not be fetched would turn a
+     * provider outage into an inability to take money out. The transfer
+     * re-validates, and this exists to catch a typo early with a clear message.
+     */
+    if (!(await bankListService.isPayableBankCode(body.bankCode))) {
+      throw new ApiError(
+        422,
+        "UNKNOWN_BANK",
+        "we do not recognise that bank. Choose one from the list.",
+      );
+    }
 
     const record = await withdrawalService.requestWithdrawal({
       userId,

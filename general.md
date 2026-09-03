@@ -86,9 +86,9 @@ browser during this pass — not that it looks right in the source.
 | | |
 |---|---|
 | Branch | `ui/plutobet-sportsbook-redesign` |
-| HEAD | `fceff5f` — "Bring accounts with no date of birth back inside the age gate" |
-| Working tree | **NOT clean** — 4 entries |
-| Commits ahead of `main` | **13** (read from `git rev-list`, not from memory) |
+| HEAD | `ebad1a6` — "Stop recomputing the live board's version on every poll" |
+| Working tree | **NOT clean** — 8 entries |
+| Commits ahead of `main` | **14** (read from `git rev-list`, not from memory) |
 | Behind `main` | 0 |
 | `origin/main` | `83cb633` |
 | `plutobet/main` | `83cb633` |
@@ -112,7 +112,7 @@ browser during this pass — not that it looks right in the source.
 | 5c | Cash-out: authenticated route, UI, audit, admin visibility | **DONE** |
 | 5d | **Date-of-birth backfill** | **DONE** |
 | 5e | **Live-version Redis cache** | **DONE** |
-| 5f | Withdrawal bank list | NOT STARTED |
+| 5f | **Withdrawal bank list** | **DONE** |
 | 5g | Edit bet | NOT STARTED |
 | 5h | Legacy style bridge removal | NOT STARTED |
 | 5i | Prompt-injection corpus | NOT STARTED |
@@ -283,23 +283,50 @@ suspension drops the key immediately; twenty concurrent readers agree on one
 digest; Redis failure degrades to the query; a malformed cached value is ignored
 rather than handed to a client as an ETag it could never match.
 
+### Stage 5f — the withdrawal bank list
+
+`VERIFIED_BY_INTEGRATION_TEST` for the caching, validation and failure
+behaviour (12 tests). Real provider communication is **`BLOCKED_BY_KEY`** and
+nothing here claims otherwise.
+
+The withdrawal form asked the customer to type a NIP bank code from memory. A
+wrong code does not bounce — it sends real money to a real account at a different
+institution, and the first anyone hears of it is a support ticket about a
+missing withdrawal.
+
+| Piece | What it does |
+|---|---|
+| `PaymentProvider.listBanks()` | New on the interface, so no part of the codebase holds a bank list of its own |
+| Paystack adapter | Follows `next_page` rather than taking the first 100 and calling it the list — a truncated list is a customer whose bank is missing, with nothing in the logs to say why. Bounded at 30 pages so a provider bug cannot loop |
+| Sandbox adapter | Two banks named **"NOT REAL"** with codes that collide with nothing. A development adapter returning plausible NIP codes is the exact failure the interface exists to prevent |
+| `BankListService` | 12-hour freshness, 7-day stale window, serves the cached list when the provider is down and **says it is stale** |
+| `GET /api/payments/banks` | Authenticated on the `wallet` budget. The list is not secret, but it costs a provider call and does not belong on an open path |
+| `POST /api/withdrawals` | Validates the submitted code against the list **before taking a hold** — a form is a suggestion; the request is what arrives |
+| The form | A real picker, with loading, stale and failed states. When the list cannot be fetched it falls back to a typed code and explains why, rather than showing an empty select |
+
+**Two deliberate directions, both recorded because they look like bugs.** An
+empty provider response is treated as a failure rather than as "no banks", so a
+provider having a bad minute cannot empty a good list and leave every customer
+unable to withdraw. And `isPayableBankCode` **passes** when no list can be
+established: refusing every withdrawal because a bank list could not be fetched
+would turn a provider outage into an inability to take money out. The transfer
+re-validates, and the provider refuses an unknown code.
+
 ### Exact next action
 
 
-Stage 5f — the withdrawal bank list.
+Stage 5g — edit bet. Inspect before implementing:
 
-The withdraw form asks for a numeric NIP bank code typed from memory. Before
-writing code, establish from the code:
+1. Search the repository for any existing edit-bet specification, product rule
+   or schema support.  §12 records it as  with no
+   code of any kind.
+2. Establish whether the repository defines eligibility, fees, timing, odds
+   change consent, or the treatment of promotional stakes.
 
-1. What `PaymentProvider` exposes today and where the interface is declared.
-2. How the sandbox provider is structured, so the fixture path matches it.
-3. Where provider responses are already cached, if anywhere.
-
-Then: a provider-abstraction `listBanks()`, an authenticated server route,
-safe caching, server-side validation of the submitted code against the
-provider list, honest failure UI, and fixture-based contract tests. Real
-provider communication stays `BLOCKED_BY_KEY` — never hard-code a production
-bank list.
+If no unambiguous product rule exists, this is 
+and must be recorded as such rather than invented. A cancel/rebook that guesses
+at fees or at whether a customer consents to a re-priced bet is a financially
+dangerous rule shipped to look complete.
 
 ### Files being modified right now
 
@@ -353,6 +380,7 @@ None in flight. The working tree is clean at the commit named above.
 | `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, 62 tables | after 5d |
 | `npx vitest run` on betting, settlement, payments, users | **28 files, 345 passed, 0 failed** | after 5d |
 | `npx vitest run` on odds | **9 files, 117 passed, 1 skipped, 0 failed** | after 5e |
+| `npx vitest run` on payments | **5 files, 67 passed, 0 failed** | after 5f |
 | `node scripts/secret-scan.mjs` | clean | baseline, `4b65c02` |
 
 The full suite is re-run from a clean state in stage 9; totals will rise because
@@ -375,6 +403,8 @@ this pass adds tests, and any figure that changes is corrected here.
 | 10 | The admin compliance page said missing-DOB accounts were "not blocked" | **FIXED** — they are |
 
 | 11 | `/api/live` recomputed a three-table aggregate on every poll | **FIXED**, 5e |
+
+| 12 | The withdrawal form asked for a hand-typed NIP bank code | **FIXED**, 5f |
 
 Cash-out and the date-of-birth flow are not yet `VERIFIED_IN_REAL_BROWSER`;
 stage 4 covers that. Blockers inherited from the previous pass are in §23.

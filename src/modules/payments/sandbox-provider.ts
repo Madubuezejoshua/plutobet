@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
+  BankOption,
   DepositWebhookEvent,
   PaymentProvider,
   TransferResult,
@@ -68,6 +69,22 @@ export class SandboxPaymentProvider implements PaymentProvider {
       accountName: "SANDBOX — NOT A REAL ACCOUNT",
       bankName: "Sandbox Bank",
     };
+  }
+
+  /**
+   * Two obviously fake banks.
+   *
+   * NOT a copy of the real Nigerian bank list. A development adapter returning
+   * plausible-looking NIP codes would be the exact failure this interface
+   * exists to prevent: somebody would eventually ship against it, and a code
+   * that looks real and is wrong sends money to the wrong institution. The
+   * names say what they are.
+   */
+  async listBanks(): Promise<BankOption[]> {
+    return [
+      { code: "000000", name: "Sandbox Bank — NOT REAL", slug: "sandbox-bank" },
+      { code: "000001", name: "Sandbox Microfinance — NOT REAL", slug: "sandbox-mfb" },
+    ];
   }
 
   async initiateTransfer(params: { reference: string }): Promise<TransferResult> {

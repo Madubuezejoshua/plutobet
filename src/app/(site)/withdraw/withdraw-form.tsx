@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { naira, parseNairaToKobo } from "@/lib/money";
 
@@ -16,11 +16,20 @@ import { naira, parseNairaToKobo } from "@/lib/money";
  * float arithmetic the comment warns against. `parseNairaToKobo` parses the
  * decimal string directly instead, so no IEEE-754 value is ever involved.
  *
- * The bank is still entered as a numeric code rather than picked from a list.
- * A dropdown would be better, and it is deliberately not invented here: the
- * codes route real money, so they have to come from the provider's own bank
- * list through a server route, not from a table typed out by hand.
+ * The bank is chosen from the provider's own list, fetched through a server
+ * route. It is never a list typed into this file: Nigerian bank codes change as
+ * banks merge and microfinance banks come and go, and a stale code does not
+ * bounce — it sends real money to a different institution.
+ *
+ * When the list cannot be fetched the field falls back to a typed code and says
+ * so. That is worse for the customer than a picker and much better than a form
+ * they cannot submit, and the server re-validates whatever arrives.
  */
+
+interface BankOption {
+  code: string;
+  name: string;
+}
 
 export function WithdrawForm(props: {
   balanceMinor: string;
@@ -35,10 +44,47 @@ export function WithdrawForm(props: {
   const [amount, setAmount] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [bankCode, setBankCode] = useState("");
+  const [banks, setBanks] = useState<BankOption[] | null>(null);
+  const [bankListState, setBankListState] = useState<"loading" | "ready" | "stale" | "failed">(
+    "loading",
+  );
   const [accountName, setAccountName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+
+  /*
+   * Fetched once on mount. The list is cached server-side for twelve hours, so
+   * this is a cheap request, and doing it here rather than on the server keeps
+   * the page itself renderable when the payment provider is unreachable.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const response = await fetch("/api/payments/banks", { cache: "no-store" });
+        const body = (await response.json().catch(() => null)) as
+          | { banks?: BankOption[]; stale?: boolean; unavailable?: boolean }
+          | null;
+
+        if (cancelled) return;
+
+        if (!response.ok || !body || body.unavailable || !body.banks?.length) {
+          setBankListState("failed");
+          return;
+        }
+        setBanks(body.banks);
+        setBankListState(body.stale ? "stale" : "ready");
+      } catch {
+        if (!cancelled) setBankListState("failed");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Cheap enough to derive every render: a regex and two BigInt operations on
   // a short string. Memoising it bought nothing and defeated the compiler.
@@ -141,17 +187,57 @@ export function WithdrawForm(props: {
         </label>
 
         <label className="sb-field" htmlFor="wd-bank">
-          <span className="sb-field__label">Bank code</span>
-          <input
-            id="wd-bank"
-            className="sb-input"
-            inputMode="numeric"
-            required
-            maxLength={6}
-            value={bankCode}
-            onChange={(e) => setBankCode(e.target.value.replace(/\D/g, ""))}
-          />
-          <span className="sb-hint">Your bank&rsquo;s NIP code, from your bank app or statement.</span>
+          <span className="sb-field__label">Bank</span>
+
+          {bankListState === "loading" ? (
+            <select id="wd-bank" className="sb-input" disabled aria-busy="true">
+              <option>Loading banks…</option>
+            </select>
+          ) : bankListState === "failed" ? (
+            <>
+              {/*
+                No list, so the customer types a code rather than being stuck.
+                The server re-validates it, and the provider refuses an unknown
+                one — this fallback loses the convenience, not the safety.
+              */}
+              <input
+                id="wd-bank"
+                className="sb-input"
+                inputMode="numeric"
+                required
+                maxLength={6}
+                value={bankCode}
+                onChange={(e) => setBankCode(e.target.value.replace(/\D/g, ""))}
+              />
+              <span className="sb-hint">
+                We could not load the bank list. Enter your bank&rsquo;s NIP code from your bank
+                app or statement, and we will check it before anything is sent.
+              </span>
+            </>
+          ) : (
+            <>
+              <select
+                id="wd-bank"
+                className="sb-input"
+                required
+                value={bankCode}
+                onChange={(e) => setBankCode(e.target.value)}
+              >
+                <option value="">Choose your bank</option>
+                {banks!.map((bank) => (
+                  <option key={bank.code} value={bank.code}>
+                    {bank.name}
+                  </option>
+                ))}
+              </select>
+              {bankListState === "stale" ? (
+                <span className="sb-hint">
+                  This list was last refreshed a little while ago. If your bank is missing, try
+                  again shortly.
+                </span>
+              ) : null}
+            </>
+          )}
         </label>
 
         <label className="sb-field" htmlFor="wd-name">

@@ -1,4 +1,5 @@
 import type {
+  BankOption,
   DepositWebhookEvent,
   PaymentProvider,
   TransferResult,
@@ -204,6 +205,49 @@ export class PaystackProvider implements PaymentProvider {
    * transfer had not completed yet would refund a customer whose money is
    * already in flight.
    */
+  /**
+   * Paystack's bank list for Nigeria.
+   *
+   * Paginated at 100 by the provider and there are more than that, so this
+   * follows `next_page` rather than taking the first page and calling it the
+   * list. A truncated bank list is not a smaller feature — it is a customer
+   * whose bank is missing being unable to withdraw, with nothing in the logs
+   * to say why.
+   *
+   * `pay_with_bank_transfer` and other flags are ignored: what matters for a
+   * payout is that the code is accepted on a transfer recipient, and Paystack
+   * returns exactly that set for `currency=NGN`.
+   *
+   * No caching here. The caller decides how long a bank list stays fresh; an
+   * adapter that cached would make that decision invisible.
+   */
+  async listBanks(): Promise<BankOption[]> {
+    const banks: BankOption[] = [];
+    let page = 1;
+
+    // Bounded rather than `while (next)`. A provider bug that always returns a
+    // next page would otherwise loop until the request times out, and thirty
+    // pages is far more than the real list needs.
+    for (; page <= 30; page++) {
+      const response = await call<
+        { code: string; name: string; slug?: string }[]
+      >(`/bank?currency=NGN&perPage=100&page=${page}`, { method: "GET" });
+
+      for (const bank of response) {
+        // Defensive: a row without a code is unusable for a transfer, and
+        // including it would put an option in front of a customer that can
+        // only fail at payout.
+        if (typeof bank.code === "string" && typeof bank.name === "string") {
+          banks.push({ code: bank.code, name: bank.name, slug: bank.slug });
+        }
+      }
+
+      if (response.length < 100) break;
+    }
+
+    return banks;
+  }
+
   async initiateTransfer(params: {
     amountMinor: bigint;
     bankCode: string;

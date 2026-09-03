@@ -26,6 +26,22 @@ export interface TransferResult {
   failureReason?: string;
 }
 
+/**
+ * One bank a customer can be paid to.
+ *
+ * `code` is the value the provider expects on a transfer — a NIP code for
+ * Paystack. It is deliberately opaque to everything above this module: nothing
+ * outside here should know what a NIP code looks like, and nothing anywhere
+ * should carry a hand-typed list of them. A wrong code sends real money to the
+ * wrong bank, so the only acceptable source is the provider itself.
+ */
+export interface BankOption {
+  code: string;
+  name: string;
+  /** Present when the provider distinguishes a slug from a display name. */
+  slug?: string;
+}
+
 export interface VirtualAccountDetails {
   providerRef: string;
   accountNumber: string;
@@ -62,6 +78,19 @@ export interface PaymentProvider {
     reference: string;
     reason: string;
   }): Promise<TransferResult>;
+
+  /**
+   * Every bank this provider can pay out to.
+   *
+   * Exists so no part of this codebase has to hold a bank list of its own.
+   * Nigerian NIP codes change — banks merge, microfinance banks are added and
+   * removed — and a list typed into source is wrong from the day it is written
+   * and gets worse. A stale code does not fail loudly; it sends somebody's
+   * withdrawal to a different institution.
+   *
+   * The caller caches the result. Implementations should not.
+   */
+  listBanks(): Promise<BankOption[]>;
 }
 
 export class WebhookSignatureError extends Error {
