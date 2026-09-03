@@ -44,6 +44,21 @@ export interface ToolDefinition {
   scopedToUser: boolean;
   /** Admin-only tools additionally require this permission. */
   adminPermission?: Permission;
+  /**
+   * Demands explicit confirmation regardless of level.
+   *
+   * The four levels are about MONEY, and that is the right axis for most of
+   * this registry. It is the wrong axis for a protection: `setDepositLimit`
+   * moves nothing, so it sits at ACCOUNT, so by level alone it would run on the
+   * strength of a sentence in a chat. Under this layer's threat model — assume
+   * the model is compromised and the attacker wrote its output — that is the
+   * failure rule 16 exists to prevent.
+   *
+   * A separate flag rather than promoting the tool to FINANCIAL, because it is
+   * not a financial action and calling it one would put a misleading word in
+   * front of the customer.
+   */
+  alwaysConfirm?: boolean;
   parameters: Record<string, { type: "string" | "number" | "boolean"; description: string; required?: boolean }>;
 }
 
@@ -163,6 +178,8 @@ export const AI_TOOLS: readonly ToolDefinition[] = [
     level: "ACCOUNT",
     requiresAuth: true,
     scopedToUser: true,
+    // Changing a protection is always the customer's explicit decision.
+    alwaysConfirm: true,
     parameters: {
       amountNaira: { type: "number", description: "Limit in naira", required: true },
       periodDays: { type: "number", description: "1, 7 or 30", required: true },

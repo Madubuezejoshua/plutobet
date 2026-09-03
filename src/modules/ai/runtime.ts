@@ -13,6 +13,8 @@ import {
   type CallerContext,
 } from "./guardrails";
 import { describeEstimate, estimateMatch, impliedOdds } from "./prediction";
+import { responsibleService } from "../responsible/responsible.service";
+import { profileService } from "../users/profile.service";
 
 /**
  * Tool dispatch.
@@ -79,15 +81,106 @@ export async function runTool(
       return getPromotions();
     case "navigate":
       return navigate(String(args.destination ?? ""));
+    case "setOddsFormat":
+      return setOddsFormat(caller.userId!, String(args.format ?? ""));
+    case "setDepositLimit":
+      return setDepositLimit(
+        caller.userId!,
+        Number(args.amountNaira ?? Number.NaN),
+        Number(args.periodDays ?? Number.NaN),
+      );
     case "prepareBet":
       return prepareBet(String(args.selectionIds ?? ""), Number(args.stakeNaira ?? 0));
     case "prepareWithdrawal":
       return prepareWithdrawal(caller.userId!, Number(args.amountNaira ?? 0));
     default:
-      // Unreachable: authoriseToolCall rejects unknown names. Kept so adding a
-      // tool without a handler fails loudly rather than silently doing nothing.
+      /*
+       * Reached only by a tool that is in the registry and has no case here.
+       *
+       * This comment used to say the branch was unreachable because
+       * `authoriseToolCall` rejects unknown names. That was wrong, and it was
+       * wrong in the direction that hides a problem: `setOddsFormat` and
+       * `setDepositLimit` were both registered, both advertised to the model by
+       * `toolsFor`, and both landed here. A customer who asked for either was
+       * told it "is not implemented" by an assistant that had just offered it.
+       *
+       * Both have handlers now, and `tools.acceptance.spec.ts` asserts that
+       * every registered tool has one, so this genuinely cannot be reached
+       * without a failing test. It stays as a last resort rather than a throw
+       * because a chat answering awkwardly is better than a chat that 500s.
+       */
       return { ok: false, summary: `${name} is not implemented` };
   }
+}
+
+// ------------------------------------------------------------- account tools
+
+/**
+ * Changes how prices are displayed. A preference, not a protection.
+ */
+async function setOddsFormat(userId: string, format: string): Promise<ToolResult> {
+  const wanted = format.trim().toUpperCase();
+  if (wanted !== "DECIMAL" && wanted !== "FRACTIONAL" && wanted !== "AMERICAN") {
+    return {
+      ok: false,
+      summary: "I can set decimal, fractional or American odds. Which would you like?",
+    };
+  }
+
+  await profileService.updatePreferences(userId, { oddsFormat: wanted });
+  return { ok: true, summary: `Prices will now show in ${wanted.toLowerCase()} format.` };
+}
+
+/**
+ * Sets a deposit limit.
+ *
+ * The tool is marked `alwaysConfirm`, so the caller has explicitly agreed to
+ * THIS change before anything reaches here.
+ *
+ * The direction policy is NOT decided here and must not be. `setLimit` applies
+ * a decrease immediately and defers an increase by 24 hours, because a player
+ * who can lift their own ceiling mid-session has no limit at all. Reproducing
+ * that rule in the assistant would create a second copy of it to drift; this
+ * calls the service and reports what the service decided.
+ */
+async function setDepositLimit(
+  userId: string,
+  amountNaira: number,
+  periodDays: number,
+): Promise<ToolResult> {
+  if (!Number.isFinite(amountNaira) || amountNaira <= 0) {
+    return { ok: false, summary: "Tell me the limit amount in naira and I will set it." };
+  }
+  if (![1, 7, 30].includes(periodDays)) {
+    return { ok: false, summary: "A deposit limit runs over 1, 7 or 30 days. Which do you want?" };
+  }
+
+  // `parseNairaToKobo` returns null for anything it will not convert exactly.
+  // A limit is a protection, so an amount we cannot read precisely is refused
+  // rather than rounded into one the customer did not ask for.
+  const amountMinor = parseNairaToKobo(String(amountNaira));
+  if (amountMinor === null || amountMinor <= 0n) {
+    return { ok: false, summary: "I could not read that amount. Give me a figure in naira." };
+  }
+
+  const { effectiveFrom, deferred } = await responsibleService.setLimit({
+    userId,
+    type: "DEPOSIT",
+    periodDays,
+    amountMinor,
+  });
+
+  // A deferred increase is stated plainly. A customer who believes a higher
+  // limit is live and finds it is not has been misled at the till.
+  return {
+    ok: true,
+    summary: deferred
+      ? `Your deposit limit will rise to ${naira(amountMinor)} per ${periodDays} day(s) on ` +
+        `${effectiveFrom.toLocaleString("en-NG")}. Raising a limit waits 24 hours; your current ` +
+        "limit stays in force until then."
+      : `Your deposit limit is now ${naira(amountMinor)} per ${periodDays} day(s), effective immediately.`,
+    data: { effectiveFrom: effectiveFrom.toISOString(), deferred },
+  };
 }
 
 // ---------------------------------------------------------------- read tools
@@ -172,7 +265,23 @@ async function getLiveEvents(): Promise<ToolResult> {
  * The estimate comes from prediction.ts, NOT from the model. The disclaimer is
  * appended here as fixed text so it cannot be paraphrased away.
  */
+/**
+ * A fixture id the database will accept as a uuid.
+ *
+ * Without this the id went straight into a `::uuid` cast, so anything that was
+ * not one — an empty string, a fixture id copied from a URL, or whatever a
+ * compromised model chose to emit — came back as a raw PostgresError rather
+ * than an answer, and the chat route turned it into a 500. The tool is reached
+ * by a model naming it, so its arguments are untrusted input in exactly the way
+ * a query string is.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function getHeadToHeadTool(eventId: string): Promise<ToolResult> {
+  if (!UUID.test(eventId.trim())) {
+    return { ok: true, summary: "I cannot find that fixture." };
+  }
+
   const [event] = await db.execute<{
     home_team_id: string | null;
     away_team_id: string | null;

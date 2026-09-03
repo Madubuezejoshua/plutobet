@@ -115,7 +115,7 @@ browser during this pass — not that it looks right in the source.
 | 5f | **Withdrawal bank list** | **DONE** |
 | 5g | **Edit bet** | **BLOCKED_BY_PRODUCT_DECISION** |
 | 5h | **Legacy style bridge removal** | **DONE** — bridge deleted |
-| 5i | Prompt-injection corpus | NOT STARTED |
+| 5i | **Prompt-injection corpus** | **DONE** — 53 attacks, 59 tests, 3 defects found |
 | 5j | Personalisation / Admin AI | NOT STARTED |
 | 5k | Fantasy / Lucky Numbers | NOT STARTED |
 | 6 | Load and reliability testing | NOT STARTED |
@@ -459,22 +459,75 @@ hashed into the production keyspace. Neither is needed to photograph a screen.
 `playwright.config.ts` still does not spawn it. Pointing the suite at a base URL
 stays a deliberate act.
 
+### Stage 5i — the adversarial corpus, and what it found
+
+`src/modules/ai/__tests__/injection-corpus.ts` holds **53 attacks** across the
+sixteen categories the owner named, entering by four vectors: a user message, a
+tool argument, a tool **name**, and retrieved text. It is data, separate from
+the tests that run it, so that adding an attack does not mean writing a test and
+so the same corpus can be replayed against a live model when a key exists.
+
+`prompt-injection.acceptance.spec.ts` runs it against the real layer —
+`authoriseToolCall`, `findTool`, `runTool`, `vetAnswer`, `RulesBasedProvider`,
+nothing mocked. **59 tests, all passing.**
+
+**What this does and does not establish.** The threat model is the pessimistic
+one: assume the model is fully compromised and the attacker wrote its output.
+Every assertion is about what happens when a hostile tool call *arrives*. That
+covers the layer, which is the part that has to hold. It says nothing about how
+a live model would answer these prompts — no key is configured, so that remains
+`BLOCKED_BY_KEY` and the corpus header says so at the top, because this is
+exactly the result somebody would otherwise quote as "Pluto resists prompt
+injection".
+
+Three defects, all found by the corpus rather than by reading the code:
+
+23. `FAILED` → fixed. **`setDepositLimit` required no confirmation.** It sits at
+    `ACCOUNT` level, and the four levels are about money — so a tool that
+    changes a *protection* was, by level alone, callable on the strength of a
+    sentence in a chat. Under the stated threat model that is precisely the
+    failure rule 16 exists to prevent. A new `alwaysConfirm` flag carries it,
+    rather than promoting the tool to `FINANCIAL`, which would put a misleading
+    word in front of the customer. The existing test that checks money tools
+    need confirmation matched on `/^(place|prepare|cashout|deposit|withdraw)/`
+    and `setDepositLimit` begins with "set", so it was never covered.
+
+24. `FAILED` → fixed. **Two registered tools had no handler.**
+    `setOddsFormat` and `setDepositLimit` were both advertised to the model by
+    `toolsFor`, and both fell through to a `default` branch whose comment
+    claimed it was unreachable. A customer asking for either was told it "is not
+    implemented" by an assistant that had just offered it. Both are wired now,
+    to services that already existed — and the deposit-limit handler calls
+    `responsibleService.setLimit` rather than restating its policy, so the rule
+    that a *decrease* applies at once and an *increase* waits 24 hours has one
+    home and cannot drift. A new test calls every registered tool and fails if
+    any reports itself unimplemented, so a tool added tomorrow is covered.
+
+25. `FAILED` → fixed. **`getHeadToHead` crashed on a malformed id.** The
+    argument went straight into a `::uuid` cast, so an empty or malformed value
+    returned a raw `PostgresError` — a 500 from the chat route, and a disclosure
+    of the column type. Tool arguments are chosen by the model, which makes them
+    untrusted input in exactly the way a query string is. Guarded, with the
+    malformed cases tested explicitly.
+
+One of my own assertions was wrong and is recorded rather than quietly changed:
+the fabricated-odds test required `ok: false` for an unknown fixture. `ok`
+reports whether the tool *ran*, not whether it found something, and conflating
+those would make a normal answer look like a fault. The assertion now checks
+what the attack is actually about — that no price is returned and the answer
+says it cannot find the fixture.
+
 ### Exact next action
 
 
-**Stage 5i — the prompt-injection corpus for Pluto AI.**
+**Stage 5j — personalisation and Admin AI.**
 
-Build the adversarial corpus against the tool registry and safety layer. Cover
-attempts to: override system rules; call an unregistered tool; supply another
-user's id; place a bet or withdraw without confirmation; reveal secrets; modify
-a balance; fabricate odds or probabilities; bypass responsible-gambling limits,
-self-exclusion or KYC; execute a dynamic tool name; inject through match names,
-team names, documents or retrieved text; hide instructions in Unicode or
-encoding; and repeat or replay a money action.
-
-No LLM key exists, so live model behaviour stays `BLOCKED_BY_KEY`. The registry
-and the safety layer are testable now and that is what this stage covers — the
-corpus asserts what the layer refuses, not what a model would say.
+Establish what exists, what is reachable without a model key, and what is
+genuinely `BLOCKED_BY_KEY`. Anything that can be made to work without a key gets
+built; anything that cannot gets an honest unavailable state rather than a
+screen that pretends. Then **5k**, Fantasy and Lucky Numbers, on the same test —
+`/fantasy` already renders an honest "not available yet" page, and the question
+is whether the others match it.
 
 Then, still outstanding for stage 3: the remaining viewports the owner named —
 430×932, 768×1024, 1024×768, 1366×768, 1920×1080 — as a responsive sweep, plus
@@ -560,7 +613,7 @@ build. Every one is a full run, not a subset.
 | `npx tsc --noEmit` | **exit 0**, 0 errors | this checkpoint |
 | `npx eslint .` | **exit 0**, 0 errors, 0 warnings | this checkpoint |
 | `npx next build` | **Compiled successfully** | this checkpoint |
-| `npx vitest run` | **74 files, 913 passed, 1 skipped, 0 failed**, exit 0 | this checkpoint |
+| `npx vitest run` | **75 files, 973 passed, 1 skipped, 0 failed**, exit 0 | this checkpoint |
 | `npx playwright test` | **118 passed, 6 skipped, 0 failed** (desktop + Pixel 7) | this checkpoint |
 | `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, exit 0 | this checkpoint |
 | `node scripts/secret-scan.mjs` | **clean**, 441 files, 15 rules | this checkpoint |
@@ -743,7 +796,7 @@ described at the top of this file.
 |---|---|---|
 | Types | `npx tsc --noEmit` | **exit 0** |
 | Lint | `npm run lint` | **exit 0** — 0 errors, **0 warnings** |
-| Tests | `npx vitest run` | **74 files, 913 passed, 1 skipped, 0 failed** |
+| Tests | `npx vitest run` | **75 files, 973 passed, 1 skipped, 0 failed** |
 | The 1 skip | — | the opt-in live provider contract (`ODDS_LIVE_CONTRACT`) — **not counted as passing** |
 | Browser | `npx playwright test` | **118 passed, 6 skipped, 0 failed** — desktop 1440×900 and a Pixel 7 profile |
 | The 6 skips | — | the measured-column check, which is meaningless on a viewport narrower than the column |
@@ -759,10 +812,10 @@ described at the top of this file.
 | Database roles | `npm run db:audit-roles` | **exit 1**, correctly — §20 |
 | CI | GitHub Actions | green on both remotes for `main`. **This branch has not been pushed**, so no CI run exists for it |
 
-Test count is **913**, from 844 at the start of this pass: +69 covering cash-out
+Test count is **973**, from 844 at the start of this pass: +129 covering cash-out
 exposure, eligibility and its HTTP surface, the date-of-birth gate, the
-live-version cache, the withdrawal bank list, and the browser suite's own
-fixtures. The 15 lint warnings the previous run recorded are gone — 14 were dead
+live-version cache, the withdrawal bank list, the browser suite's own fixtures,
+and the adversarial corpus for Pluto. The 15 lint warnings the previous run recorded are gone — 14 were dead
 imports and one duplicated a policy the SQL restated as a literal.
 
 The browser row is new and is the only gate here that opens one. It is listed

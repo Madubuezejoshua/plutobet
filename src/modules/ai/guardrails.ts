@@ -88,7 +88,10 @@ export function authoriseToolCall(
 
   // Rules 13 and 14. A financial action needs the customer to have said yes to
   // THIS action, not to have been generally agreeable earlier in the chat.
-  if (requiresConfirmation(tool.level) && !caller.confirmed) {
+  //
+  // `alwaysConfirm` extends that to tools that change a protection without
+  // moving money — see the flag's own note in `tools.ts`.
+  if ((requiresConfirmation(tool.level) || tool.alwaysConfirm === true) && !caller.confirmed) {
     throw new GuardrailError(
       "CONFIRMATION_REQUIRED",
       "this needs your explicit confirmation before I can do it",
