@@ -314,18 +314,17 @@ re-validates, and the provider refuses an unknown code.
 
 ### Exact next action
 
-
 Stage 5g — edit bet. Inspect before implementing:
 
 1. Search the repository for any existing edit-bet specification, product rule
-   or schema support.  §12 records it as  with no
+   or schema support. `general.md` §12 records it as `NOT_IMPLEMENTED` with no
    code of any kind.
-2. Establish whether the repository defines eligibility, fees, timing, odds
-   change consent, or the treatment of promotional stakes.
+2. Establish whether the repository defines eligibility, fees, timing,
+   odds-change consent, or the treatment of promotional stakes.
 
-If no unambiguous product rule exists, this is 
+If no unambiguous product rule exists, this is `BLOCKED_BY_PRODUCT_DECISION`
 and must be recorded as such rather than invented. A cancel/rebook that guesses
-at fees or at whether a customer consents to a re-priced bet is a financially
+at fees, or at whether a customer consents to a re-priced bet, is a financially
 dangerous rule shipped to look complete.
 
 ### Files being modified right now
