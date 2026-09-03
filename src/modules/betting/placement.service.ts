@@ -4,6 +4,7 @@ import { responsibleService, ResponsibleService } from "../responsible/responsib
 import { users } from "../users/schema";
 import { dbDirect, type DirectDatabase } from "../wallet/db-direct";
 import { walletService, WalletService, type DirectTransaction } from "../wallet/wallet.service";
+import { dateOfBirthService } from "../users/date-of-birth.service";
 import {
   AccountNotEligibleError,
   DuplicateSelectionError,
@@ -393,6 +394,23 @@ export class PlacementService {
     if (!account) throw new AccountNotEligibleError(userId, "UNKNOWN");
     if (account.status !== "ACTIVE") {
       throw new AccountNotEligibleError(userId, account.status);
+    }
+
+    /*
+     * An account with no date of birth on file has never passed the age gate.
+     *
+     * The database trigger only fires when the column is NOT NULL, so these
+     * accounts — created before the date was collected — sit outside the age
+     * control entirely. They are not underage; they are unverified, which is the
+     * same thing to a regulator asking how you know. No new bet until they
+     * answer. The completion flow is one screen and the check disappears once
+     * the column can be made NOT NULL.
+     *
+     * In the same transaction as the rest of placement, so a date supplied
+     * concurrently either lands before this read or after the whole bet.
+     */
+    if (await dateOfBirthService.isMissingWithin(tx, userId)) {
+      throw new AccountNotEligibleError(userId, "DATE_OF_BIRTH_REQUIRED");
     }
 
     // Identity-level exclusion and cooling-off. Runs in the placement

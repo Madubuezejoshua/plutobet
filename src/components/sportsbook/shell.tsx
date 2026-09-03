@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/modules/auth/auth-options";
 import { walletForUser } from "@/modules/wallet/lookup";
 import { walletService } from "@/modules/wallet/wallet.service";
+import { dateOfBirthService } from "@/modules/users/date-of-birth.service";
+import { DateOfBirthBanner } from "./date-of-birth-banner";
 import { BetslipProvider } from "./betslip-store";
 import { SportsbookHeader } from "./header";
 import { MobileBar } from "./mobile-bar";
@@ -41,6 +43,29 @@ export async function SportsbookShell({
   const signedIn = Boolean(session?.user);
   const balanceMinor = signedIn ? await headerBalanceMinor(session!.user.id) : null;
 
+  /*
+   * "Ask at the next authenticated session" is implemented here because this is
+   * the one component every signed-in page renders through.
+   *
+   * It is a banner rather than a forced redirect. A redirect from every page
+   * would also bounce someone reading the responsible-gambling controls or the
+   * terms, which are exactly the pages a customer being asked for personal data
+   * may want to read first. The banner is unmissable and the ENFORCEMENT is
+   * elsewhere: placement and withdrawal refuse inside their own transactions,
+   * so nothing depends on the customer having seen this.
+   *
+   * A failed lookup shows nothing rather than blocking the site — the gates
+   * still hold, and a database blip must not lock everyone out of browsing.
+   */
+  const needsDateOfBirth = signedIn
+    ? await dateOfBirthService
+        .isMissing(session!.user.id)
+        .catch((error: unknown) => {
+          console.error("[sb-shell] date-of-birth check unavailable", error);
+          return false;
+        })
+    : false;
+
   return (
     <BetslipProvider>
       <div className="sb">
@@ -50,6 +75,7 @@ export async function SportsbookShell({
           sports={showSports ? SPORTS : []}
           activeSport={activeSport}
         />
+        {needsDateOfBirth ? <DateOfBirthBanner /> : null}
         {children}
         <SportsbookFooter />
         <MobileBar signedIn={signedIn} balanceMinor={balanceMinor} />

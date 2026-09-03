@@ -288,3 +288,32 @@
   .sb-cashout { justify-items: stretch; }
   .sb-cashout__actions .sb-btn { flex: 1 1 auto; }
 }
+
+/* ==========================================================================
+   BANNER — a compliance prompt that cannot be dismissed
+
+   Warm rather than red. It is a required action, not a failure, and colouring
+   an ordinary request as an error trains people to ignore real errors.
+   ========================================================================== */
+
+.sb-banner {
+  background: var(--sb-warn-wash);
+  border-bottom: 1px solid var(--sb-warn);
+  color: var(--sb-ink);
+}
+.sb-banner__inner {
+  max-width: var(--sb-max);
+  margin: 0 auto;
+  padding: var(--sb-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sb-3);
+}
+.sb-banner__icon { color: var(--sb-warn); flex: none; }
+.sb-banner__text { margin: 0; font-size: var(--sb-t-md); line-height: 1.45; min-width: 0; }
+.sb-banner__action { flex: none; }
+
+@media (max-width: 640px) {
+  .sb-banner__inner { flex-wrap: wrap; }
+  .sb-banner__action { width: 100%; }
+}

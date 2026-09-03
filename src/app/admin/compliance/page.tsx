@@ -84,12 +84,20 @@ export default async function AdminCompliancePage() {
       ) : null}
 
       {Number(tiers?.no_dob ?? 0) > 0 ? (
-        <p className="notice error">
+        <p className="notice warn">
           <strong>{tiers!.no_dob} accounts have no date of birth.</strong> These predate the
-          age gate. They are flagged on their account page but <em>not blocked</em> — decide
-          whether to block them or require it at next login.
+          age gate. Each is asked at every authenticated session and <em>cannot bet, deposit or
+          withdraw</em> until it is supplied, so this number falls on its own. The column stays
+          nullable until it reaches zero — <code>SET NOT NULL</code> would fail while any row is
+          empty, and the only way to force it through is to write a date nobody gave us.
         </p>
-      ) : null}
+      ) : (
+        <p className="notice ok">
+          Every account has a date of birth on file. The <code>date_of_birth</code> column can now
+          be tightened to <code>NOT NULL</code>, which makes the age gate structural rather than
+          procedural — see <code>date-of-birth.service.ts</code> for the procedure.
+        </p>
+      )}
 
       <section className="tiles">
         <div className="tile">

@@ -42,6 +42,19 @@ export async function createFundedUser(
       .values({
         email: `${randomUUID()}@betting.test`,
         passwordHash: "test-only-not-an-authentication-hash",
+        /*
+         * A real account always has one. Registration collects it and the
+         * `users_minimum_age` trigger enforces it, so a fixture without one is
+         * not a customer — it is a LEGACY account from before the column was
+         * collected, which is a different thing with different rules.
+         *
+         * Omitting it here silently made every betting test run against that
+         * legacy state, which went unnoticed until the date-of-birth gate was
+         * added and the fixtures started being refused. A test whose subject is
+         * accidentally in an edge state proves something other than what it
+         * claims.
+         */
+        dateOfBirth: "1990-06-15",
       })
       .returning({ id: users.id });
 

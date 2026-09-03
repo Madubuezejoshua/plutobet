@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { appendAuditLog } from "../audit/append";
 import { walletService, WalletService } from "../wallet/wallet.service";
 import type { AdminActor } from "../wallet/types";
+import { dateOfBirthService } from "../users/date-of-birth.service";
 import {
   AccountNotWithdrawableError,
   KycLimitError,
@@ -101,6 +102,19 @@ export class WithdrawalService {
       // account is under investigation and may not.
       if (account.status === "SUSPENDED") {
         throw new AccountNotWithdrawableError(params.userId, account.status);
+      }
+
+      /*
+       * No payout to an account whose holder has never been age-verified.
+       *
+       * Unlike self-exclusion — where trapping the money would punish someone
+       * for using the protection — this is a customer we cannot confirm should
+       * have an account at all. The money is not lost; it is held until they
+       * complete one screen, and the completion flow is offered at every
+       * authenticated session until they do.
+       */
+      if (await dateOfBirthService.isMissingWithin(tx, params.userId)) {
+        throw new AccountNotWithdrawableError(params.userId, "DATE_OF_BIRTH_REQUIRED");
       }
 
       await this.assertWithinDailyCap(tx, params.userId, account.kyc_level, params.amountMinor);

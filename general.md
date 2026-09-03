@@ -86,9 +86,9 @@ browser during this pass — not that it looks right in the source.
 | | |
 |---|---|
 | Branch | `ui/plutobet-sportsbook-redesign` |
-| HEAD | `4a743d1` — "Gate cash-out inside the service, and make a retry return what was paid" |
-| Working tree | **NOT clean** — 7 entries |
-| Commits ahead of `main` | **11** (read from `git rev-list`, not from memory) |
+| HEAD | `7985ed0` — "Let a customer actually cash out" |
+| Working tree | **NOT clean** — 13 entries |
+| Commits ahead of `main` | **12** (read from `git rev-list`, not from memory) |
 | Behind `main` | 0 |
 | `origin/main` | `83cb633` |
 | `plutobet/main` | `83cb633` |
@@ -109,8 +109,8 @@ browser during this pass — not that it looks right in the source.
 | 4 | Interaction audit of every enabled control | NOT STARTED |
 | 5a | Cash-out: repair partial cash-out and exposure | **DONE** |
 | 5b | Cash-out: eligibility gate, replay, concurrency | **DONE** |
-| 5c | **Cash-out: authenticated route, UI, audit, admin visibility** | **DONE** |
-| 5d | DOB backfill | NOT STARTED |
+| 5c | Cash-out: authenticated route, UI, audit, admin visibility | **DONE** |
+| 5d | **Date-of-birth backfill** | **DONE** |
 | 5e | Live-version Redis cache | NOT STARTED |
 | 5f | Withdrawal bank list | NOT STARTED |
 | 5g | Edit bet | NOT STARTED |
@@ -130,113 +130,137 @@ browser during this pass — not that it looks right in the source.
 
 ### Stage 2 — automated repository audits
 
-| Audit | Result |
-|---|---|
-| `TODO` / `FIXME` / `HACK` / `XXX` in source | **0** — the three matches are a phone-format doc comment and the CI reporter's own TODO handling |
-| `href="#"`, empty click/submit handlers | **0** |
-| Skipped or `.only` tests | **0** — the one `describe.skipIf` is the opt-in live provider contract |
-| Suppressed lint/TS rules | **3**, each documented and justified |
-| Internal links to routes that do not exist | **0 of 25 targets**, against 46 pages and 26 API routes |
-| `wallets` queries missing a bucket | **0 real.** Two pattern hits read and cleared: a primary-key lookup that verifies ownership after, and a reconciliation sweep that must scan every bucket to find drift |
+`TODO`/`FIXME`/`HACK`/`XXX`: **0** in source. `href="#"` and empty handlers:
+**0**. Skipped or `.only` tests: **0** (the one `describe.skipIf` is the opt-in
+live provider contract). Suppressed lint/TS rules: **3**, each documented.
+Internal links to routes that do not exist: **0 of 25**, against 46 pages and 26
+API routes. `wallets` queries missing a bucket: **0 real** — two pattern hits
+read and cleared (a primary-key lookup that verifies ownership after, and a
+reconciliation sweep that must scan every bucket to find drift).
 
-### Stage 5 — cash-out, from broken to exposed
+### Stage 5a–5c — cash-out, from broken to exposed
 
-Cash-out was `IMPLEMENTED_NOT_REACHABLE`. It is now
-`VERIFIED_BY_INTEGRATION_TEST` end to end through its HTTP route, with 35 tests
-across three files. It is **not yet** `VERIFIED_IN_REAL_BROWSER` — stage 4 does
-that.
+Was `IMPLEMENTED_NOT_REACHABLE`; now `VERIFIED_BY_INTEGRATION_TEST` end to end
+through its HTTP route, 35 tests across three files. Not yet
+`VERIFIED_IN_REAL_BROWSER` — stage 4 does that.
 
-**Two defects found, one worse than previously reported.**
+**Two defects, one worse than previously reported.**
 
-1. `FAILED` → fixed. **Partial cash-out could never have succeeded.** Migration
-   0007's `bets_cashout_matches_status` requires `cashout_value_minor IS NULL`
-   unless the bet is `CASHED_OUT`; 0016 added partial cash-out, which leaves the
-   bet `PENDING` while recording value, and never revisited the constraint. Every
-   call raised Postgres `23514` and rolled back. It went unnoticed because
-   **nothing called it** — no route, no UI, no test. §15 previously called it
-   well constructed with only an exposure defect; that was wrong.
+1. `FAILED` → fixed. **Partial cash-out could never have succeeded.** 0007's
+   `bets_cashout_matches_status` requires `cashout_value_minor IS NULL` unless
+   the bet is `CASHED_OUT`; 0016 added partial cash-out, which leaves the bet
+   `PENDING` while recording value, and never revisited the constraint. Every
+   call raised Postgres `23514`. Unnoticed because **nothing called it** — no
+   route, no UI, no test. §15 previously called it well constructed with only an
+   exposure defect; that was wrong.
 2. `FAILED` → fixed. **Exposure would have been released twice.** `GREATEST`
-   floors a double release at zero rather than raising, so the market would
-   report less liability than it holds — the direction that lets a ceiling admit
-   risk it exists to refuse.
+   floors a double release at zero rather than raising, so a market would report
+   less liability than it holds — the direction that lets a ceiling admit risk it
+   exists to refuse.
 
 `cashout-exposure.acceptance.spec.ts` was written first and **failed 5 of 7**
-against the unmodified code. All three cash-out suites pass now.
+against the unmodified code.
 
-**Migration `0027_cashout_partial_repair.sql`** replaces the constraint with one
-permitting a partially cashed-out `PENDING` bet and stating three invariants the
-database checks; adds `bets.released_liability_minor`, bounded at or below the
-claim so a double release is a loud error; and indexes bets still carrying
-liability. Every release returns `claim − released` and records what it gave
-back. Division truncates deliberately — under-releasing costs ceiling headroom,
-over-releasing admits refused risk — and the final instalment returns the
-remainder so truncation strands nothing.
+`0027_cashout_partial_repair.sql` replaces the constraint and adds
+`released_liability_minor`, bounded at or below the claim so a double release is
+a loud error. Every release returns `claim − released` and records what it gave
+back; division truncates deliberately and the final instalment returns the
+remainder.
 
-**The service boundary** (`cashout-eligibility.acceptance.spec.ts`, 11 tests):
-only `ACTIVE` may cash out, with `SUSPENDED`, `RESTRICTED`, `SELF_EXCLUDED` and
-`CLOSED` each asserted separately and the balance checked unchanged after the
-refusal; identity-level exclusion runs in the same transaction; ownership is
-checked first and refused with the same reason an ineligible account gets, so a
-prober cannot discover which bet ids exist; a retried cash-out returns the
-**original** result rather than an error; two full cash-outs racing pay once; two
-partials racing cannot buy back more stake than the bet carries.
+**Boundary** (11 tests): only `ACTIVE` may cash out, with `SUSPENDED`,
+`RESTRICTED`, `SELF_EXCLUDED` and `CLOSED` each asserted and the balance checked
+unchanged after refusal; identity-level exclusion runs in the same transaction;
+ownership is checked first and refused with the same reason an ineligible account
+gets; a retry returns the **original** result; two full cash-outs racing pay once;
+two partials racing cannot buy back more stake than the bet carries.
 
-**The route** — `GET`/`POST /api/bets/[id]/cashout`
-(`http-cashout.acceptance.spec.ts`, 17 tests). `GET` prices without taking;
-`POST` takes, in full or in part. The user id comes only from the authenticated
-session. A refusal to *quote* answers 200 with `available: false` because a
+**Route** — `GET`/`POST /api/bets/[id]/cashout` (17 tests). `GET` prices without
+taking; a refusal to quote answers 200 with `available: false` because a
 suspended market is a market condition, not an error — except an ineligible
-account, which stays 403 because that is about the person. Each
-`CashOutUnavailableError` reason maps to its own status: 403 account, 409 bet
-state and market state, 422 value and validation. Zero portions, non-integer
-portions and unknown fields are refused at the schema, so none reaches the
-database to surface as a 500 — the failure mode a zero stake once had on the
-placement route.
+account, which stays 403. Each reason maps to its own status. The price the
+customer saw is sent back and the server pays that or more, never less.
 
-**The price the customer saw is sent back** as `expectedOfferMinor`, and the
-server pays that or more, never less. Verified by a test that drifts the price
-between quote and accept and asserts 422 with nothing paid.
+**UI** inside the ticket, priced on demand. **Audit rows on the same transaction
+as the ledger entries.**
 
-**The UI** is inside the ticket rather than a dialog, because the decision is
-weighed against the selections and the potential return the dialog would hide.
-It prices on demand rather than on page load: ten open tickets would otherwise
-mean ten pricing requests for offers nobody looks at.
+### Stage 5d — date of birth
 
-**Audit rows are appended on the same transaction as the ledger entries**, so a
-trail that exists is a trail whose money moved. Admin already surfaces
-cashed-out bets through `cashed_out_stake_minor`.
+`VERIFIED_BY_INTEGRATION_TEST`, `date-of-birth.acceptance.spec.ts`, 12 tests.
+
+Accounts created before the column was collected have `date_of_birth IS NULL`,
+and the `users_minimum_age` trigger only fires when it is NOT NULL — so those
+accounts sat outside the age control entirely. Not underage; unverified, which
+is the same thing to a regulator asking how you know.
+
+| Piece | What it does |
+|---|---|
+| `date-of-birth.service.ts` | `isMissing`, and a write-once `complete` that validates through `assertOldEnough`, locks the row so two submissions cannot both write, and appends an audit row **recording that a date was supplied, not what it was** |
+| `POST /api/account/date-of-birth` | Write-once; no PUT. Underage is **403, not 422** — the request was understood and the holder is not permitted, and calling it a validation error would have the UI say "check the date" to someone who typed it correctly. The date is not echoed back |
+| `/account/date-of-birth` | A real page, not a modal, so it can be linked, bookmarked by support, and read without a focus trap |
+| Banner in the shell | Every authenticated page, not dismissible, and it names what is blocked rather than only what is needed |
+| Placement + withdrawal | Refuse inside their own transactions, so enforcement does not depend on the customer having seen the banner |
+| Admin compliance page | Corrected — it said these accounts were "**not blocked**", which is no longer true |
+
+**No date is ever invented.** A fabricated date of birth is worse than a missing
+one: it turns "we do not know" into a false record that looks like diligence.
+
+**The column stays nullable.** `SET NOT NULL` fails while any row is empty, and
+the only way to force it through is to write a date nobody gave us. The
+procedure for tightening it — including that accounts which never return are a
+compliance decision, not a code change — is at the bottom of the service file.
+
+### Two further defects found while testing stage 5d
+
+1. `FAILED` → fixed. **The age gate meant different things in two places.**
+   `enforce_minimum_age` compared against `CURRENT_DATE` — today in the *database
+   server's* timezone — while `assertOldEnough` computes in UTC. Wherever the
+   database is not UTC they disagree for part of every day, and a person exactly
+   eighteen falls in the gap: the service accepts, the trigger raises, the
+   customer gets a 500. Found by a test on a PDT machine. Production Neon runs
+   UTC so it has almost certainly never fired for a real customer, but an age
+   control whose answer depends on where the database is deployed is not one
+   anybody can attest to. `0028_age_gate_utc.sql` makes the trigger use
+   `(now() AT TIME ZONE 'UTC')::date`.
+2. `FAILED` → fixed. **Every betting test fixture was a legacy account.**
+   `createFundedUser` never set a date of birth, so all of them sat in the
+   pre-collection state. It went unnoticed until the new gate started refusing
+   them. A test whose subject is accidentally in an edge state proves something
+   other than what it claims; the fixture now sets one, and the date-of-birth
+   tests clear it explicitly when that is the state under test.
 
 ### One existing test was objectively wrong and was replaced
 
-`cashout.acceptance.spec.ts` asserted that a second cash-out **throws**. That was
-the behaviour and it was wrong: a cash-out that committed and then lost its
-response returned an error to a customer who had already been paid. The property
-it protected — paid exactly once — is kept and strengthened by also requiring the
-original figure back. The reason is recorded inline.
+`cashout.acceptance.spec.ts` asserted a second cash-out **throws**. That returned
+an error to a customer who had already been paid. The property it protected —
+paid exactly once — is kept and strengthened by also requiring the original
+figure back. The reason is recorded inline.
 
 ### Lint reached zero warnings
 
-Sixteen of seventeen were dead imports and unused locals. The seventeenth was
-not: `ASSUMED_FINISHED_AFTER_MS` documented the three-hour assumed-finish policy
-while the query restated it as a literal `interval '3 hours'`, so the two could
-drift apart silently. The query uses the constant now.
+Sixteen of seventeen were dead imports. The seventeenth was not:
+`ASSUMED_FINISHED_AFTER_MS` documented the assumed-finish policy while the query
+restated it as a literal `interval '3 hours'`, so the two could drift apart. The
+query uses the constant now.
 
 ### Exact next action
 
 
-Stage 5d — date-of-birth backfill. Before writing code, establish from the
-database and the code, not from the previous report:
+Stage 5e — the `/api/live` version cache.
 
-1. How many accounts actually have a NULL `date_of_birth`.
-2. Where the age gate is enforced today (registration service, database
-   trigger) and what those paths do for an account that has no date at all.
-3. Whether an authenticated session can already be forced through a completion
-   step, or whether that mechanism has to be built.
+`liveVersion()` runs a three-table aggregate on every poll, and the board polls
+every five seconds per viewer. Before writing code, establish from the code:
 
-Then: require completion at the next authenticated session, block wagering,
-deposits and withdrawals until it is done, validate 18+, store only a real
-user-submitted value, add admin visibility and an audit event, and document the
-later `NOT NULL` migration. Never invent a date.
+1. What `liveVersion()` actually queries and what the ETag is derived from.
+2. Where Redis is already used and what the failure behaviour is when it is
+   unavailable (`src/db/redis.ts`, the rate limiter, the odds budget).
+3. Whether any placement decision reads the cached value — it must not; a stale
+   version may never authorise a bet, and prices used for placement stay
+   authoritative on the server.
+
+Then: Redis-backed cache with explicit invalidation when live data changes, a
+bounded TTL as recovery, correct 304 behaviour, a safe fallback that degrades to
+the direct query when Redis is down, and tests for hit, miss, invalidation,
+concurrency and Redis failure.
 
 ### Files being modified right now
 
@@ -249,64 +273,69 @@ None in flight. The working tree is clean at the commit named above.
 - Commit counts, branch state and remote heads are read from git on every
   checkpoint rather than carried forward in prose.
 - The standing reporting instruction lives in `AGENTS.md` **outside** the
-  BEGIN/END markers `next dev` regenerates, so a dev server cannot delete it.
+  BEGIN/END markers `next dev` regenerates.
 - Exposure is made exact with a recorded `released_liability_minor` rather than
-  by having settlement release a proportion of the remaining stake. The
-  proportional approach needs no column but truncates at every step, leaving a
-  residue permanently claimed; recording what was released is exact, auditable,
-  and keeps "a market with no PENDING bets holds zero liability" true rather than
-  approximately true.
+  by releasing a proportion of the remaining stake at settlement. The
+  proportional approach truncates at every step and leaves a residue permanently
+  claimed; recording what was released is exact and auditable.
 - A full cash-out sets `cashed_out_stake_minor = stake_minor`, so one
   database-checked invariant covers both routes into `CASHED_OUT`. Verified not
-  to affect `product-reconciliation.service.ts`, whose only use of that column
-  filters on `status = 'WON'`.
-- Cash-out is refused for every non-`ACTIVE` status, including `SELF_EXCLUDED`
-  and `RESTRICTED`, per the owner's explicit instruction. It **differs from
-  withdrawal**, which permits a self-excluded customer so as not to trap their
-  money. The difference is deliberate: cash-out is a wagering decision and
-  nothing is trapped by refusing it, because the bet still settles and still
-  pays. Recorded so it is not later "fixed" as an inconsistency.
-- The cash-out money key is derived from the bet rather than supplied by the
-  client. A client key protects only against that client's retries; a bet can be
-  cashed out exactly once, so a bet-derived key holds even for a client that
-  generates a fresh key each attempt. The route still accepts and validates a
-  client key for request tracing.
-- A quote is ownership-checked. What a bet is worth right now also reveals that
-  it exists and is still running, and that costs nothing to close.
-- Playwright was installed as a dev dependency. The browser, interaction and
-  accessibility audits cannot be done without a real browser driver, and the
-  previous pass proved a one-shot headless capture reports a viewport it did not
-  use.
+  to affect `product-reconciliation.service.ts`.
+- Cash-out is refused for every non-`ACTIVE` status including `SELF_EXCLUDED`,
+  per the owner's explicit instruction. It **differs from withdrawal**, which
+  permits a self-excluded customer so as not to trap their money. Deliberate:
+  cash-out is a wagering decision and nothing is trapped, because the bet still
+  settles and still pays.
+- The cash-out money key is derived from the bet, not supplied by the client. A
+  client key protects only against that client's retries.
+- A quote is ownership-checked: what a bet is worth also reveals that it exists.
+- Date of birth is **write-once** through the customer-facing path. The age gate
+  rests on it, and an editable value would turn a refused registration into an
+  accepted one on the second attempt. Correcting a genuine mistake is an admin
+  action with a reason attached — not built here, and not needed until someone
+  asks for it.
+- Deposits are **not** blocked for a missing date of birth, and this is
+  deliberate. The deposit rail is a dedicated NUBAN: money arrives by bank
+  transfer with no application action to refuse. Blocking the webhook would
+  strand a customer's money, which is worse than the gap it closes. Betting and
+  withdrawal — both of which the application does control — are blocked.
+- Playwright is a dev dependency: the browser, interaction and accessibility
+  audits need a real driver, and the previous pass proved a one-shot headless
+  capture reports a viewport it did not use.
 
 ### Latest gate results
 
 
 | Gate | Result | When |
 |---|---|---|
-| `npx tsc --noEmit` | **0 errors** | after stage 5c |
-| `npx eslint .` | **0 errors, 0 warnings** | after stage 5c |
-| `npx next build` | **exit 0**, `/api/bets/[id]/cashout` emitted | after stage 5c |
-| `npx vitest run` on betting + settlement | **21 files, 251 passed, 0 failed** | after stage 5c |
-| `node scripts/check-migrations.mjs` | 28 of 28 on a clean database, 62 tables | after stage 5a |
+| `npx tsc --noEmit` | **0 errors** | after 5d |
+| `npx eslint .` | **0 errors, 0 warnings** | after 5d |
+| `npx next build` | **exit 0**; `/account/date-of-birth`, `/api/account/date-of-birth` and `/api/bets/[id]/cashout` all emitted | after 5d |
+| `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, 62 tables | after 5d |
+| `npx vitest run` on betting, settlement, payments, users | **28 files, 345 passed, 0 failed** | after 5d |
 | `node scripts/secret-scan.mjs` | clean | baseline, `4b65c02` |
 
-The full suite is re-run from a clean state in stage 9. Totals will rise because
-this pass adds tests; any figure that changes is corrected here.
+The full suite is re-run from a clean state in stage 9; totals will rise because
+this pass adds tests, and any figure that changes is corrected here.
 
 ### Known failures and blockers
 
 
 | # | Finding | Status |
 |---|---|---|
-| 1 | Partial cash-out refused by `bets_cashout_matches_status` on every call, with no test coverage | **FIXED**, 5a |
+| 1 | Partial cash-out refused by a constraint on every call, untested | **FIXED**, 5a |
 | 2 | Partial cash-out's exposure slice released twice | **FIXED**, 5a |
 | 3 | `CashOutService` did not check account status | **FIXED**, 5b |
-| 4 | A retried cash-out returned an error to a customer who had been paid | **FIXED**, 5b |
+| 4 | A retried cash-out returned an error for money already paid | **FIXED**, 5b |
 | 5 | `ASSUMED_FINISHED_AFTER_MS` duplicated a policy the SQL restated as a literal | **FIXED** |
 | 6 | Cash-out had no API route and no UI | **FIXED**, 5c |
+| 7 | Accounts with no date of birth were outside the age control entirely | **FIXED**, 5d |
+| 8 | The age gate used the database's local date, the service used UTC | **FIXED**, `0028` |
+| 9 | Every betting fixture was accidentally a legacy account | **FIXED** |
+| 10 | The admin compliance page said missing-DOB accounts were "not blocked" | **FIXED** — they are |
 
-Cash-out is not yet `VERIFIED_IN_REAL_BROWSER`; stage 4 covers that. Blockers
-inherited from the previous pass remain accurate and are in §23.
+Cash-out and the date-of-birth flow are not yet `VERIFIED_IN_REAL_BROWSER`;
+stage 4 covers that. Blockers inherited from the previous pass are in §23.
 
 ### Deliberately not performed
 
