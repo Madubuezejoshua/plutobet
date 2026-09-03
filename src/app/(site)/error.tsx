@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 
 /**
  * Error boundary for player-facing pages.
@@ -24,38 +25,36 @@ export default function SiteError({
   reset: () => void;
 }) {
   return (
-    <section className="card raised" style={{ maxWidth: "34rem", margin: "3rem auto", padding: "1.75rem" }}>
-      <h1 style={{ margin: 0, fontSize: "1.35rem" }}>This page didn’t load</h1>
+    <div className="sb-page sb-page--narrow">
+      <section className="sb-panel sb-pad">
+        <AlertTriangle size={26} aria-hidden="true" style={{ color: "var(--sb-warn)" }} />
+        <h1 style={{ margin: "var(--sb-3) 0 0", fontSize: 21, letterSpacing: "-0.02em" }}>
+          This page didn’t load
+        </h1>
 
-      <p style={{ margin: "0.75rem 0 0", lineHeight: 1.6, opacity: 0.85 }}>
-        Something failed on our side. Nothing was placed, paid or changed — your
-        balance and any open bets are untouched.
-      </p>
-
-      <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem", flexWrap: "wrap" }}>
-        <button type="button" onClick={reset} className="btn primary">
-          Try again
-        </button>
-        <Link href="/" className="btn">
-          Go to home
-        </Link>
-        <Link href="/bets" className="btn">
-          My bets
-        </Link>
-      </div>
-
-      {error.digest ? (
-        <p
-          style={{
-            margin: "1.25rem 0 0",
-            fontSize: "0.75rem",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            opacity: 0.5,
-          }}
-        >
-          error id: {error.digest}
+        <p className="sb-muted" style={{ margin: "var(--sb-2) 0 0", lineHeight: 1.6 }}>
+          Something failed on our side. Nothing was placed, paid or changed — your balance and
+          any open bets are untouched.
         </p>
-      ) : null}
-    </section>
+
+        <div style={{ display: "flex", gap: "var(--sb-2)", marginTop: "var(--sb-5)", flexWrap: "wrap" }}>
+          <button type="button" onClick={reset} className="sb-btn sb-btn--primary">
+            Try again
+          </button>
+          <Link href="/" className="sb-btn sb-btn--ghost">
+            Go to home
+          </Link>
+          <Link href="/bets" className="sb-btn sb-btn--ghost">
+            My bets
+          </Link>
+        </div>
+
+        {error.digest ? (
+          <p className="sb-ticket__ref" style={{ marginTop: "var(--sb-5)" }}>
+            error id: {error.digest}
+          </p>
+        ) : null}
+      </section>
+    </div>
   );
 }

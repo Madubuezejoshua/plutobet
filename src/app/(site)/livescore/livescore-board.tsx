@@ -49,8 +49,11 @@ export function LiveScoreBoard({ snapshot: initial }: { snapshot: LiveSnapshot }
 
   if (snapshot.events.length === 0) {
     return (
-      <section className="card empty">
-        <p>No fixtures are loaded. Matches appear here once the odds worker has run.</p>
+      <section className="sb-panel">
+        <div className="sb-empty">
+          <p className="sb-empty__title">No fixtures loaded</p>
+          <p className="sb-small">Matches appear here once the odds worker has run.</p>
+        </div>
       </section>
     );
   }
@@ -58,55 +61,55 @@ export function LiveScoreBoard({ snapshot: initial }: { snapshot: LiveSnapshot }
   return (
     <>
       {live.length > 0 ? (
-        <section className="card">
-          <h2>In play</h2>
-          <div className="scroll-x">
-            <table className="statement">
-              <tbody>
-                {live.map((event) => (
-                  <tr key={event.id}>
-                    <td>
-                      <span className="pill live">Live</span> {event.fixture}
-                    </td>
-                    <td className="right">
-                      {event.homeScore === null || event.awayScore === null ? (
-                        <span className="muted">—</span>
-                      ) : (
-                        <strong className="tnum">
-                          {event.homeScore} - {event.awayScore}
-                        </strong>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <section className="sb-panel" style={{ marginBottom: "var(--sb-3)" }}>
+          <div className="sb-panel__head"><h2 className="sb-panel__title">In play</h2></div>
+          <table className="sb-table">
+            <tbody>
+              {live.map((event) => (
+                <tr key={event.id}>
+                  <td>
+                    <span className="sb-live">
+                      <span className="sb-live__dot" aria-hidden="true" />
+                      Live
+                    </span>{" "}
+                    {event.fixture}
+                  </td>
+                  <td className="sb-table__num">
+                    {event.homeScore === null || event.awayScore === null ? (
+                      <span className="sb-muted">—</span>
+                    ) : (
+                      <strong>
+                        {event.homeScore} - {event.awayScore}
+                      </strong>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       ) : null}
 
       {upcoming.length > 0 ? (
-        <section className="card">
-          <h2>Upcoming</h2>
-          <div className="scroll-x">
-            <table className="statement">
-              <tbody>
-                {upcoming.map((event) => (
-                  <tr key={event.id}>
-                    <td>{event.fixture}</td>
-                    <td className="right muted small">
-                      {new Date(event.startsAt).toLocaleString("en-NG", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <section className="sb-panel">
+          <div className="sb-panel__head"><h2 className="sb-panel__title">Upcoming</h2></div>
+          <table className="sb-table">
+            <tbody>
+              {upcoming.map((event) => (
+                <tr key={event.id}>
+                  <td>{event.fixture}</td>
+                  <td className="sb-table__num sb-muted sb-small">
+                    {new Date(event.startsAt).toLocaleString("en-NG", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       ) : null}
     </>

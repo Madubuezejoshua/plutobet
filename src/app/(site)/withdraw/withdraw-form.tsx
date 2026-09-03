@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
 import { naira, parseNairaToKobo } from "@/lib/money";
 
 /**
@@ -14,6 +15,11 @@ import { naira, parseNairaToKobo } from "@/lib/money";
  * used to be `BigInt(Math.round(Number(amount) * 100))` — which is the very
  * float arithmetic the comment warns against. `parseNairaToKobo` parses the
  * decimal string directly instead, so no IEEE-754 value is ever involved.
+ *
+ * The bank is still entered as a numeric code rather than picked from a list.
+ * A dropdown would be better, and it is deliberately not invented here: the
+ * codes route real money, so they have to come from the provider's own bank
+ * list through a server route, not from a table typed out by hand.
  */
 
 export function WithdrawForm(props: {
@@ -51,6 +57,7 @@ export function WithdrawForm(props: {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -85,9 +92,12 @@ export function WithdrawForm(props: {
 
   if (done) {
     return (
-      <section className="card form-card">
-        <p className="notice ok">{done}</p>
-        <p className="muted small legal">
+      <section className="sb-panel sb-pad sb-stack">
+        <p className="sb-note sb-note--ok" role="status">
+          <CheckCircle2 size={15} aria-hidden="true" />
+          {done}
+        </p>
+        <p className="sb-xs sb-muted" style={{ margin: 0 }}>
           Withdrawals are reviewed before the transfer is sent. You will see it in your wallet
           history throughout.
         </p>
@@ -96,24 +106,30 @@ export function WithdrawForm(props: {
   }
 
   return (
-    <section className="card form-card">
-      <form onSubmit={submit}>
-        <label className="field">
-          Amount (₦)
+    <section className="sb-panel sb-pad">
+      <form onSubmit={submit} noValidate>
+        <label className="sb-field" htmlFor="wd-amount">
+          <span className="sb-field__label">Amount (₦)</span>
           <input
+            id="wd-amount"
+            className="sb-input"
             inputMode="decimal"
             required
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            aria-invalid={problem !== null}
+            aria-describedby={problem ? "wd-problem" : undefined}
           />
-          <span className="hint">
-            Daily limit {naira(cap)} at verification level {props.tier}.
+          <span className="sb-hint">
+            Between {naira(minimum)} and {naira(cap)} a day at verification level {props.tier}.
           </span>
         </label>
 
-        <label className="field">
-          Account number
+        <label className="sb-field" htmlFor="wd-account">
+          <span className="sb-field__label">Account number</span>
           <input
+            id="wd-account"
+            className="sb-input"
             inputMode="numeric"
             required
             maxLength={10}
@@ -121,43 +137,62 @@ export function WithdrawForm(props: {
             value={accountNumber}
             onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
           />
-          <span className="hint">10 digits, NUBAN.</span>
+          <span className="sb-hint">10 digits, NUBAN.</span>
         </label>
 
-        <label className="field">
-          Bank code
+        <label className="sb-field" htmlFor="wd-bank">
+          <span className="sb-field__label">Bank code</span>
           <input
+            id="wd-bank"
+            className="sb-input"
             inputMode="numeric"
             required
             maxLength={6}
             value={bankCode}
             onChange={(e) => setBankCode(e.target.value.replace(/\D/g, ""))}
           />
+          <span className="sb-hint">Your bank&rsquo;s NIP code, from your bank app or statement.</span>
         </label>
 
-        <label className="field">
-          Account name
+        <label className="sb-field" htmlFor="wd-name">
+          <span className="sb-field__label">Account name</span>
           <input
+            id="wd-name"
+            className="sb-input"
             required
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
           />
-          <span className="hint">Must match your own name — third-party payouts are refused.</span>
+          <span className="sb-hint">
+            Must match your own name — third-party payouts are refused.
+          </span>
         </label>
 
-        {problem ? <p className="notice error">{problem}</p> : null}
+        {problem ? (
+          <p id="wd-problem" className="sb-note sb-note--error" role="alert">
+            <AlertTriangle size={14} aria-hidden="true" />
+            {problem}
+          </p>
+        ) : null}
 
         <button
           type="submit"
-          className="place"
+          className="sb-btn sb-btn--primary sb-btn--lg"
           disabled={busy || amountMinor === 0n || problem !== null}
         >
-          {busy ? "Requesting…" : "Request withdrawal"}
+          {busy ? (
+            <>
+              <Loader2 size={16} className="sb-spin" aria-hidden="true" /> Requesting
+            </>
+          ) : (
+            "Request withdrawal"
+          )}
         </button>
       </form>
 
       {error ? (
-        <p className="notice error" role="alert">
+        <p className="sb-note sb-note--error" role="alert" style={{ marginTop: "var(--sb-3)" }}>
+          <AlertTriangle size={14} aria-hidden="true" />
           {error}
         </p>
       ) : null}

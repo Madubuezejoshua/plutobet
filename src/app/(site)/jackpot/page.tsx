@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { jackpotService } from "@/modules/jackpot/jackpot.service";
 import { naira } from "@/lib/money";
+import { Trophy } from "lucide-react";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Jackpot" };
@@ -21,43 +23,34 @@ export default async function JackpotPage() {
 
   if (competitions.length === 0) {
     return (
-      <>
-        <header className="page-head">
-          <h1>Jackpot</h1>
-        </header>
-        <section className="placeholder">
-          <span className="ico" aria-hidden="true">🏆</span>
-          <h2>No competition running</h2>
-          <p>
+      <PageShell title="Jackpot" width="narrow">
+        <section className="sb-panel" style={{ textAlign: "center", padding: "var(--sb-8) var(--sb-4)" }}>
+          <Trophy size={30} aria-hidden="true" style={{ color: "var(--sb-faint)" }} />
+          <h2 style={{ margin: "var(--sb-3) 0 4px", fontSize: 19 }}>No competition running</h2>
+          <p className="sb-muted" style={{ margin: 0 }}>
             Predict a full slate of fixtures for a share of a pooled prize. Competitions are
             created by the operator with a fixed slate, entry price and prize structure.
           </p>
-          <span className="phase-tag">No open competition right now</span>
-          <p className="small muted">
+          <p className="sb-small sb-muted" style={{ maxWidth: 460, margin: "var(--sb-4) auto 0" }}>
             Entries, scoring and prize splitting are built and tested — including that the pool
             paid out equals the pool collected, to the kobo.
           </p>
-          <div className="placeholder-actions">
-            <Link href="/sports" className="btn primary">Sports</Link>
-            <Link href="/" className="btn ghost">Home</Link>
+          <div style={{ display: "flex", gap: "var(--sb-2)", justifyContent: "center", marginTop: "var(--sb-5)" }}>
+            <Link href="/sports" className="sb-btn sb-btn--primary">Sports</Link>
+            <Link href="/" className="sb-btn sb-btn--ghost">Home</Link>
           </div>
         </section>
-      </>
+      </PageShell>
     );
   }
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Jackpot</h1>
-        <p className="muted">{competitions.length} open</p>
-      </header>
-
-      <div className="stack">
+    <PageShell title="Jackpot" sub={`${competitions.length} open`}>
+      <div className="sb-stack-3">
         {competitions.map((competition) => (
-          <section className="card" key={competition.id}>
-            <div className="fixture-head">
-              <span className="league">{competition.selectionCount} fixtures</span>
+          <section className="sb-panel sb-pad" key={competition.id}>
+            <div className="sb-row-between sb-small sb-muted">
+              <span>{competition.selectionCount} fixtures</span>
               <span>
                 Closes {competition.closesAt.toLocaleString("en-NG", {
                   day: "2-digit",
@@ -68,24 +61,26 @@ export default async function JackpotPage() {
               </span>
             </div>
 
-            <h2>{competition.name}</h2>
+            <h2 style={{ margin: "var(--sb-2) 0", fontSize: "var(--sb-t-xl)", letterSpacing: "-0.02em" }}>
+              {competition.name}
+            </h2>
 
-            <dl className="totals">
-              <div>
+            <dl style={{ margin: "0 0 var(--sb-2)" }}>
+              <div className="sb-total">
                 <dt>Entry</dt>
                 <dd>{naira(competition.entryFeeMinor)}</dd>
               </div>
-              <div className="payout">
+              <div className="sb-total sb-total--major">
                 <dt>Prize pool</dt>
                 <dd>{naira(competition.poolMinor)}</dd>
               </div>
-              <div>
+              <div className="sb-total">
                 <dt>Entries</dt>
                 <dd>{competition.entries}</dd>
               </div>
             </dl>
 
-            <p className="muted small">
+            <p className="sb-xs sb-muted" style={{ margin: 0 }}>
               The pool grows as more people enter. The figure above is what has actually been
               collected and guaranteed so far — not a headline.
             </p>
@@ -93,10 +88,10 @@ export default async function JackpotPage() {
         ))}
       </div>
 
-      <p className="muted small legal" style={{ marginBottom: 40 }}>
+      <p className="sb-xs sb-muted" style={{ marginTop: "var(--sb-4)" }}>
         Prizes are shared equally between everyone who scores the most correct predictions. If
         nobody reaches the advertised minimum, no prize is paid.
       </p>
-    </>
+    </PageShell>
   );
 }

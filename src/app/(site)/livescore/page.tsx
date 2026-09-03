@@ -1,6 +1,7 @@
 import { liveSnapshot, type LiveSnapshot } from "@/modules/odds/live-feed";
 import { recentResults } from "@/modules/sports/results.service";
 import { LiveScoreBoard } from "./livescore-board";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Livescore" };
@@ -25,28 +26,23 @@ export default async function LivescorePage() {
   ]);
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Livescore</h1>
-        <p className="muted">Scores and kick-off times. No bet required.</p>
-      </header>
-
+    <PageShell title="Livescore" sub="Scores and kick-off times. No bet required.">
       <LiveScoreBoard snapshot={snapshot} />
 
       {finished.length > 0 ? (
-        <section className="card">
-          <h2>Finished today</h2>
-          <div className="scroll-x">
-            <table className="statement">
+        <section className="sb-panel" style={{ marginTop: "var(--sb-3)" }}>
+          <div className="sb-panel__head"><h2 className="sb-panel__title">Finished today</h2></div>
+          <div className="sb-tablewrap">
+            <table className="sb-table">
               <tbody>
                 {finished.map((result) => (
                   <tr key={result.eventId}>
                     <td>
                       {result.homeName} v {result.awayName}
                     </td>
-                    <td className="right">
+                    <td className="sb-table__num">
                       {result.homeScore === null || result.awayScore === null ? (
-                        <span className="muted">—</span>
+                        <span className="sb-muted">—</span>
                       ) : (
                         <strong>
                           {result.homeScore} - {result.awayScore}
@@ -60,7 +56,7 @@ export default async function LivescorePage() {
           </div>
         </section>
       ) : null}
-    </>
+    </PageShell>
   );
 }
 

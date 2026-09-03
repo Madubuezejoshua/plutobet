@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Lock, Radio, WifiOff } from "lucide-react";
 import type { LiveSnapshot } from "@/modules/odds/live-feed";
 import { formatOdds } from "@/modules/odds/format";
 import type { OddsFormat } from "@/modules/users/schema";
@@ -19,6 +20,11 @@ const POLL_INTERVAL_MS = 5_000;
  * needs the suspend-on-incident path to be driven by a real in-play feed, and
  * offering a tappable price that the server would refuse is worse than
  * offering none.
+ *
+ * So every price here is rendered as a static tile in the `closed` state, not
+ * as a button. That is the whole reason the odds tile carries its state in a
+ * `data-state` attribute rather than in a click handler: a price can be shown
+ * without implying it can be taken.
  */
 export function LiveBoard({
   snapshot: initial,
@@ -74,11 +80,14 @@ export function LiveBoard({
 
   if (snapshot.events.length === 0) {
     return (
-      <section className="card empty">
-        <p>
-          Nothing is in play. Live fixtures appear here once a match kicks off and the odds
-          worker has picked it up.
-        </p>
+      <section className="sb-panel">
+        <div className="sb-empty">
+          <Radio className="sb-empty__icon" size={26} aria-hidden="true" />
+          <p className="sb-empty__title">Nothing is in play</p>
+          <p className="sb-small">
+            Live fixtures appear here once a match kicks off and the odds worker has picked it up.
+          </p>
+        </div>
       </section>
     );
   }
@@ -86,63 +95,79 @@ export function LiveBoard({
   return (
     <>
       {stale ? (
-        <p className="notice warn">
+        <p className="sb-note sb-note--warn" role="status" style={{ marginBottom: "var(--sb-2)" }}>
+          <WifiOff size={14} aria-hidden="true" />
           Prices may be out of date — we could not reach the live feed. Reconnecting.
         </p>
       ) : null}
 
-      <div className="fixtures">
-        {snapshot.events.map((event) => (
-          <article className="card" key={event.id}>
-            <div className="fixture-head">
-              <span className="league">
-                {event.status === "LIVE" ? <span className="pill live">Live</span> : null}
-              </span>
-              <span>
-                {new Date(event.startsAt).toLocaleTimeString("en-NG", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </div>
+      <section className="sb-panel sb-board sb-board--3">
+        <div className="sb-cols" role="row">
+          <span role="columnheader">Match</span>
+          <span className="sb-cols__odds" role="columnheader">1</span>
+          <span className="sb-cols__odds" role="columnheader">X</span>
+          <span className="sb-cols__odds" role="columnheader">2</span>
+        </div>
 
-            <div className="teams">
-              {event.fixture}
-              {event.homeScore !== null && event.awayScore !== null ? (
-                <>
-                  {" "}
-                  <strong className="tnum">
-                    {event.homeScore} - {event.awayScore}
-                  </strong>
-                </>
-              ) : null}
-            </div>
-
-            {event.markets
-              .filter((market) => market.key === "1x2")
-              .map((market) => (
-                <div className="odds-row" key={market.id}>
-                  {market.selections.map((selection) => (
-                    <span
-                      key={selection.id}
-                      className="odd"
-                      role="presentation"
-                      style={selection.suspended ? { opacity: 0.45 } : undefined}
-                    >
-                      <span className="odd-label">{selection.label}</span>
-                      <span className="odd-price">
-                        {/* A suspended price is shown as a lock, never as a
-                            number — a visible price implies a bet we would
-                            take, and we would refuse it. */}
-                        {selection.suspended ? "🔒" : formatOdds(selection.price, oddsFormat)}
-                      </span>
+        {snapshot.events.map((event) => {
+          const market = event.markets.find((m) => m.key === "1x2");
+          return (
+            <div className="sb-row" key={event.id}>
+              <div className="sb-fixture">
+                <span className="sb-fixture__time">
+                  {event.status === "LIVE" ? (
+                    <span className="sb-live">
+                      <span className="sb-live__dot" aria-hidden="true" />
+                      Live
                     </span>
-                  ))}
-                </div>
-              ))}
-          </article>
-        ))}
-      </div>
+                  ) : (
+                    new Date(event.startsAt).toLocaleTimeString("en-NG", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  )}
+                </span>
+                <span className="sb-fixture__teams">
+                  <span className="sb-fixture__team">{event.fixture}</span>
+                </span>
+                {event.homeScore !== null && event.awayScore !== null ? (
+                  <span className="sb-score">
+                    {event.homeScore}&nbsp;-&nbsp;{event.awayScore}
+                  </span>
+                ) : null}
+              </div>
+
+              {["1", "X", "2"].map((label, index) => {
+                const selection = market?.selections[index];
+                const suspended = selection?.suspended ?? true;
+                return (
+                  <span
+                    key={label}
+                    className="sb-odd"
+                    data-state={suspended ? "suspended" : "closed"}
+                    title={
+                      suspended
+                        ? "Suspended"
+                        : "Shown for information — in-play betting is not open yet"
+                    }
+                  >
+                    <span className="sb-odd__label">{label}</span>
+                    <span className="sb-odd__value">
+                      {selection === undefined ? (
+                        "—"
+                      ) : suspended ? (
+                        <Lock size={12} aria-label="Suspended" />
+                      ) : (
+                        formatOdds(selection.price, oddsFormat)
+                      )}
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          );
+        })}
+      </section>
     </>
   );
 }

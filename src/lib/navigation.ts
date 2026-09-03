@@ -12,12 +12,12 @@
  *     mobile drawer, the mobile bottom bar, the homepage and the footer. One
  *     list means they cannot drift apart.
  *
- *  2. Honesty. Most of these products do not exist yet. `status` records that
+ *  2. Honesty. Some of these products do not exist yet. `status` records that
  *     fact in one place, so a link to an unbuilt product renders as a labelled
- *     placeholder rather than a dead route. The master spec forbids fake
- *     buttons and empty pages; this is the mechanism that enforces it.
+ *     placeholder rather than a dead route. Fake buttons and empty pages are
+ *     forbidden; this is the mechanism that enforces it.
  *
- *  3. Pluto AI (Phase 17.7). The spec is explicit that the model must not be
+ *  3. Pluto AI. The model must not be
  *     allowed to invent internal URLs — it may only navigate to a destination
  *     that exists in a registry. That registry is this file. Building it now
  *     means the AI navigation tool is a lookup against known-good keys rather
@@ -27,7 +27,12 @@
 export type ProductStatus =
   /** Built, reachable, and doing real work. */
   | "LIVE"
-  /** Route exists and renders an honest placeholder naming the phase. */
+  /**
+   * The route exists and says plainly that the product is not available yet.
+   *
+   * It does NOT name a delivery date. An internal build-phase number told a
+   * customer nothing and read as a commitment we had not made.
+   */
   | "PLANNED";
 
 export interface NavItem {
@@ -35,11 +40,7 @@ export interface NavItem {
   key: string;
   label: string;
   href: string;
-  /** Single glyph for the mobile bar and menu. Text label always accompanies it. */
-  icon: string;
   status: ProductStatus;
-  /** Phase from the master build prompt that delivers this. Shown on placeholders. */
-  phase: number;
   /** One line describing the product, used on placeholders and the homepage. */
   blurb: string;
   /** Redirects to sign-in when there is no session. */
@@ -54,9 +55,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "home",
     label: "Home",
     href: "/",
-    icon: "🏠",
     status: "LIVE",
-    phase: 1,
     blurb: "Everything happening on PlutoBet right now.",
     group: "BETTING",
   },
@@ -64,9 +63,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "sports",
     label: "Sports",
     href: "/sports",
-    icon: "⚽",
     status: "LIVE",
-    phase: 8,
     blurb: "Pre-match football odds. Singles and accumulators.",
     group: "BETTING",
   },
@@ -74,9 +71,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "live",
     label: "Live",
     href: "/live",
-    icon: "🔴",
     status: "LIVE",
-    phase: 9,
     blurb: "Live scores and prices, refreshed automatically.",
     group: "BETTING",
   },
@@ -84,9 +79,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "jackpot",
     label: "Jackpot",
     href: "/jackpot",
-    icon: "🏆",
     status: "LIVE",
-    phase: 13,
     blurb: "Predict a full slate of fixtures for a pooled prize.",
     group: "BETTING",
   },
@@ -96,9 +89,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "casino",
     label: "Casino",
     href: "/casino",
-    icon: "🎰",
     status: "LIVE",
-    phase: 11,
     blurb: "Slots, table games, crash and instant games.",
     group: "GAMING",
   },
@@ -106,9 +97,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "live-casino",
     label: "Live Casino",
     href: "/live-casino",
-    icon: "🃏",
     status: "PLANNED",
-    phase: 11,
     blurb: "Real dealers, streamed in real time.",
     group: "GAMING",
   },
@@ -116,9 +105,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "virtuals",
     label: "Virtuals",
     href: "/virtuals",
-    icon: "🎮",
     status: "LIVE",
-    phase: 12,
     blurb: "Simulated football, racing and instant draws.",
     group: "GAMING",
   },
@@ -126,9 +113,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "fantasy",
     label: "Fantasy",
     href: "/fantasy",
-    icon: "👥",
     status: "PLANNED",
-    phase: 13,
     blurb: "Build a squad, score against other players.",
     group: "GAMING",
   },
@@ -136,9 +121,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "lucky-numbers",
     label: "Lucky Numbers",
     href: "/lucky-numbers",
-    icon: "🔢",
     status: "PLANNED",
-    phase: 13,
     blurb: "Draw-based number games.",
     group: "GAMING",
   },
@@ -148,9 +131,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "livescore",
     label: "Livescore",
     href: "/livescore",
-    icon: "📊",
     status: "LIVE",
-    phase: 10,
     blurb: "Scores, clocks and match events. No bet required.",
     group: "INFO",
   },
@@ -158,9 +139,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "results",
     label: "Results",
     href: "/results",
-    icon: "📋",
     status: "LIVE",
-    phase: 10,
     blurb: "Completed fixtures, searchable by date and team.",
     group: "INFO",
   },
@@ -168,9 +147,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "promotions",
     label: "Promotions",
     href: "/promotions",
-    icon: "🎁",
     status: "LIVE",
-    phase: 14,
     blurb: "Bonuses, free bets and seasonal offers.",
     group: "INFO",
   },
@@ -178,9 +155,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "rewards",
     label: "Rewards",
     href: "/rewards",
-    icon: "💎",
     status: "LIVE",
-    phase: 14,
     blurb: "Loyalty tiers and everything they unlock.",
     group: "INFO",
   },
@@ -188,9 +163,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "pluto-ai",
     label: "Pluto AI",
     href: "/pluto",
-    icon: "✨",
     status: "LIVE",
-    phase: 16,
     blurb: "Ask for fixtures, analysis, or your balance in plain language.",
     group: "INFO",
   },
@@ -200,9 +173,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "bets",
     label: "My Bets",
     href: "/bets",
-    icon: "🎫",
     status: "LIVE",
-    phase: 8,
     blurb: "Open and settled tickets, at the odds you locked in.",
     requiresAuth: true,
     group: "ACCOUNT",
@@ -211,9 +182,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "wallet",
     label: "Wallet",
     href: "/wallet",
-    icon: "👛",
     status: "LIVE",
-    phase: 4,
     blurb: "Balance and full transaction statement.",
     requiresAuth: true,
     group: "ACCOUNT",
@@ -222,9 +191,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "account",
     label: "Account",
     href: "/account",
-    icon: "👤",
     status: "LIVE",
-    phase: 2,
     blurb: "Profile, verification and responsible gambling controls.",
     requiresAuth: true,
     group: "ACCOUNT",
@@ -238,7 +205,7 @@ export const UTILITY_ROUTES = {
   verify: "/kyc",
   responsible: "/responsible",
   register: "/register",
-  signIn: "/api/auth/signin",
+  signIn: "/signin",
   signOut: "/api/auth/signout",
 } as const;
 

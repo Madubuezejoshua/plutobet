@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { recentResults } from "@/modules/sports/results.service";
 import { listCompetitions } from "@/modules/sports/browse.service";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Results" };
@@ -35,50 +36,50 @@ export default async function ResultsPage({
   });
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Results</h1>
-        <p className="muted">
-          {selected ? selected.name : "All competitions"} · {results.length} fixtures
-        </p>
-      </header>
-
+    <PageShell
+      title="Results"
+      sub={`${selected ? selected.name : "All competitions"} · ${results.length} fixtures`}
+    >
       {competitions.length > 0 ? (
-        <nav className="chip-row" aria-label="Competitions">
-          <Link href="/results" className="chip" aria-current={selected ? undefined : "page"}>
-            All
-          </Link>
-          {competitions.map((competition) => (
-            <Link
-              key={competition.id}
-              href={`/results?competition=${competition.key}`}
-              className="chip"
-              aria-current={selected?.id === competition.id ? "page" : undefined}
-            >
-              {competition.name}
+        <div className="sb-panel" style={{ marginBottom: "var(--sb-3)" }}>
+          <nav className="sb-chips" aria-label="Competitions">
+            <Link href="/results" className="sb-chip" aria-current={selected ? undefined : "true"}>
+              All
             </Link>
-          ))}
-        </nav>
+            {competitions.map((competition) => (
+              <Link
+                key={competition.id}
+                href={`/results?competition=${competition.key}`}
+                className="sb-chip"
+                aria-current={selected?.id === competition.id ? "true" : undefined}
+              >
+                {competition.name}
+              </Link>
+            ))}
+          </nav>
+        </div>
       ) : null}
 
       {results.length === 0 ? (
-        <section className="card empty">
-          <p>
-            No settled fixtures yet. Results appear here once matches finish and the settlement
-            worker has ingested them.
-          </p>
+        <section className="sb-panel">
+          <div className="sb-empty">
+            <p className="sb-empty__title">No settled fixtures yet</p>
+            <p className="sb-small">
+              Results appear here once matches finish and the settlement worker has ingested them.
+            </p>
+          </div>
         </section>
       ) : (
-        <section className="card">
-          <div className="scroll-x">
-            <table className="statement">
+        <section className="sb-panel">
+          <div className="sb-tablewrap">
+            <table className="sb-table">
               <thead>
                 <tr>
                   <th scope="col">Date</th>
                   <th scope="col">Competition</th>
                   <th scope="col">Fixture</th>
-                  <th scope="col" className="right">Score</th>
-                  <th scope="col" className="right">HT</th>
+                  <th scope="col" className="sb-table__num">Score</th>
+                  <th scope="col" className="sb-table__num">HT</th>
                 </tr>
               </thead>
               <tbody>
@@ -94,16 +95,16 @@ export default async function ResultsPage({
                     <td>
                       {result.homeName} v {result.awayName}
                     </td>
-                    <td className="right">
+                    <td className="sb-table__num">
                       {result.homeScore === null || result.awayScore === null ? (
-                        <span className="muted">—</span>
+                        <span className="sb-muted">—</span>
                       ) : (
                         <strong>
                           {result.homeScore} - {result.awayScore}
                         </strong>
                       )}
                     </td>
-                    <td className="right muted small">
+                    <td className="sb-table__num sb-muted sb-small">
                       {result.halfTimeHome === null || result.halfTimeAway === null
                         ? "—"
                         : `${result.halfTimeHome} - ${result.halfTimeAway}`}
@@ -114,12 +115,12 @@ export default async function ResultsPage({
             </table>
           </div>
 
-          <p className="muted small legal">
+          <p className="sb-xs sb-muted" style={{ padding: "var(--sb-3)", margin: 0 }}>
             Scores shown are the regulation result — the same figure bets settle against. A match
             decided on penalties is a draw here, because that is what it is for betting.
           </p>
         </section>
       )}
-    </>
+    </PageShell>
   );
 }

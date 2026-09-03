@@ -3,6 +3,7 @@ import { authOptions } from "@/modules/auth/auth-options";
 import { liveSnapshot, type LiveSnapshot } from "@/modules/odds/live-feed";
 import { profileService } from "@/modules/users/profile.service";
 import { LiveBoard } from "./live-board";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Live" };
@@ -25,22 +26,20 @@ export default async function LivePage() {
   const inPlay = snapshot.events.filter((event) => event.status === "LIVE").length;
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Live</h1>
-        <p className="muted">
-          {inPlay > 0
-            ? `${inPlay} in play · prices refresh automatically`
-            : "Nothing in play right now"}
-        </p>
-      </header>
-
+    <PageShell
+      title="Live"
+      sub={
+        inPlay > 0
+          ? `${inPlay} in play · prices refresh automatically`
+          : "Nothing in play right now"
+      }
+    >
       <LiveBoard snapshot={snapshot} oddsFormat={preferences?.oddsFormat ?? "DECIMAL"} />
 
-      <p className="muted small legal" style={{ marginBottom: 40 }}>
+      <p className="sb-xs sb-muted" style={{ marginTop: "var(--sb-4)" }}>
         Live prices are shown for information. In-play betting opens once a real in-play feed is
         connected — a tappable price we would then refuse is worse than no price at all.
       </p>
-    </>
+    </PageShell>
   );
 }

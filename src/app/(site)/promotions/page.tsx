@@ -5,6 +5,7 @@ import { db } from "@/db/pooled";
 import { authOptions } from "@/modules/auth/auth-options";
 import { bonusService } from "@/modules/promotions/bonus.service";
 import { naira } from "@/lib/money";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Promotions" };
@@ -49,35 +50,37 @@ export default async function PromotionsPage() {
   ]);
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Promotions</h1>
-        <p className="muted">{promotions.length} running</p>
-      </header>
-
+    <PageShell title="Promotions" sub={`${promotions.length} running`}>
       {myBonuses.length > 0 ? (
-        <section className="card">
-          <h2>Your bonuses</h2>
+        <section className="sb-panel sb-pad" style={{ marginBottom: "var(--sb-3)" }}>
+          <h2 className="sb-panel__title" style={{ marginBottom: "var(--sb-3)" }}>Your bonuses</h2>
           {myBonuses.map((bonus) => (
             <div key={bonus.id} style={{ marginBottom: 16 }}>
-              <div className="fixture-head">
+              <div className="sb-row-between sb-bold">
                 <span>{bonus.promotionName}</span>
                 <span>{naira(bonus.grantedMinor)}</span>
               </div>
               {/* Progress as money staked against money required, not as a
                   multiplier — that is the figure a customer can actually
                   check against their own bet history. */}
-              <p className="muted small">
+              <p className="sb-small sb-muted" style={{ margin: "4px 0" }}>
                 {naira(bonus.wageredMinor)} of {naira(bonus.wageringRequiredMinor)} wagered ·{" "}
                 {bonus.progressPercent}% · expires{" "}
                 {bonus.expiresAt.toLocaleDateString("en-NG")}
               </p>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${bonus.progressPercent}%` }} />
+              <div
+                className="sb-progress"
+                role="progressbar"
+                aria-valuenow={bonus.progressPercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`${bonus.promotionName} wagering progress`}
+              >
+                <div className="sb-progress__fill" style={{ width: `${bonus.progressPercent}%` }} />
               </div>
             </div>
           ))}
-          <p className="muted small legal">
+          <p className="sb-xs sb-muted">
             Bonus credit can be staked but not withdrawn until its wagering requirement is met.
             Your cash balance is always withdrawable and is kept separate from it.
           </p>
@@ -85,46 +88,49 @@ export default async function PromotionsPage() {
       ) : null}
 
       {promotions.length === 0 ? (
-        <section className="card empty">
-          <p>
-            No promotions are running at the moment. When one is, it will appear here with its
-            full terms — including what you have to stake before a bonus becomes withdrawable.
-          </p>
+        <section className="sb-panel">
+          <div className="sb-empty">
+            <p className="sb-empty__title">No promotions right now</p>
+            <p className="sb-small">
+              When one is running it will appear here with its full terms — including what you
+              have to stake before a bonus becomes withdrawable.
+            </p>
+          </div>
         </section>
       ) : (
-        <div className="stack">
+        <div className="sb-stack-3">
           {promotions.map((promotion) => (
-            <section className="card" key={promotion.id}>
-              <h2>{promotion.name}</h2>
-              <p className="muted small">{promotion.description}</p>
+            <section className="sb-panel sb-pad" key={promotion.id}>
+              <h2 className="sb-panel__title">{promotion.name}</h2>
+              <p className="sb-small sb-muted">{promotion.description}</p>
 
-              <dl className="totals">
+              <dl style={{ margin: "0 0 var(--sb-3)" }}>
                 {promotion.match_basis_points ? (
-                  <div>
+                  <div className="sb-total">
                     <dt>Match</dt>
                     <dd>{(Number(promotion.match_basis_points) / 100).toFixed(0)}%</dd>
                   </div>
                 ) : null}
                 {promotion.max_bonus_minor ? (
-                  <div>
+                  <div className="sb-total">
                     <dt>Up to</dt>
                     <dd>{naira(BigInt(promotion.max_bonus_minor))}</dd>
                   </div>
                 ) : null}
-                <div>
+                <div className="sb-total">
                   <dt>Min deposit</dt>
                   <dd>{naira(BigInt(promotion.min_deposit_minor))}</dd>
                 </div>
               </dl>
 
-              <p className="notice warn">
+              <p className="sb-note sb-note--warn">
                 <strong>Wagering: {promotion.wagering_multiplier}x.</strong> You must stake the
                 bonus {promotion.wagering_multiplier} times before it becomes withdrawable cash.
                 It expires after {promotion.bonus_validity_days} days.
               </p>
 
               {promotion.code ? (
-                <p className="muted small">
+                <p className="sb-small sb-muted">
                   Use code <strong>{promotion.code}</strong> when depositing.
                 </p>
               ) : null}
@@ -133,10 +139,10 @@ export default async function PromotionsPage() {
         </div>
       )}
 
-      <p className="muted small legal" style={{ marginBottom: 40 }}>
+      <p className="sb-xs sb-muted" style={{ marginTop: "var(--sb-4)" }}>
         <Link href="/responsible">Set a deposit limit</Link> if promotions are pushing you to
         stake more than you meant to.
       </p>
-    </>
+    </PageShell>
   );
 }
