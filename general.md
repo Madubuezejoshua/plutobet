@@ -7,7 +7,8 @@ this file is right.
 
 **Last updated:** 2026-09-02
 **Branch described:** `ui/plutobet-sportsbook-redesign` (branched from `main`)
-**Merged to `main`:** no. **Deployed:** no. Awaiting visual review.
+**Merged to `main`:** no. **Pushed:** no. **Deployed:** no. Seven commits on the
+branch, awaiting visual review of `artifacts/ui-review/`.
 
 **No credential, connection string, one-time code, personal detail or other
 secret value appears anywhere in this document, and none may be added to it.**
@@ -147,7 +148,7 @@ described at the top of this file.
 | Demo readiness | `npm run readiness:demo` | **exit 1**, correctly — §3 |
 | Real-money readiness | `npm run readiness:real-money` | **exit 1**, correctly — §3 |
 | Database roles | `npm run db:audit-roles` | **exit 1**, correctly — §20 |
-| CI | GitHub Actions | green on both remotes for `main` |
+| CI | GitHub Actions | green on both remotes for `main`. **This branch has not been pushed**, so no CI run exists for it |
 
 Test count rose from 815 to 844 in this pass: +29 covering the betslip
 arithmetic, the sign-in redirect guard, the navigation registry (§6) and the
