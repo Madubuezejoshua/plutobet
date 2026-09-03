@@ -150,3 +150,74 @@ export async function listUpcoming(opts?: {
     markets: [...(byEvent.get(e.id)?.values() ?? [])],
   }));
 }
+
+/**
+ * One fixture with every open market, for the event page.
+ *
+ * Added because the match board linked to `/sports/event/<id>` and that page
+ * did not exist: two dead links on every row of the board. Building the page
+ * needed a read that returns ALL markets for one event rather than the three
+ * the board shows.
+ *
+ * Same rules as `listUpcoming`: stored data only, never a provider call, and
+ * only markets and selections that are OPEN. A closed market is absent rather
+ * than shown without a price, so the caller can tell "no such market" from
+ * "market present, price withheld" — a distinction the odds tile relies on.
+ */
+export async function getEventView(providerEventId: string): Promise<EventView | null> {
+  const [event] = await db
+    .select()
+    .from(events)
+    .where(eq(events.providerEventId, providerEventId))
+    .limit(1);
+
+  if (!event) return null;
+
+  const rows = await db
+    .select({
+      marketId: markets.id,
+      marketKey: markets.key,
+      selectionId: selections.id,
+      selectionKey: selections.key,
+      label: selections.label,
+      line: selections.line,
+      price: selections.currentPriceDecimal,
+    })
+    .from(markets)
+    .innerJoin(selections, eq(selections.marketId, markets.id))
+    .where(
+      and(
+        eq(markets.eventId, event.id),
+        eq(markets.status, "OPEN"),
+        eq(selections.status, "OPEN"),
+      ),
+    );
+
+  const byMarket = new Map<string, MarketView>();
+  for (const row of rows) {
+    let market = byMarket.get(row.marketId);
+    if (!market) {
+      market = { id: row.marketId, key: row.marketKey, selections: [] };
+      byMarket.set(row.marketId, market);
+    }
+    market.selections.push({
+      id: row.selectionId,
+      key: row.selectionKey,
+      label: row.label,
+      line: row.line === null ? null : Number(row.line),
+      price: Number(row.price),
+    });
+  }
+
+  return {
+    id: event.id,
+    providerEventId: event.providerEventId,
+    sport: event.sport,
+    league: event.league,
+    home: event.home,
+    away: event.away,
+    startsAt: event.startsAt.toISOString(),
+    status: event.status,
+    markets: [...byMarket.values()],
+  };
+}
