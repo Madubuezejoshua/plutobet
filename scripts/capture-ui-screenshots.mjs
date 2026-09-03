@@ -64,6 +64,17 @@ const PAGES = [
   { slug: "13-fantasy-unavailable", path: "/fantasy" },
 ];
 
+/*
+ * The event page needs a real fixture id, which only the seeded database knows.
+ * Pass one with --event=<providerEventId> and it is photographed too; leave it
+ * out and it is skipped rather than shot as a 404.
+ */
+function withEventPage(pages) {
+  const id = arg("event", null);
+  if (!id) return pages;
+  return [...pages, { slug: "14-event", path: `/sports/event/${id}` }];
+}
+
 function arg(name, fallback) {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : fallback;
@@ -199,7 +210,7 @@ async function main() {
         mobile: viewport.mobile,
       });
 
-      for (const target of PAGES) {
+      for (const target of withEventPage(PAGES)) {
         const file = resolve(outDir, `${target.slug}-${viewport.name}.png`);
         try {
           const loaded = cdp.once("Page.loadEventFired", 30_000);
