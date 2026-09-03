@@ -86,9 +86,9 @@ browser during this pass — not that it looks right in the source.
 | | |
 |---|---|
 | Branch | `ui/plutobet-sportsbook-redesign` |
-| HEAD | `c94d7e2` — "Delete the style bridge, and open a real browser at the result" |
-| Working tree | **NOT clean** — 11 entries (stage 3/4 work, committed next) |
-| Commits ahead of `main` | **17** (read from `git rev-list`, not from memory) |
+| HEAD | `23b595d` — "Measure the read paths under load, and the limiter that shields them" |
+| Working tree | **NOT clean** — stage 7/8 work, committed next |
+| Commits ahead of `main` | **21** (read from `git rev-list`, not from memory) |
 | Behind `main` | 0 |
 | `origin/main` | `83cb633` |
 | `plutobet/main` | `83cb633` |
@@ -119,8 +119,8 @@ browser during this pass — not that it looks right in the source.
 | 5j | **Personalisation / Admin AI** | **BLOCKED_BY_PRODUCT_DECISION** (+ `BLOCKED_BY_KEY` for Admin AI) |
 | 5k | **Fantasy / Lucky Numbers** | **DONE** — honest unavailable pages; a fabricated blocker fixed |
 | 6 | **Load and reliability testing** | **DONE** for the read paths; casino callbacks have no route to load |
-| 7 | Full E2E suite against a disposable database | NOT STARTED |
-| 8 | Security re-verification | NOT STARTED |
+| 7 | **Full E2E journey** | **DONE** — 14 steps, one account, one run; 2 defects found |
+| 8 | **Security re-verification** | **DONE** for what this pass changed |
 | 9 | Complete gates, twice | NOT STARTED |
 | 10 | Truthful `general.md` rewrite + changelog | NOT STARTED |
 | 11 | Merge and push, only if every gate passes | NOT STARTED |
@@ -625,19 +625,106 @@ Bet placement under contention already has correctness tests under concurrency.
 And the Pluto figure is the route, guardrails and dispatch — **not** model
 latency, which does not exist yet and will dominate the moment it does.
 
+### Stage 7 — one customer, all the way through
+
+`customer-journey.acceptance.spec.ts`. Registration, funding, a bet, a win, a
+replayed result, a loss, a void, a corrected result, a cash-out and two refusals — **14 steps, one
+account, one run**, on a clean disposable database. All pass.
+
+Seventy-five test files already covered these modules in isolation and covered
+them well. What none of them could see is the **seam**: an account that
+registers and then cannot bet, a deposit that credits a bucket placement will
+not spend from, exposure claimed by one module and released by another. Each of
+those is a passing-test, broken-product failure living between two files that
+each pass. So the assertions are about **continuity** — the balance after step
+six is the balance step five left behind — and nothing is re-seeded between
+steps.
+
+Money moves only by the ordinary routes: the real registration handler with a
+real one-time code, `applyDepositWebhook` (what the payment webhook calls), the
+placement HTTP route, `ingestResult` and `settleBet`, and the cash-out route.
+**No balance, ledger row, bet status or exposure value is written by the test.**
+The session is the only substitution, because a test cannot hold a cookie.
+
+Two defects, and one of them was mine:
+
+29. `FAILED` → fixed. **A refused bet did not say why.** The slip service works
+    out the exact reason a combination failed — no funds, price moved, market
+    full — collects them, and the route **dropped them**. A customer with an
+    empty wallet was told "none of the combinations on this slip could be
+    placed": true, useless, and indistinguishable from a suspended market. On a
+    single bet, which is most of them, there is exactly one reason and it was
+    already known.
+
+    The reasons now travel with the response, through a new `details` field on
+    `ApiError`. They are a **hand-written mapping**, never `error.message` —
+    the domain messages are written for a log and three of them leak:
+    `InsufficientFundsError` carries a wallet UUID, `AccountNotEligibleError` a
+    user UUID, and `ExposureLimitError` states how much more liability a market
+    will absorb, which tells a bettor exactly how much the book will take
+    before it stops. Anything unrecognised collapses to one generic line,
+    because an unexpected error is precisely the one whose message was never
+    written with a customer in mind. The journey asserts the reason arrives
+    **and** that no UUID comes with it.
+
+30. **My own helper made the mistake `AGENTS.md` exists to prevent.** The first
+    version of `cashMinor` was `WHERE user_id = ? AND kind = 'CASH' AND
+    currency = 'NGN'` — wrong twice: `kind` is USER or SYSTEM, and CASH is a
+    **bucket**. It is exactly the bucket-blind predicate that matches three rows
+    and takes whichever the planner returns first. It failed loudly only because
+    I also guessed the column name wrong; had `cached_balance_minor` been right,
+    the query would have run, returned a plausible number, and the journey would
+    have asserted against the wrong wallet all the way through. It now calls
+    `balancesForUser`, so the test and the product read a balance the same way.
+
+One assertion was also tightened after it passed. Step 10 began as `if
+(!quote.available) return`, which would have gone on passing if cash-out stopped
+pricing anything at all. A PENDING bet placed moments ago on an OPEN market for
+an ACTIVE account **must** be priceable; it is asserted, not tolerated.
+
+### Stage 8 — security re-verified against what this pass changed
+
+`docs/security-review.md` 24.1 is re-checked rather than assumed still true.
+Four things this pass introduced needed review, and all four are recorded there
+as deliberate decisions with a re-review trigger:
+
+- **`ApiError.details`**, new, so a refused bet can say why. It is a curated
+  field, not a passthrough — one call site, hand-written pairs, and the check
+  that no domain message reaches it. **Verified**: 17 `new ApiError(...)` call
+  sites in the repository, exactly **one** passes `details`, and it passes
+  `SlipError.failures`, which is built by `customerReason` and contains no
+  identifier. The journey test asserts no UUID appears in that response.
+- **`alwaysConfirm`** on responsible-gambling tools, and why it is not a
+  promotion to `FINANCIAL`.
+- **The review server's generated secrets**, replacing the production
+  `AUTH_SECRET` and `IDENTITY_PEPPER` it used to inherit from `.env`.
+  **Verified**: `.env.review.local` is untracked and `secret-scan` is clean
+  across 447 files.
+- **The AI tool registry**, now with a 53-attack corpus behind it.
+
+Also re-checked and unchanged: every new route added this pass —
+`/api/payments/banks`, `/api/account/date-of-birth`, `/api/bets/[id]/cashout` —
+uses `authedRoute`, and no `dangerouslySetInnerHTML` exists anywhere in the
+application.
+
+**What was not re-done.** The areas this pass did not touch — argon2id, session
+revocation, RBAC separation of duties, webhook HMAC, the money-path locks — are
+unchanged and their existing evidence stands. Re-running a review of code that
+did not change would produce a fresher date and no new information, and a date
+is not evidence.
+
 ### Exact next action
 
 
-**Stage 7 — the full end-to-end journey.**
+**Stage 9 — the complete gate set from a clean state, run twice.**
 
-From a clean disposable database: registration, funding through the QA-gated
-ledger utility, placement, settlement across win, loss and void, resettlement,
-cash-out, and the RBAC refusals. One run, asserted end to end, rather than the
-per-module tests that already exist.
+Every gate, in order, from a clean checkout: typecheck, lint, build, the full
+vitest suite, the browser suite, migrations against a fresh database, the secret
+scan, and the readiness scripts. Twice, because a suite that passes once may be
+passing on state the first run left behind.
 
-Then stage 8 (security re-verification), 9 (complete gates from a clean state,
-run twice), 10 (the truthful rewrite and dated changelog) and 11 (merge and
-push — only if every gate passes).
+Then 10 (the truthful rewrite and dated changelog) and 11 (merge and push —
+only if every gate passes).
 
 Still outstanding from stage 3, and not to be lost: the remaining viewports —
 430×932, 768×1024, 1024×768, 1366×768, 1920×1080 — plus the accessibility pass
@@ -777,6 +864,8 @@ this pass adds tests, and any figure that changes is corrected here.
 | 26 | The unavailable-product page gave a blocking reason that was false for Fantasy | **FIXED**, 5k |
 | 27 | Personalisation has no rules for what to recommend, or when to withhold it | **BLOCKED_BY_PRODUCT_DECISION** — not built, by instruction |
 | 28 | Admin AI has no model and no decision on which admin actions it may take | **BLOCKED_BY_KEY** and **BLOCKED_BY_PRODUCT_DECISION** |
+| 29 | A refused bet dropped the reason; the customer could not tell no-funds from a closed market | **FIXED**, 7 |
+| 30 | My own journey helper used a bucket-blind `wallets` predicate | **FIXED** before it could mislead — recorded because it is the mistake the rules name |
 
 Cash-out and the date-of-birth flow still are **not** `VERIFIED_IN_REAL_BROWSER`
 as complete money journeys. The date-of-birth *control* is audited (row:
@@ -1542,8 +1631,16 @@ The benchmark boots its own throwaway cluster and refuses to run against a
 non-ephemeral database, after an earlier version wrote through the shared client
 (§22).
 
-Not load-tested: the homepage, `/api/live` polling at scale, casino callbacks,
-and Pluto AI concurrency. Only bet placement has a load test.
+**Now load-tested**, in stage 6 above: the board, `/api/live` polling at scale,
+the market list, odds, and Pluto concurrency —
+`scripts/bench-http.mjs`, report at `artifacts/load/HTTP_LOAD.md`. Zero failures
+and zero 5xx, and the rate limiter measured shedding load correctly rather than
+falling over.
+
+Still not load-tested: **casino callbacks**, because there is no callback route
+in the repository to load — the casino is a sandbox adapter with no aggregator
+connected. And the Pluto figure covers the route, guardrails and dispatch, not
+model latency, which does not exist yet.
 
 ---
 
@@ -1609,8 +1706,15 @@ one you have not are different acts.
 ### Blocked by a key
 
 Paystack deposits and payouts · Termii SMS · Resend email · an LLM key for
-Pluto AI, which is a keyword router today and needs an adapter, prompt-injection
-tests and concurrency tests once a key exists — not "swap a key".
+Pluto AI, which is a keyword router today and needs an adapter — not "swap a
+key".
+
+The prompt-injection and concurrency work is **no longer waiting on the key**.
+The adversarial corpus exists and runs (stage 5i: 53 attacks, 59 tests), and
+Pluto concurrency is measured (stage 6). What still needs a key is replaying
+that corpus **through a live model**, which is the only thing that can establish
+how a model answers these prompts. Until then that specific claim, and nothing
+else about this layer, stays `BLOCKED_BY_KEY`.
 
 ### Blocked by a contract
 

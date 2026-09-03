@@ -90,10 +90,24 @@ export const POST = authedRoute(
       });
     } catch (error) {
       if (error instanceof SlipError) {
+        /*
+         * The per-combination reasons travel with the response.
+         *
+         * They were dropped here, so a customer with an empty wallet was told
+         * "none of the combinations on this slip could be placed" — accurate,
+         * useless, and indistinguishable from a suspended market or a price
+         * that moved. On a single bet there is exactly one reason and the
+         * service already knows it.
+         *
+         * They are the curated pair from `customerReason`, never the raw
+         * domain message, which carries wallet ids and the book's remaining
+         * appetite on a market.
+         */
         throw new ApiError(
           error.code === "INVALID_SLIP" ? 422 : 409,
           error.code,
           error.message,
+          error.failures.length > 0 ? error.failures : undefined,
         );
       }
       /*

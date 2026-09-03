@@ -23,7 +23,8 @@ that matter — a review that reports everything green is a review nobody did.
 | SQL injection | ✅ | Drizzle parameterises throughout; **no string-concatenated SQL** |
 | Secure cookies | ✅ | Auth.js defaults; `httpOnly`, `sameSite`, `secure` in production |
 | Webhook signatures | ✅ | HMAC-SHA512 over the **raw** body, constant-time compare |
-| AI permissions | ✅ | Tool registry, no dynamic dispatch, user-scoped tools take no user id |
+| AI permissions | ✅ | Tool registry, no dynamic dispatch, user-scoped tools take no user id. **53-attack adversarial corpus**, 59 tests |
+| API error detail | ✅ | `ApiError.details` carries only hand-written customer-safe pairs, never a domain message |
 | Admin permissions | ✅ | Every admin page and route calls `requirePermission` |
 | Money paths | ✅ | Unpooled connection, row locks, DB triggers, idempotency fingerprints |
 | Account enumeration | ✅ | Reset and login give identical responses for unknown accounts |
@@ -45,6 +46,31 @@ Failing to boot beats booting with an open door to the ledger.
 sandbox. A keyword router cannot invent a fixture, promise a certainty, or be
 prompt-injected. It is limited, not dangerous, so it degrades rather than
 refusing to start.
+
+**`ApiError.details` is a curated field, not a passthrough.** It was added so a
+refused bet can tell the customer *why* — an empty wallet had been
+indistinguishable from a suspended market. The reasons are a hand-written
+mapping in `slip.service.ts`, never `error.message`, because the domain messages
+are written for a log and three of them leak: `InsufficientFundsError` carries a
+wallet UUID, `AccountNotEligibleError` a user UUID, and `ExposureLimitError`
+states how much more liability a market will absorb — which tells a bettor
+exactly how much the book will take. Anything unrecognised collapses to one
+generic line. *Re-review if a second call site ever populates `details`; today
+there is exactly one.*
+
+**Responsible-gambling tools carry `alwaysConfirm`, separate from action level.**
+The AI's four levels are about money, which is the wrong axis for a protection:
+`setDepositLimit` moves nothing, so by level alone it would have run on the
+strength of a sentence in a chat. The flag is deliberately not a promotion to
+`FINANCIAL`, which would put a misleading word in front of the customer.
+
+**The review server never inherits production secrets.** `next start` loads
+`.env`, which here holds production credentials, so `scripts/review-server.mjs`
+sets every connection string explicitly, refuses to start against a
+non-loopback host, and generates review-only `AUTH_SECRET` and `IDENTITY_PEPPER`
+values into a gitignored file. Previously a local browser session was signed
+with the production secret and local identity numbers hashed into the production
+keyspace.
 
 ---
 

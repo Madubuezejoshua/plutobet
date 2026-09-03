@@ -1,5 +1,16 @@
 import { sql } from "drizzle-orm";
+import { InsufficientFundsError } from "../wallet/errors";
 import { walletService, WalletService } from "../wallet/wallet.service";
+import {
+  AccountNotEligibleError,
+  DuplicateSelectionError,
+  EventStartedError,
+  ExposureLimitError,
+  OddsDriftError,
+  SelectionUnavailableError,
+  StakeLimitError,
+  UserExposureLimitError,
+} from "./errors";
 import {
   placementService,
   PlacementService,
@@ -32,15 +43,82 @@ import {
  * The customer is told exactly what was accepted and charged only for that.
  */
 
+/** Why one combination was refused, in terms safe to show the customer. */
+export interface SlipFailure {
+  combinationIndex: number;
+  code: string;
+  message: string;
+}
+
 export class SlipError extends Error {
   constructor(
     readonly code: "NOTHING_PLACED" | "INVALID_SLIP",
     message: string,
-    readonly failures: string[] = [],
+    readonly failures: SlipFailure[] = [],
   ) {
     super(message);
     this.name = "SlipError";
   }
+}
+
+/**
+ * Turns a placement error into something the customer can act on.
+ *
+ * DELIBERATELY A HAND-WRITTEN MAPPING, not `error.message`. The domain messages
+ * are written for a log and several of them leak: `InsufficientFundsError`
+ * carries a wallet UUID, `AccountNotEligibleError` carries a user UUID, and
+ * `ExposureLimitError` states how much more liability a market can absorb —
+ * which tells a bettor exactly how much the book will take before it stops.
+ *
+ * Anything unrecognised collapses to one generic line. An unexpected error is
+ * precisely the one whose message was never written with a customer in mind.
+ */
+function customerReason(error: unknown): { code: string; message: string } {
+  if (error instanceof InsufficientFundsError) {
+    return {
+      code: "INSUFFICIENT_FUNDS",
+      message: "There is not enough in your wallet to cover this stake.",
+    };
+  }
+  if (error instanceof OddsDriftError) {
+    return {
+      code: "ODDS_CHANGED",
+      message: `The price moved from ${error.submittedOdds} to ${error.currentOdds} before this was placed.`,
+    };
+  }
+  if (error instanceof SelectionUnavailableError) {
+    return { code: "SELECTION_UNAVAILABLE", message: "That selection is no longer available." };
+  }
+  if (error instanceof EventStartedError) {
+    return { code: "EVENT_STARTED", message: "That match has already started." };
+  }
+  if (error instanceof DuplicateSelectionError) {
+    return {
+      code: "DUPLICATE_SELECTION",
+      message: "The same selection appears more than once on this slip.",
+    };
+  }
+  if (error instanceof StakeLimitError) {
+    return { code: "STAKE_OUT_OF_RANGE", message: "That stake is outside the permitted range." };
+  }
+  if (error instanceof UserExposureLimitError) {
+    return {
+      code: "ACCOUNT_LIMIT",
+      message: "This would take your open bets above your account limit.",
+    };
+  }
+  if (error instanceof ExposureLimitError) {
+    // No market id and no figures: how much more the book will take is not the
+    // customer's business, and publishing it invites being probed for it.
+    return { code: "MARKET_FULL", message: "We cannot take any more on that market right now." };
+  }
+  if (error instanceof AccountNotEligibleError) {
+    return {
+      code: "ACCOUNT_RESTRICTED",
+      message: "Your account cannot place bets at the moment.",
+    };
+  }
+  return { code: "UNAVAILABLE", message: "This could not be placed." };
 }
 
 export type SlipKind = "SINGLE" | "MULTIPLE" | "SYSTEM";
@@ -69,7 +147,11 @@ export interface PlacedSlip {
   totalStakeMinor: bigint;
   placed: PlacedBet[];
   /** Combinations refused, with the reason. Empty when everything landed. */
-  rejected: { combinationIndex: number; reason: string }[];
+  /**
+   * `reason` is the raw domain message and is for the LOG. `code` and `message`
+   * are the curated pair safe to show a customer — see `customerReason`.
+   */
+  rejected: (SlipFailure & { reason: string })[];
 }
 
 export class SlipService {
@@ -104,7 +186,7 @@ export class SlipService {
     });
 
     const placed: PlacedBet[] = [];
-    const rejected: { combinationIndex: number; reason: string }[] = [];
+    const rejected: (SlipFailure & { reason: string })[] = [];
 
     for (const [combinationIndex, indices] of combinations.entries()) {
       const combinationLegs = indices.map((index) => legs[index]!);
@@ -134,18 +216,33 @@ export class SlipService {
         // A refused combination is a normal outcome, not a failure of the
         // slip: markets fill, prices move, exposure caps bite. Record it and
         // carry on so the customer keeps the combinations that were placeable.
+        const reason = customerReason(error);
         rejected.push({
           combinationIndex,
           reason: error instanceof Error ? error.message : "could not be placed",
+          ...reason,
         });
       }
     }
 
     if (placed.length === 0) {
+      /*
+       * The reasons travel with the error.
+       *
+       * They were collected here and then dropped at the route boundary, so a
+       * customer with an empty wallet was told "none of the combinations on
+       * this slip could be placed" — true, unhelpful, and indistinguishable
+       * from a suspended market. On a single bet, which is most of them, there
+       * is exactly one reason and it is known.
+       */
       throw new SlipError(
         "NOTHING_PLACED",
         "none of the combinations on this slip could be placed",
-        rejected.map((entry) => entry.reason),
+        rejected.map((entry) => ({
+          combinationIndex: entry.combinationIndex,
+          code: entry.code,
+          message: entry.message,
+        })),
       );
     }
 

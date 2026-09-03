@@ -32,6 +32,15 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    /**
+     * Structured detail the client can act on, rendered alongside the code.
+     *
+     * Only ever what the raiser has decided is safe to show a customer. Domain
+     * error messages are written for a log and routinely carry wallet ids, user
+     * ids and book internals; none of that belongs in a response, so nothing is
+     * put here by reflex.
+     */
+    readonly details?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -53,7 +62,14 @@ export function clientIp(request: NextRequest): string {
 
 function toResponse(error: unknown): NextResponse {
   if (error instanceof ApiError) {
-    return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
+    return NextResponse.json(
+      {
+        error: error.code,
+        message: error.message,
+        ...(error.details === undefined ? {} : { details: error.details }),
+      },
+      { status: error.status },
+    );
   }
   if (error instanceof ActiveSessionRequiredError) {
     return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
