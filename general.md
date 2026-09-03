@@ -7,8 +7,8 @@ this file is right.
 
 **Last updated:** 2026-09-02
 **Branch described:** `ui/plutobet-sportsbook-redesign` (branched from `main`)
-**Merged to `main`:** no. **Pushed:** no. **Deployed:** no. Seven commits on the
-branch, awaiting visual review of `artifacts/ui-review/`.
+**Merged to `main`:** no. **Pushed:** no. **Deployed:** no.
+Commit count and remote state are recorded in §0, read from git.
 
 **No credential, connection string, one-time code, personal detail or other
 secret value appears anywhere in this document, and none may be added to it.**
@@ -16,10 +16,168 @@ Environment variables are named and reported only as set / missing / blocked.
 
 ---
 
+## §0 — Resume Here
+
+**This section is the recovery point.** If a session ends for any reason, a
+fresh one reads this, checks it against `git log` and `git status`, and
+continues from "Exact next action" without repeating finished work.
+
+It is rewritten and committed after every completed unit of work. If it
+disagrees with the repository, the repository is right and this section is
+stale — say so and correct it.
+
+### The assignment
+
+Final developer-completion, UI-integration, security and end-to-end
+verification pass. In the owner's words, the goal is to:
+
+- finish every genuinely developer-owned task that needs no purchased key,
+  signed contract, owner dashboard, regulatory approval, or irreversible
+  product-policy decision;
+- accept and integrate the approved sportsbook redesign;
+- make every enabled customer-facing control perform real behaviour;
+- test the complete sportsbook flow end to end;
+- fix every defect found;
+- update this file truthfully;
+- merge and push **only if** every required gate passes.
+
+Target on completion: **`DEVELOPER_OWNED_SPORTSBOOK_MVP_COMPLETE`**. Not
+"the platform is complete". External integrations and regulated products stay
+honestly classified as blocked.
+
+Standing constraints for this pass, in short form — the full list is in the
+owner's instruction and none of it is negotiable:
+
+- No assumption presented as fact. Evidence levels only (§0.1).
+- No fake external success: QA credit is not a deposit, a fixture is not a
+  provider, a sandbox is not a casino, a keyword router is not a model.
+- No manual money manipulation. Balances, ledger rows, bet outcomes, event
+  results, outbox status and exposure move only through application services,
+  public routes, registered jobs, migrations, or QA-gated utilities against a
+  disposable database.
+- Real production money and customer data are not touched. All development,
+  browser testing, screenshots, seeding and load testing run against a local
+  disposable database.
+- The 400 synthetic production fixtures are **not** deleted. The ₦630 historical
+  exposure repair is **not** applied. Both need owner approval on a dry-run
+  fingerprint.
+- No secret printed, logged, committed, screenshotted or written into Markdown.
+- No weakening of tests or security to obtain green results.
+- No force push, destructive reset, history rewrite, or branch-protection
+  bypass.
+- No Railway deployment and no live provider activation.
+
+### §0.1 Evidence levels used in this file
+
+`VERIFIED_IN_REAL_BROWSER` · `VERIFIED_END_TO_END` ·
+`VERIFIED_AGAINST_REAL_PROVIDER_DATA` · `VERIFIED_BY_INTEGRATION_TEST` ·
+`VERIFIED_BY_UNIT_TEST_ONLY` · `IMPLEMENTED_NOT_LIVE_TESTED` ·
+`BLOCKED_BY_KEY` · `BLOCKED_BY_CONTRACT` · `BLOCKED_BY_OWNER_CONFIGURATION` ·
+`BLOCKED_BY_PRODUCT_DECISION` · `BLOCKED_BY_REGULATION` · `NOT_IMPLEMENTED` ·
+`FAILED`
+
+A status is never upgraded without the evidence its level names.
+`VERIFIED_IN_REAL_BROWSER` means the control was clicked or submitted in a
+browser during this pass — not that it looks right in the source.
+
+### Repository state at this checkpoint
+
+| | |
+|---|---|
+| Branch | `ui/plutobet-sportsbook-redesign` |
+| HEAD | `4b65c02` — "Say plainly that this branch has not been pushed" |
+| Working tree | clean |
+| Commits ahead of `main` | **8** (read from `git rev-list`, not from memory) |
+| Behind `main` | 0 |
+| `origin/main` | `83cb633` |
+| `plutobet/main` | `83cb633` — identical, no divergence |
+| Redesign branch pushed | **no** |
+| Merged to `main` | no |
+| Deployed | no |
+
+> A previous version of this file said "seven commits". It was wrong. Commit
+> counts are read from git, never repeated from a document.
+
+### Stages
+
+| # | Stage | Status |
+|---|---|---|
+| 1 | Read every instruction, report and runbook; inspect git state | **DONE** |
+| 2 | Repository audit + task matrix | NOT STARTED |
+| 3 | Redesign verification in a real browser at seven viewports | NOT STARTED |
+| 4 | Interaction audit of every enabled control | NOT STARTED |
+| 5 | Developer backlog: cash-out, DOB backfill, live cache, bank list, edit bet, legacy bridge, prompt injection, personalisation, fantasy | NOT STARTED |
+| 6 | Load and reliability testing | NOT STARTED |
+| 7 | Full E2E suite against a disposable database | NOT STARTED |
+| 8 | Security re-verification | NOT STARTED |
+| 9 | Complete gates, twice | NOT STARTED |
+| 10 | Truthful `general.md` rewrite + changelog | NOT STARTED |
+| 11 | Merge and push, only if every gate passes | NOT STARTED |
+
+### Completed this pass, with evidence
+
+Nothing yet beyond stage 1. The eight commits already on this branch are the
+approved redesign and predate this pass; they are described in §5 and
+`UI_REDESIGN_REPORT.md`.
+
+### Exact next action
+
+Stage 2. Audit the repository against the developer-owned backlog in §23:
+grep for `TODO`, `FIXME`, `HACK`, `XXX`, `ComingSoon`, `NOT_IMPLEMENTED`,
+`IMPLEMENTED_NOT_REACHABLE`, `href="#"`, empty handlers, hard-coded balances
+and odds, disabled lint rules, skipped tests, wallet queries missing
+`bucket = 'CASH'`, and runtime clients on owner credentials. Then write the
+task matrix into this section before implementing anything.
+
+### Files being modified right now
+
+`general.md` only.
+
+### Decisions and assumptions made
+
+- Commit counts, branch state and remote heads are read from git on every
+  checkpoint rather than carried forward in prose.
+- `AGENTS.md` carries a Next.js block that `next dev` rewrites between its
+  BEGIN/END markers. The standing reporting instruction will be added **outside**
+  those markers so regeneration cannot delete it.
+
+### Latest gate results
+
+From the end of the previous pass, on this same tree (`4b65c02`):
+
+| Gate | Result |
+|---|---|
+| `npx tsc --noEmit` | 0 errors |
+| `npm run lint` | 0 errors, 15 pre-existing warnings |
+| `npx vitest run` | 68 files, 844 passed, 1 skipped, 0 failed |
+| `npx next build` | exit 0 |
+| `node scripts/secret-scan.mjs` | clean |
+| `git diff --check` | clean |
+
+These are carried forward as the baseline. They are re-run from a clean state
+in stage 9 and any figure that changes is corrected here.
+
+### Known failures and blockers
+
+None yet identified in this pass. The blockers inherited from the previous one
+are in §23 and remain accurate until stage 2 says otherwise.
+
+### Deliberately not performed
+
+| Not done | Why |
+|---|---|
+| Deleting the 400 synthetic production fixtures | Needs owner approval on a dry-run fingerprint |
+| Applying the ₦630 exposure repair | Same |
+| Any Railway deployment | Not authorised by this task |
+| Any live provider activation | Not authorised, and no credentials exist |
+
+---
+
 ## Contents
 
 | § | Section |
 |---|---|
+| **0** | [**Resume Here**](#0--resume-here) — the recovery point |
 | 1 | [What this document is, and the rules it follows](#1-what-this-document-is-and-the-rules-it-follows) |
 | 2 | [How to read the status labels](#2-how-to-read-the-status-labels) |
 | 3 | [Where the project stands, in one page](#3-where-the-project-stands-in-one-page) |
