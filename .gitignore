@@ -32,6 +32,11 @@ artifacts/*
 artifacts/ui-review/*
 !artifacts/ui-review/00-contact-sheet.png
 !artifacts/ui-review/INTERACTION_AUDIT.md
+# ...and the load measurement, for the same reason: it is the evidence, and it
+# is text. The raw Playwright traces and screenshots stay out.
+!artifacts/load/
+artifacts/load/*
+!artifacts/load/HTTP_LOAD.md
 
 # Review-server secrets, generated locally by scripts/review-server.mjs.
 .env.review.local

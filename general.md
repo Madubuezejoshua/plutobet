@@ -118,7 +118,7 @@ browser during this pass — not that it looks right in the source.
 | 5i | **Prompt-injection corpus** | **DONE** — 53 attacks, 59 tests, 3 defects found |
 | 5j | **Personalisation / Admin AI** | **BLOCKED_BY_PRODUCT_DECISION** (+ `BLOCKED_BY_KEY` for Admin AI) |
 | 5k | **Fantasy / Lucky Numbers** | **DONE** — honest unavailable pages; a fabricated blocker fixed |
-| 6 | Load and reliability testing | NOT STARTED |
+| 6 | **Load and reliability testing** | **DONE** for the read paths; casino callbacks have no route to load |
 | 7 | Full E2E suite against a disposable database | NOT STARTED |
 | 8 | Security re-verification | NOT STARTED |
 | 9 | Complete gates, twice | NOT STARTED |
@@ -579,20 +579,65 @@ that no `LIVE` item does — so adding a planned product forces somebody to say
 why it is unavailable. Verified in the browser: all three pages served their own
 sentence.
 
+### Stage 6 — load and reliability, measured
+
+`scripts/bench-http.mjs`, against the review server on a disposable local
+database. Report at `artifacts/load/HTTP_LOAD.md`. It covers the paths D8 lists
+as untested — the board, the live-feed poll at scale, and Pluto concurrency.
+
+**Zero failures and zero 5xx across every scenario.** 300 requests each at
+concurrency 25, plus a 30-request single-customer baseline.
+
+| Scenario | alone p50 | loaded p50 | p95 | p99 | txn/req |
+|---|---|---|---|---|---|
+| Board `GET /` | 23ms | 528ms | 886ms | 1350ms | 2.0 |
+| Market list `GET /sports` | 16ms | 453ms | 603ms | 719ms | 2.1 |
+| Live poll `GET /api/live` | 6ms | 97ms | 121ms | 132ms | **0.8** |
+| Odds `GET /api/odds` | 6ms | 125ms | 172ms | 183ms | 1.9 |
+| Pluto `POST /api/ai` | 6ms | 53ms | 82ms | 102ms | 1.6 |
+
+**Read the last column, not the first.** Latency here is one laptop running
+Postgres, Next and the harness at once; it describes the weather. Transactions
+per request is machine-independent, and it is what moves when somebody adds a
+query inside a loop.
+
+The board at 23ms alone and 528ms at concurrency 25 is **queueing on a single
+Node process**, not an expensive page — which is why the baseline column exists.
+Without it the obvious next move would have been to optimise a page that renders
+in 23 milliseconds.
+
+`GET /api/live` at **0.8 transactions per request** is the stage 5e cache
+working: fewer than one database transaction per poll means most polls are
+served from Redis inside the 2-second TTL. That is the first measurement of it;
+5e was `VERIFIED_BY_INTEGRATION_TEST` and this is the load evidence.
+
+**The rate limiter is measured, not assumed.** Each simulated customer sends its
+own `x-forwarded-for` — the key the limiter uses, and what a crowd behind a proxy
+looks like — so the control runs on every request rather than being disabled to
+get a number. Then one client fires 200 requests at a 120-per-minute budget:
+**120 answered, 80 refused with 429, 0 failures.** A limiter that sheds load by
+refusing is working; one that sheds it by falling over is not.
+
+**Not measured, and why.** Casino callbacks: there is no callback route in the
+repository to load. The casino is a sandbox adapter with no aggregator
+connected, so there is nothing to measure and a figure would be an invention.
+Bet placement under contention already has correctness tests under concurrency.
+And the Pluto figure is the route, guardrails and dispatch — **not** model
+latency, which does not exist yet and will dominate the moment it does.
+
 ### Exact next action
 
 
-**Stage 6 — load and reliability testing.**
+**Stage 7 — the full end-to-end journey.**
 
-Measure p50/p95/p99 and statement counts on the paths D8 names as uncovered:
-the board, casino callbacks, live-feed polling at scale, and Pluto concurrency.
-Bet placement under contention is already covered. Against the **disposable
-local database only**, and the synthetic benchmark fixtures are not to be
-deleted — that needs owner approval on a dry-run fingerprint.
+From a clean disposable database: registration, funding through the QA-gated
+ledger utility, placement, settlement across win, loss and void, resettlement,
+cash-out, and the RBAC refusals. One run, asserted end to end, rather than the
+per-module tests that already exist.
 
-Then stage 7 (the full end-to-end journey), 8 (security re-verification), 9
-(complete gates from clean, twice), 10 (the truthful rewrite and changelog) and
-11 (merge and push, only if every gate passes).
+Then stage 8 (security re-verification), 9 (complete gates from a clean state,
+run twice), 10 (the truthful rewrite and dated changelog) and 11 (merge and
+push — only if every gate passes).
 
 Still outstanding from stage 3, and not to be lost: the remaining viewports —
 430×932, 768×1024, 1024×768, 1366×768, 1920×1080 — plus the accessibility pass
