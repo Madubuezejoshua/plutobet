@@ -317,3 +317,46 @@
   .sb-banner__inner { flex-wrap: wrap; }
   .sb-banner__action { width: 100%; }
 }
+
+/* ==========================================================================
+   NOT FOUND
+
+   Rendered outside the site shell, so it carries its own chrome. It is the
+   one page that has to work when the database does not.
+   ========================================================================== */
+
+.sb-notfound {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sb-4);
+  background: linear-gradient(160deg, var(--sb-shell) 0%, var(--sb-shell-2) 100%);
+}
+.sb-notfound__card { width: 100%; max-width: 460px; text-align: center; }
+.sb-notfound__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sb-shell-ink);
+  text-decoration: none;
+  margin-bottom: var(--sb-6);
+}
+.sb-notfound__mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--sb-brand); color: var(--sb-brand-ink);
+}
+.sb-notfound__title {
+  margin: 0 0 var(--sb-2);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sb-shell-ink);
+}
+.sb-notfound__text { margin: 0 0 var(--sb-6); color: var(--sb-shell-muted); line-height: 1.55; }
+.sb-notfound__actions { display: flex; gap: var(--sb-2); justify-content: center; flex-wrap: wrap; }
+.sb-notfound__brand:focus-visible { outline: none; box-shadow: var(--sb-focus-dark); border-radius: var(--sb-r-sm); }

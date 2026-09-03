@@ -1,10 +1,19 @@
 /*
  * PlutoBet design system.
  *
- * The sportsbook stylesheets are imported rather than merged into this file, so
- * the redesign's tokens and surfaces can be reviewed as one unit. The legacy
- * variables below still power pages not yet migrated; both sets coexist
- * deliberately rather than half-converting every page at once.
+ * The sportsbook stylesheets are imported rather than merged into this file so
+ * the tokens and surfaces can be reviewed as one unit.
+ *
+ * `legacy-bridge.css` used to sit here too. It re-pointed the old dark system's
+ * variables at the new tokens so pages still carrying legacy classes rendered in
+ * the new palette during the migration. Every customer-facing page has since
+ * been converted, so the bridge is gone — it was a migration aid with an end
+ * date, and this was the date.
+ *
+ * The legacy rules further down this file still serve the ADMIN console, which
+ * renders outside the `.sb` shell and keeps the dark system on purpose: it is an
+ * internal tool, and re-skinning the screens that approve withdrawals is not a
+ * side effect anybody should accept from a customer-facing pass.
  */
 
 /*
@@ -15,15 +24,14 @@
  * and is silently dropped — no warning from the bundler, no error in the
  * build, just a stylesheet that is missing whole files.
  *
- * That happened: the four sportsbook stylesheets sat below `@source`, none of
- * them reached the browser, and the entire redesign rendered as unstyled HTML
- * while the build reported success. If you add a stylesheet, add it here.
+ * That happened: the sportsbook stylesheets sat below `@source`, none of them
+ * reached the browser, and the entire redesign rendered as unstyled HTML while
+ * the build reported success. If you add a stylesheet, add it here.
  */
 @import "tailwindcss" source(none);
 @import "../styles/tokens.css";
 @import "../styles/sportsbook.css";
 @import "../styles/surfaces.css";
-@import "../styles/legacy-bridge.css";
 
 /*
  * Automatic content detection is DISABLED, and the sources are declared.

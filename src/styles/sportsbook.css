@@ -906,6 +906,17 @@
 /* ------------------------------------------------------------------ fields */
 
 .sb-field { display: block; margin-bottom: var(--sb-3); }
+/*
+ * Also used as a wrapper around a real <label> plus a sibling link, which is
+ * why it is not a <label> selector: a link inside a label takes the label's
+ * text into the field's accessible name and makes clicking it ambiguous.
+ */
+.sb-field__label,
+.sb-field__label label {
+  font-size: var(--sb-t-sm);
+  font-weight: 700;
+  color: var(--sb-ink);
+}
 .sb-field__label {
   display: flex;
   align-items: baseline;

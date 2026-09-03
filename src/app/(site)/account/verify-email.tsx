@@ -79,7 +79,7 @@ export function VerifyEmail({ verified }: { verified: boolean }) {
     <div style={{ marginTop: "0.75rem" }}>
       {stage === "sent" || stage === "confirming" ? (
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-          <input
+          <input className="sb-input"
             value={code}
             onChange={(event) => setCode(event.target.value)}
             inputMode="numeric"
@@ -91,24 +91,24 @@ export function VerifyEmail({ verified }: { verified: boolean }) {
           />
           <button
             type="button"
-            className="btn primary"
+            className="sb-btn sb-btn--primary"
             onClick={confirm}
             disabled={stage === "confirming" || code.trim().length < 4}
           >
             {stage === "confirming" ? "Checking…" : "Confirm"}
           </button>
-          <button type="button" className="btn" onClick={send}>
+          <button type="button" className="sb-btn sb-btn--ghost" onClick={send}>
             Resend
           </button>
         </div>
       ) : (
-        <button type="button" className="btn" onClick={send} disabled={stage === "sending"}>
+        <button type="button" className="sb-btn sb-btn--ghost" onClick={send} disabled={stage === "sending"}>
           {stage === "sending" ? "Sending…" : "Verify email"}
         </button>
       )}
 
       {devCode ? (
-        <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
+        <p className="sb-muted" style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
           No email provider is configured, so the code is shown here for testing:{" "}
           <strong>{devCode}</strong>
         </p>

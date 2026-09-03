@@ -88,11 +88,11 @@ export function PreferencesForm({ initial }: { initial: PreferencesView }) {
 
   return (
     <>
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>Odds format</h2>
-        <label className="field">
-          How prices are shown
-          <select
+        <label className="sb-field">
+          <span className="sb-field__label">How prices are shown</span>
+          <select className="sb-input"
             value={prefs.oddsFormat}
             disabled={busy}
             onChange={(e) => save({ oddsFormat: e.target.value as PreferencesView["oddsFormat"] })}
@@ -104,26 +104,26 @@ export function PreferencesForm({ initial }: { initial: PreferencesView }) {
             ))}
           </select>
         </label>
-        <p className="muted small">
+        <p className="sb-small sb-muted">
           Applied across the odds board and your bet slip. Prices are calculated in decimal
           internally whichever format you choose — the other two are lossy, and a bet settles
           against the exact price you accepted.
         </p>
       </section>
 
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>If the price changes</h2>
-        <p className="muted small">
+        <p className="sb-small sb-muted">
           Odds move between building a slip and confirming it. This decides what happens then.
         </p>
 
         {ODDS_CHANGE_POLICIES.map((policy) => (
           <label
             key={policy.value}
-            className="field"
+            className="sb-field"
             style={{ display: "flex", alignItems: "flex-start", gap: 11, marginBottom: 14 }}
           >
-            <input
+            <input className="sb-input"
               type="radio"
               name="oddsChangePolicy"
               checked={prefs.oddsChangePolicy === policy.value}
@@ -134,18 +134,18 @@ export function PreferencesForm({ initial }: { initial: PreferencesView }) {
             <span>
               <span style={{ color: "var(--ink)", fontWeight: 600 }}>{policy.label}</span>
               <br />
-              <span className="hint">{policy.hint}</span>
+              <span className="sb-hint">{policy.hint}</span>
             </span>
           </label>
         ))}
 
-        <p className="muted small legal">
+        <p className="sb-legal">
           A drifted price is never accepted on your behalf unless you chose one of the last two
           options here.
         </p>
       </section>
 
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>Notifications</h2>
 
         <Toggle
@@ -177,14 +177,14 @@ export function PreferencesForm({ initial }: { initial: PreferencesView }) {
           onChange={(value) => save({ marketingEmails: value })}
         />
 
-        {saved ? <p className="notice ok">Saved.</p> : null}
+        {saved ? <p className="sb-note sb-note--ok">Saved.</p> : null}
         {error ? (
-          <p className="notice error" role="alert">
+          <p className="sb-note sb-note--error" role="alert">
             {error}
           </p>
         ) : null}
 
-        <p className="muted small legal">
+        <p className="sb-legal">
           Service messages about your money — deposits, withdrawals, settled bets — and security
           alerts are sent regardless of these settings. Turning notifications off does not turn
           those off.
@@ -209,10 +209,10 @@ function Toggle({
 }) {
   return (
     <label
-      className="field"
+      className="sb-field"
       style={{ display: "flex", alignItems: "flex-start", gap: 11, marginBottom: 14 }}
     >
-      <input
+      <input className="sb-input"
         type="checkbox"
         checked={checked}
         disabled={disabled}
@@ -222,7 +222,7 @@ function Toggle({
       <span>
         <span style={{ color: "var(--ink)", fontWeight: 600 }}>{label}</span>
         <br />
-        <span className="hint">{hint}</span>
+        <span className="sb-hint">{hint}</span>
       </span>
     </label>
   );

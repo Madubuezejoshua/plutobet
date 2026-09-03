@@ -86,9 +86,9 @@ browser during this pass — not that it looks right in the source.
 | | |
 |---|---|
 | Branch | `ui/plutobet-sportsbook-redesign` |
-| HEAD | `ebad1a6` — "Stop recomputing the live board's version on every poll" |
-| Working tree | **NOT clean** — 8 entries |
-| Commits ahead of `main` | **14** (read from `git rev-list`, not from memory) |
+| HEAD | `41713ab` — "Repair a checkpoint line the shell ate" |
+| Working tree | **NOT clean** — 16 entries |
+| Commits ahead of `main` | **16** (read from `git rev-list`, not from memory) |
 | Behind `main` | 0 |
 | `origin/main` | `83cb633` |
 | `plutobet/main` | `83cb633` |
@@ -105,7 +105,7 @@ browser during this pass — not that it looks right in the source.
 |---|---|---|
 | 1 | Read every instruction, report and runbook; inspect git state | **DONE** |
 | 2 | Repository audit + task matrix | **DONE** |
-| 3 | Redesign verification in a real browser at seven viewports | NOT STARTED |
+| 3 | Redesign verification in a real browser | **IN PROGRESS** — Playwright wired, desktop suite running |
 | 4 | Interaction audit of every enabled control | NOT STARTED |
 | 5a | Cash-out: repair partial cash-out and exposure | **DONE** |
 | 5b | Cash-out: eligibility gate, replay, concurrency | **DONE** |
@@ -113,8 +113,8 @@ browser during this pass — not that it looks right in the source.
 | 5d | **Date-of-birth backfill** | **DONE** |
 | 5e | **Live-version Redis cache** | **DONE** |
 | 5f | **Withdrawal bank list** | **DONE** |
-| 5g | Edit bet | NOT STARTED |
-| 5h | Legacy style bridge removal | NOT STARTED |
+| 5g | **Edit bet** | **BLOCKED_BY_PRODUCT_DECISION** |
+| 5h | **Legacy style bridge removal** | **DONE** — bridge deleted |
 | 5i | Prompt-injection corpus | NOT STARTED |
 | 5j | Personalisation / Admin AI | NOT STARTED |
 | 5k | Fantasy / Lucky Numbers | NOT STARTED |
@@ -312,20 +312,92 @@ established: refusing every withdrawal because a bank list could not be fetched
 would turn a provider outage into an inability to take money out. The transfer
 re-validates, and the provider refuses an unknown code.
 
+### Stage 5g — edit bet is BLOCKED_BY_PRODUCT_DECISION
+
+Searched the whole repository. **Every reference is a backlog entry saying it is
+not implemented** — `docs/who-does-what.md` D6, `NEXT_WORK_REPORT.md`, three
+files under `docs/history/`, and §12 here. There is no specification anywhere.
+
+The repository does not define **eligibility** (which bets, how long after
+placement, before or after kick-off), **fees**, **odds-change consent** (a
+rebooked bet is priced again — does the customer agree, and to what), or the
+**treatment of promotional stakes** (a bonus-funded bet edited into a different
+one is a wagering-requirement question, not a betting one).
+
+Building a cancel/rebook without those means inventing the financial rules of a
+money feature, which the owner's instruction explicitly forbids. It is recorded
+as blocked, with the exact decisions needed, rather than shipped to look
+complete.
+
+### Stage 5h — the legacy style bridge is gone
+
+`src/styles/legacy-bridge.css` is **deleted**. It re-pointed the old dark
+system's variables at the new tokens so pages still carrying legacy classes
+rendered in the new palette during the migration. Seven files still depended on
+it — `kyc-form`, `responsible/controls`, `account/preferences`,
+`account/security`, `account/verify-email`, `pluto-chat` and one stray class in
+`results` — and all seven are converted.
+
+The structural part was `.field`, whose label text was a bare child and now
+carries the `sb-field__label` span the new form language expects. Two
+components were also reusing the **odds tile** for cool-off and self-exclusion
+choosers; they use the board's chip now, because an odds tile carries betting
+meaning and a self-exclusion button is not a bet.
+
+The legacy rules further down `globals.css` stay: they serve the **admin
+console**, which renders outside the `.sb` shell and keeps the dark system on
+purpose. Re-skinning the screens that approve withdrawals is not a side effect
+to accept from a customer-facing pass.
+
+`stylesheet-imports.acceptance.spec.ts` was updated so it no longer requires the
+deleted file.
+
+### Stage 3 — Playwright, and two defects it found immediately
+
+`playwright.config.ts` plus `e2e/`. The config deliberately does **not** start
+the server: doing so would make it easy to run the suite against whatever
+`.env` holds, and `.env` holds production credentials. A base URL that has to be
+supplied is one somebody thought about. Two projects — desktop 1440×900 and a
+real **Pixel 7** device profile, because desktop Chrome narrowed to 390px is not
+a phone and the difference is where mobile-only defects hide.
+
+Every page test asserts: status under 400, **no console error, no uncaught
+exception, no failed request**, no horizontal overflow (measured, and the
+failure names the widest element), and that the sportsbook stylesheet actually
+reached the browser — the check that would have caught the `@import` ordering
+defect where every other gate passed.
+
+First run: **28 passed, 12 failed**, and both causes were real.
+
+1. `FAILED` → fixed. **The password field's accessible name was wrong.** The
+   "Forgot password?" link sat *inside* the `<label>`, so the field was
+   announced as "Password Forgot password?, edit text" — and a link nested in a
+   label has ambiguous click behaviour, since the browser may focus the input
+   instead of following it. Found because a browser could not locate a field
+   labelled exactly "Password". The link is now a sibling.
+2. `FAILED` → fixed. **There was no 404 page.** Next.js served its built-in
+   one: black text on white, no branding, and no way out. A customer who
+   mistypes a URL or follows a stale link got something that does not look like
+   this product and offers them nothing. `src/app/not-found.tsx` is branded and
+   carries three routes back. It sits at the app root deliberately, so it renders
+   without a session — a 404 that reads the database turns an unreachable
+   database into a 500 on every wrong URL.
+
 ### Exact next action
 
-Stage 5g — edit bet. Inspect before implementing:
 
-1. Search the repository for any existing edit-bet specification, product rule
-   or schema support. `general.md` §12 records it as `NOT_IMPLEMENTED` with no
-   code of any kind.
-2. Establish whether the repository defines eligibility, fees, timing,
-   odds-change consent, or the treatment of promotional stakes.
+Finish stage 3, then stage 4.
 
-If no unambiguous product rule exists, this is `BLOCKED_BY_PRODUCT_DECISION`
-and must be recorded as such rather than invented. A cancel/rebook that guesses
-at fees, or at whether a customer consents to a re-priced bet, is a financially
-dangerous rule shipped to look complete.
+1. Re-run the desktop Playwright suite and confirm 40/40 after the two fixes.
+2. Run the mobile (Pixel 7) project and fix what it finds.
+3. Add the remaining viewports the owner named — 430×932, 768×1024, 1024×768,
+   1366×768, 1920×1080 — as a responsive sweep.
+4. Then stage 4: the interaction audit. Every enabled control clicked or
+   submitted in the browser, recorded in
+   `artifacts/ui-review/INTERACTION_AUDIT.md` with the route each one calls.
+   `e2e/support.ts` already has `enabledControls(page)`, which enumerates what
+   is actually rendered so the audit covers that rather than a remembered list.
+5. Regenerate screenshots and the contact sheet after the fixes, not before.
 
 ### Files being modified right now
 
@@ -380,6 +452,7 @@ None in flight. The working tree is clean at the commit named above.
 | `npx vitest run` on betting, settlement, payments, users | **28 files, 345 passed, 0 failed** | after 5d |
 | `npx vitest run` on odds | **9 files, 117 passed, 1 skipped, 0 failed** | after 5e |
 | `npx vitest run` on payments | **5 files, 67 passed, 0 failed** | after 5f |
+| `npx playwright test --project=desktop` | first run **28 passed, 12 failed**; both causes fixed, re-run in progress | stage 3 |
 | `node scripts/secret-scan.mjs` | clean | baseline, `4b65c02` |
 
 The full suite is re-run from a clean state in stage 9; totals will rise because
@@ -404,6 +477,10 @@ this pass adds tests, and any figure that changes is corrected here.
 | 11 | `/api/live` recomputed a three-table aggregate on every poll | **FIXED**, 5e |
 
 | 12 | The withdrawal form asked for a hand-typed NIP bank code | **FIXED**, 5f |
+
+| 13 | The sign-in password field's accessible name included the "Forgot password?" link | **FIXED**, stage 3 |
+| 14 | No `not-found.tsx` — Next served an unbranded 404 with no way out | **FIXED**, stage 3 |
+| 15 | Edit bet has no product rules anywhere in the repository | **BLOCKED_BY_PRODUCT_DECISION** — not built, by instruction |
 
 Cash-out and the date-of-birth flow are not yet `VERIFIED_IN_REAL_BROWSER`;
 stage 4 covers that. Blockers inherited from the previous pass are in §23.

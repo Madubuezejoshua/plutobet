@@ -81,28 +81,28 @@ export function KycForm(props: {
 
   return (
     <>
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>Step 1 · Basic verification</h2>
-        <p className="muted small">
+        <p className="sb-small sb-muted">
           Confirms who you are and unlocks withdrawals up to ₦50,000 a day. We hash your BVN or
           NIN before it ever reaches storage — the raw number is never kept.
         </p>
 
         {props.hasIdentity || idDone ? (
-          <p className="notice ok">Basic verification is on file for this account.</p>
+          <p className="sb-note sb-note--ok">Basic verification is on file for this account.</p>
         ) : (
           <form onSubmit={submitIdentity}>
-            <label className="field">
-              ID type
-              <select value={idType} onChange={(e) => setIdType(e.target.value as "bvn" | "nin")}>
+            <label className="sb-field">
+              <span className="sb-field__label">ID type</span>
+              <select className="sb-input" value={idType} onChange={(e) => setIdType(e.target.value as "bvn" | "nin")}>
                 <option value="bvn">BVN</option>
                 <option value="nin">NIN</option>
               </select>
             </label>
 
-            <label className="field">
-              {idType.toUpperCase()}
-              <input
+            <label className="sb-field">
+              <span className="sb-field__label">{idType.toUpperCase()}</span>
+              <input className="sb-input"
                 inputMode="numeric"
                 required
                 maxLength={11}
@@ -110,44 +110,44 @@ export function KycForm(props: {
                 value={idNumber}
                 onChange={(e) => setIdNumber(e.target.value.replace(/\D/g, ""))}
               />
-              <span className="hint">11 digits.</span>
+              <span className="sb-hint">11 digits.</span>
             </label>
 
             {idError ? (
-              <p className="notice error" role="alert">
+              <p className="sb-note sb-note--error" role="alert">
                 {idError}
               </p>
             ) : null}
 
-            <button type="submit" className="place" disabled={idBusy || idNumber.length !== 11}>
+            <button type="submit" className="sb-btn sb-btn--primary sb-btn--lg" disabled={idBusy || idNumber.length !== 11}>
               {idBusy ? "Verifying…" : "Verify"}
             </button>
           </form>
         )}
       </section>
 
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>Step 2 · Document review</h2>
-        <p className="muted small">
+        <p className="sb-small sb-muted">
           Raises your daily withdrawal limit to ₦500,000. Upload a clear photo — an admin reviews
           it manually, since no automated document checker is connected yet.
         </p>
 
         {props.pendingDocument || docDone ? (
-          <p className="notice ok">
+          <p className="sb-note sb-note--ok">
             Your document is with a reviewer. This page will update once it has been checked.
           </p>
         ) : (
           <>
             {props.rejectionNote ? (
-              <p className="notice error">
+              <p className="sb-note sb-note--error">
                 Your last submission was rejected: {props.rejectionNote}. You can try again below.
               </p>
             ) : null}
             <form onSubmit={submitDocument}>
-              <label className="field">
-                Document type
-                <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
+              <label className="sb-field">
+                <span className="sb-field__label">Document type</span>
+                <select className="sb-input" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
                   {DOCUMENT_KINDS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -156,24 +156,24 @@ export function KycForm(props: {
                 </select>
               </label>
 
-              <label className="field">
-                File
-                <input
+              <label className="sb-field">
+                <span className="sb-field__label">File</span>
+                <input className="sb-input"
                   type="file"
                   accept="image/jpeg,image/png,image/webp,application/pdf"
                   required
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
-                <span className="hint">JPEG, PNG, WebP, or PDF. Up to 10MB.</span>
+                <span className="sb-hint">JPEG, PNG, WebP, or PDF. Up to 10MB.</span>
               </label>
 
               {docError ? (
-                <p className="notice error" role="alert">
+                <p className="sb-note sb-note--error" role="alert">
                   {docError}
                 </p>
               ) : null}
 
-              <button type="submit" className="place" disabled={docBusy || !file}>
+              <button type="submit" className="sb-btn sb-btn--primary sb-btn--lg" disabled={docBusy || !file}>
                 {docBusy ? "Uploading…" : "Upload"}
               </button>
             </form>

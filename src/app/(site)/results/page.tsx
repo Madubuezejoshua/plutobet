@@ -85,13 +85,13 @@ export default async function ResultsPage({
               <tbody>
                 {results.map((result) => (
                   <tr key={result.eventId}>
-                    <td className="muted small">
+                    <td className="sb-small sb-muted">
                       {result.playedAt.toLocaleDateString("en-NG", {
                         day: "2-digit",
                         month: "short",
                       })}
                     </td>
-                    <td className="muted small">{result.competition ?? "—"}</td>
+                    <td className="sb-small sb-muted">{result.competition ?? "—"}</td>
                     <td>
                       {result.homeName} v {result.awayName}
                     </td>

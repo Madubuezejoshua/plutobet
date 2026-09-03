@@ -92,12 +92,12 @@ export function SecurityControls({ devices }: { devices: DeviceRow[] }) {
 
   return (
     <>
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>Change password</h2>
         <form onSubmit={changePassword}>
-          <label className="field">
-            Current password
-            <input
+          <label className="sb-field">
+            <span className="sb-field__label">Current password</span>
+            <input className="sb-input"
               type="password"
               autoComplete="current-password"
               required
@@ -106,9 +106,9 @@ export function SecurityControls({ devices }: { devices: DeviceRow[] }) {
             />
           </label>
 
-          <label className="field">
-            New password
-            <input
+          <label className="sb-field">
+            <span className="sb-field__label">New password</span>
+            <input className="sb-input"
               type="password"
               autoComplete="new-password"
               required
@@ -116,12 +116,12 @@ export function SecurityControls({ devices }: { devices: DeviceRow[] }) {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
-            <span className="hint">At least 10 characters. Length beats complexity.</span>
+            <span className="sb-hint">At least 10 characters. Length beats complexity.</span>
           </label>
 
-          <label className="field">
-            Confirm new password
-            <input
+          <label className="sb-field">
+            <span className="sb-field__label">Confirm new password</span>
+            <input className="sb-input"
               type="password"
               autoComplete="new-password"
               required
@@ -130,56 +130,56 @@ export function SecurityControls({ devices }: { devices: DeviceRow[] }) {
             />
           </label>
 
-          {tooShort ? <p className="notice error">Use at least 10 characters.</p> : null}
-          {mismatch ? <p className="notice error">Those passwords do not match.</p> : null}
+          {tooShort ? <p className="sb-note sb-note--error">Use at least 10 characters.</p> : null}
+          {mismatch ? <p className="sb-note sb-note--error">Those passwords do not match.</p> : null}
 
           <button
             type="submit"
-            className="place"
+            className="sb-btn sb-btn--primary sb-btn--lg"
             disabled={busy || mismatch || tooShort || !currentPassword || !newPassword}
           >
             {busy ? "Changing…" : "Change password"}
           </button>
         </form>
 
-        {done ? <p className="notice ok">{done}</p> : null}
+        {done ? <p className="sb-note sb-note--ok">{done}</p> : null}
         {error ? (
-          <p className="notice error" role="alert">
+          <p className="sb-note sb-note--error" role="alert">
             {error}
           </p>
         ) : null}
 
-        <p className="muted small legal">
+        <p className="sb-legal">
           Changing your password signs out every other device. The one you are using now stays
           signed in.
         </p>
       </section>
 
-      <section className="card">
+      <section className="sb-panel sb-pad">
         <h2>Signed-in devices</h2>
-        <p className="muted small">
+        <p className="sb-small sb-muted">
           If you do not recognise one of these, sign it out and change your password.
         </p>
 
         {deviceError ? (
-          <p className="notice error" role="alert">
+          <p className="sb-note sb-note--error" role="alert">
             {deviceError}
           </p>
         ) : null}
 
-        <div className="scroll-x">
-          <table className="statement">
+        <div className="sb-tablewrap">
+          <table className="sb-table">
             <thead>
               <tr>
                 <th scope="col">Device</th>
                 <th scope="col">Last active</th>
-                <th scope="col" className="right">Action</th>
+                <th scope="col" className="sb-table__num">Action</th>
               </tr>
             </thead>
             <tbody>
               {devices.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="muted">
+                  <td colSpan={3} className="sb-muted">
                     No device sessions recorded yet. Sign out and back in to start tracking.
                   </td>
                 </tr>
@@ -188,32 +188,32 @@ export function SecurityControls({ devices }: { devices: DeviceRow[] }) {
                   <tr key={device.id}>
                     <td>
                       {device.device}
-                      {device.current ? <span className="pill ok"> This device</span> : null}
+                      {device.current ? <span className="sb-pill sb-pill--won"> This device</span> : null}
                       {device.ip ? (
                         <>
                           <br />
-                          <span className="muted small">{device.ip}</span>
+                          <span className="sb-small sb-muted">{device.ip}</span>
                         </>
                       ) : null}
                     </td>
-                    <td className="muted small">
+                    <td className="sb-small sb-muted">
                       {new Date(device.lastSeenAt).toLocaleString("en-NG")}
                       {device.revokedAt ? (
                         <>
                           <br />
-                          <span className="pill critical">
+                          <span className="sb-pill sb-pill--lost">
                             {device.revokedReason ?? "Signed out"}
                           </span>
                         </>
                       ) : null}
                     </td>
-                    <td className="right">
+                    <td className="sb-table__num">
                       {device.revokedAt || device.current ? (
-                        <span className="muted small">—</span>
+                        <span className="sb-small sb-muted">—</span>
                       ) : (
                         <button
                           type="button"
-                          className="btn sm danger"
+                          className="sb-btn sb-btn--danger"
                           disabled={deviceBusy === device.id}
                           onClick={() => revoke({ sessionId: device.id }, device.id)}
                         >
@@ -232,7 +232,7 @@ export function SecurityControls({ devices }: { devices: DeviceRow[] }) {
           <p style={{ marginTop: 14 }}>
             <button
               type="button"
-              className="btn danger"
+              className="sb-btn sb-btn--danger"
               disabled={deviceBusy === "all"}
               onClick={() => revoke({ all: true }, "all")}
             >

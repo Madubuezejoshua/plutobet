@@ -92,26 +92,26 @@ export function PlutoChat({
   return (
     <>
       {!live ? (
-        <p className="notice warn">
+        <p className="sb-note sb-note--warn">
           <strong>Rules-based mode.</strong> No language model is connected, so Pluto understands
           only a few phrasings — balance, bets, transactions, live matches, promotions, finding a
           fixture, and explaining a market. Everything it says still comes from real data.
         </p>
       ) : null}
 
-      <section className="card">
+      <section className="sb-panel sb-pad">
         {turns.length === 0 ? (
           <>
-            <p className="muted small">
+            <p className="sb-small sb-muted">
               Ask about fixtures, odds, results{signedIn ? ", your balance or your bets" : ""}.
               Pluto can prepare a bet for you to confirm — it can never place one itself.
             </p>
-            <div className="chip-row" style={{ marginTop: 12 }}>
+            <div className="sb-chips" style={{ marginTop: 12 }}>
               {SUGGESTIONS.filter((s) => signedIn || !/my|balance/i.test(s)).map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
-                  className="chip"
+                  className="sb-chip"
                   onClick={() => send(suggestion)}
                 >
                   {suggestion}
@@ -120,20 +120,20 @@ export function PlutoChat({
             </div>
           </>
         ) : (
-          <div className="stack">
+          <div className="sb-stack-3">
             {turns.map((turn, index) => (
               <div
                 key={index}
                 className={turn.role === "user" ? "chat-turn user" : "chat-turn"}
               >
-                <span className="chat-role">{turn.role === "user" ? "You" : "Pluto"}</span>
+                <span className="sb-xs sb-bold sb-muted">{turn.role === "user" ? "You" : "Pluto"}</span>
                 <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap" }}>{turn.content}</p>
 
                 {turn.draft ? (
-                  <div className="notice info" style={{ marginTop: 10 }}>
+                  <div className="sb-note" style={{ marginTop: 10 }}>
                     <strong>Nothing has been done yet.</strong> {turn.draft.detail}
                     <br />
-                    <Link href={turn.draft.href} className="btn primary sm" style={{ marginTop: 8 }}>
+                    <Link href={turn.draft.href} className="sb-btn sb-btn--primary" style={{ marginTop: 8 }}>
                       Review and confirm
                     </Link>
                   </div>
@@ -150,9 +150,9 @@ export function PlutoChat({
           }}
           style={{ marginTop: 14 }}
         >
-          <label className="field" style={{ marginBottom: 8 }}>
-            <span className="hint">Ask Pluto</span>
-            <input
+          <label className="sb-field" style={{ marginBottom: 8 }}>
+           <span className="sb-field__label"><span className="sb-hint">Ask Pluto</span></span>
+            <input className="sb-input"
               value={input}
               maxLength={2000}
               placeholder="What's good today?"
@@ -160,19 +160,19 @@ export function PlutoChat({
               disabled={busy}
             />
           </label>
-          <button type="submit" className="place" disabled={busy || input.trim().length === 0}>
+          <button type="submit" className="sb-btn sb-btn--primary sb-btn--lg" disabled={busy || input.trim().length === 0}>
             {busy ? "Thinking…" : "Send"}
           </button>
         </form>
 
         {error ? (
-          <p className="notice error" role="alert">
+          <p className="sb-note sb-note--error" role="alert">
             {error}
           </p>
         ) : null}
       </section>
 
-      <p className="muted small legal" style={{ marginBottom: 40 }}>
+      <p className="sb-legal" style={{ marginBottom: 40 }}>
         Pluto reads only your own account and public fixture data. It cannot place a bet, move
         money, or change a limit without you confirming it yourself on the relevant page. It will
         never tell you an outcome is certain, because none is. Assistant: {modelName}.

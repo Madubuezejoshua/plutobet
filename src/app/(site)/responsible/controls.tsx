@@ -120,13 +120,13 @@ export function ResponsibleControls(props: {
 
   if (excluded) {
     return (
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>Your account is self-excluded</h2>
-        <p className="muted small">
+        <p className="sb-small sb-muted">
           You cannot bet or deposit. This applies to your verified identity, so it also covers any
           new account you might open.
         </p>
-        <p className="muted small legal">
+        <p className="sb-legal">
           Reinstatement is not automatic and cannot be requested here. If you need support,
           Gamblers Anonymous Nigeria and similar services can help.
         </p>
@@ -137,8 +137,8 @@ export function ResponsibleControls(props: {
   return (
     <>
       {coolingOff ? (
-        <section className="card form-card">
-          <p className="notice ok">
+        <section className="sb-panel sb-pad">
+          <p className="sb-note sb-note--ok">
             You are taking a break until{" "}
             {new Date(props.coolOffUntil!).toLocaleString("en-NG")}. Betting and deposits are
             paused. A break cannot be shortened once it starts.
@@ -146,30 +146,30 @@ export function ResponsibleControls(props: {
         </section>
       ) : null}
 
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>Your limits</h2>
         {props.limits.length === 0 ? (
-          <p className="muted small">You have not set any limits yet.</p>
+          <p className="sb-small sb-muted">You have not set any limits yet.</p>
         ) : (
-          <ul className="picks">
+          <ul className="sb-stack">
             {props.limits.map((limit) => {
               const pending = new Date(limit.effectiveFrom) > new Date();
               return (
                 <li key={`${limit.type}-${limit.periodDays}`}>
                   <div>
                     <strong>{naira(limit.amountMinor)}</strong>
-                    <span className="muted small">
+                    <span className="sb-small sb-muted">
                       {" "}
                       {limit.type.toLowerCase()}{" "}
                       {PERIODS.find((p) => p.days === limit.periodDays)?.label}
                     </span>
                   </div>
                   {pending ? (
-                    <span className="pill warning">
+                    <span className="sb-pill sb-pill--void">
                       from {new Date(limit.effectiveFrom).toLocaleDateString("en-NG")}
                     </span>
                   ) : (
-                    <span className="pill">active</span>
+                    <span className="sb-pill">active</span>
                   )}
                 </li>
               );
@@ -178,23 +178,23 @@ export function ResponsibleControls(props: {
         )}
 
         <form onSubmit={saveLimit}>
-          <label className="field">
-            Limit type
-            <select value={type} onChange={(e) => setType(e.target.value)}>
+          <label className="sb-field">
+            <span className="sb-field__label">Limit type</span>
+            <select className="sb-input" value={type} onChange={(e) => setType(e.target.value)}>
               {LIMIT_TYPES.map((option) => (
                 <option key={option.key} value={option.key}>
                   {option.label}
                 </option>
               ))}
             </select>
-            <span className="hint">
+            <span className="sb-hint">
               {LIMIT_TYPES.find((option) => option.key === type)?.blurb}
             </span>
           </label>
 
-          <label className="field">
-            Period
-            <select value={periodDays} onChange={(e) => setPeriodDays(Number(e.target.value))}>
+          <label className="sb-field">
+            <span className="sb-field__label">Period</span>
+            <select className="sb-input" value={periodDays} onChange={(e) => setPeriodDays(Number(e.target.value))}>
               {PERIODS.map((period) => (
                 <option key={period.days} value={period.days}>
                   {period.label}
@@ -203,54 +203,54 @@ export function ResponsibleControls(props: {
             </select>
           </label>
 
-          <label className="field">
-            Amount (₦)
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            <span className="hint">
+          <label className="sb-field">
+            <span className="sb-field__label">Amount (₦)</span>
+            <input className="sb-input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <span className="sb-hint">
               Lowering a limit applies at once. Raising one takes 24 hours.
             </span>
           </label>
 
-          <button type="submit" className="place" disabled={busy || amount === ""}>
+          <button type="submit" className="sb-btn sb-btn--primary sb-btn--lg" disabled={busy || amount === ""}>
             {busy ? "Saving…" : "Save limit"}
           </button>
         </form>
       </section>
 
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>Take a break</h2>
-        <p className="muted small">
+        <p className="sb-small sb-muted">
           Pauses betting and deposits. It cannot be shortened once it starts.
         </p>
-        <div className="odds-row">
+        <div className="sb-chips" style={{ padding: 0 }}>
           {[1, 7, 30, 90].map((days) => (
             <button
               key={days}
               type="button"
-              className="odd"
+              className="sb-chip"
               disabled={busy}
               onClick={() => startCoolOff(days)}
             >
-              <span className="odd-price">{days}</span>
-              <span className="odd-label">{days === 1 ? "day" : "days"}</span>
+              <span className="sb-bold">{days}</span>
+              <span className="sb-xs sb-muted">{days === 1 ? "day" : "days"}</span>
             </button>
           ))}
         </div>
       </section>
 
-      <section className="card form-card">
+      <section className="sb-panel sb-pad">
         <h2>Self-exclude</h2>
-        <p className="muted small">
+        <p className="sb-small sb-muted">
           Closes your account. This is registered against your verified identity, so it also
           covers any new account you open. It cannot be undone here.
         </p>
 
-        <label className="field">
-          Type SELF EXCLUDE to confirm
-          <input value={confirmPhrase} onChange={(e) => setConfirmPhrase(e.target.value)} />
+        <label className="sb-field">
+          <span className="sb-field__label">Type SELF EXCLUDE to confirm</span>
+          <input className="sb-input" value={confirmPhrase} onChange={(e) => setConfirmPhrase(e.target.value)} />
         </label>
 
-        <div className="odds-row">
+        <div className="sb-chips" style={{ padding: 0 }}>
           {[
             { months: 6, label: "6 months" },
             { months: 12, label: "1 year" },
@@ -259,17 +259,17 @@ export function ResponsibleControls(props: {
             <button
               key={option.months}
               type="button"
-              className="odd"
+              className="sb-chip"
               disabled={busy}
               onClick={() => selfExclude(option.months)}
             >
-              <span className="odd-price">{option.label}</span>
+              <span className="sb-bold">{option.label}</span>
             </button>
           ))}
         </div>
         <button
           type="button"
-          className="link-button"
+          className="sb-btn sb-btn--ghost"
           disabled={busy}
           onClick={() => selfExclude()}
         >

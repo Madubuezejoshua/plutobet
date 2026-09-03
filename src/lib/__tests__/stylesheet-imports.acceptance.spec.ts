@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
  * except `@charset` and `@layer`. Tailwind v4's `@source` is neither, so an
  * `@import` written below it is invalid and is dropped.
  *
- * It was dropped. Four stylesheets — every token, every surface, the entire
+ * It was dropped. Every stylesheet — every token, every surface, the entire
  * redesigned interface — sat below `@source` and never reached the browser.
  * `tsc` was clean, `eslint` was clean, `vitest` was green and `next build`
  * exited 0, because none of those tools reads CSS ordering. The only symptom
@@ -60,7 +60,6 @@ describe("globals.css import ordering", () => {
       "../styles/tokens.css",
       "../styles/sportsbook.css",
       "../styles/surfaces.css",
-      "../styles/legacy-bridge.css",
     ]) {
       expect(css, `${sheet} is no longer imported`).toContain(sheet);
     }

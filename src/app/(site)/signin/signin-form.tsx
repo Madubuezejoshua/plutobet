@@ -101,13 +101,21 @@ export function SignInForm({
         />
       </label>
 
-      <label className="sb-field" htmlFor="signin-password">
-        <span className="sb-field__label">
-          Password
+      {/*
+        The "Forgot password?" link is a SIBLING of the label, not inside it.
+        Nested, its text became part of the field's accessible name — a screen
+        reader announced "Password Forgot password?, edit text" — and clicking
+        the link inside a label is ambiguous: the browser may focus the input
+        instead of following it. Found by a browser test that could not locate a
+        field labelled exactly "Password".
+      */}
+      <div className="sb-field">
+        <div className="sb-field__label">
+          <label htmlFor="signin-password">Password</label>
           <Link href="/forgot-password" className="sb-field__optional">
             Forgot password?
           </Link>
-        </span>
+        </div>
         <span className="sb-inputwrap">
           <input
             id="signin-password"
@@ -131,7 +139,7 @@ export function SignInForm({
             {reveal ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
           </button>
         </span>
-      </label>
+      </div>
 
       {error ? (
         <p id="signin-error" className="sb-note sb-note--error" role="alert">
