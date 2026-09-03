@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashBvn } from "@/modules/kyc/identity";
-import { users } from "@/modules/users/schema";
 import { ResponsibleService } from "@/modules/responsible/responsible.service";
 import {
   closeBettingContexts,

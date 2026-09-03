@@ -156,7 +156,28 @@ describe("cash-out execution", () => {
     expect(liability!.total).toBe(0n);
   }, 120_000);
 
-  it("cannot be taken twice", async () => {
+  /**
+   * CORRECTED, WITH THE REASON.
+   *
+   * This test used to assert that a second cash-out THROWS
+   * `CashOutUnavailableError`. That was the behaviour, and it was wrong: a
+   * cash-out that committed and then lost its response — a dropped connection,
+   * a client timeout, a retried fetch — came back as an error to a customer who
+   * had already been paid. That invites a second attempt and a support ticket
+   * about money they already have.
+   *
+   * The property the old assertion was really protecting is "paid exactly
+   * once", and that is asserted here and strengthened: the retry must also
+   * return the ORIGINAL figure, so the caller can show the customer what they
+   * received rather than guessing. `replayed` distinguishes it from a fresh
+   * cash-out for logs and for tests.
+   *
+   * CASHED_OUT is still terminal and the database still refuses a second
+   * transition; nothing about that changed. What changed is that the service no
+   * longer needs the database to refuse it, because it recognises the replay
+   * first.
+   */
+  it("pays once and returns the original result when retried", async () => {
     const ctx = context();
     const service = new CashOutService(ctx.wallet, {
       marginBasisPoints: 500,
@@ -167,11 +188,10 @@ describe("cash-out execution", () => {
     const first = await service.cashOut({ betId: placed.betId, userId, ip: IP });
     const balance = await ctx.wallet.getBalance(walletId);
 
-    // CASHED_OUT is terminal and the database refuses a second transition.
     for (let i = 0; i < 3; i++) {
-      await expect(
-        service.cashOut({ betId: placed.betId, userId, ip: IP }),
-      ).rejects.toBeInstanceOf(CashOutUnavailableError);
+      const replay = await service.cashOut({ betId: placed.betId, userId, ip: IP });
+      expect(replay.replayed).toBe(true);
+      expect(replay.offerMinor).toBe(first.offerMinor);
     }
 
     expect(await ctx.wallet.getBalance(walletId)).toBe(balance);

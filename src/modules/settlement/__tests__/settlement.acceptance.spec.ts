@@ -1,8 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { betLegs, bets, exposure } from "@/modules/betting/schema";
-import { events } from "@/modules/odds/schema";
-import { ledgerEntries, ledgerTransactions } from "@/modules/wallet/schema";
 import {
   closeBettingContexts,
   createBettingContext,

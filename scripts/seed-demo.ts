@@ -33,7 +33,7 @@ async function main(): Promise<void> {
 
   const passwordHash = await hashPassword(DEMO_PASSWORD);
 
-  const { userId, walletId } = await dbDirect.transaction(async (tx) => {
+  const { walletId } = await dbDirect.transaction(async (tx) => {
     await tx.execute(sql.raw("SET LOCAL ROLE app_role"));
 
     const [user] = await tx.execute<{ id: string }>(sql`

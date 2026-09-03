@@ -1,4 +1,4 @@
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { events } from "../odds/schema";
 import type { OddsProvider } from "../odds/provider";
 import { walletService, WalletService } from "../wallet/wallet.service";
@@ -26,6 +26,7 @@ import type { MatchResult, PeriodScore } from "./resolve";
  * the long tail this covers.
  */
 const ASSUMED_FINISHED_AFTER_MS = 3 * 60 * 60_000;
+const ASSUMED_FINISHED_AFTER_SECONDS = ASSUMED_FINISHED_AFTER_MS / 1000;
 
 /**
  * Backoff for an event the provider has not scored yet.
@@ -92,7 +93,7 @@ export class ResultIngestionService {
         FROM events e
         WHERE e.provider = ${this.provider.name}
           AND e.status IN ('PENDING', 'LIVE')
-          AND e.starts_at < now() - interval '3 hours'
+          AND e.starts_at < now() - make_interval(secs => ${ASSUMED_FINISHED_AFTER_SECONDS})
           AND (e.result_next_poll_at IS NULL OR e.result_next_poll_at <= now())
           AND NOT EXISTS (
             SELECT 1 FROM event_results r WHERE r.event_id = e.id

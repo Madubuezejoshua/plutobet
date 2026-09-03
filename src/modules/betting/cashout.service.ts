@@ -1,7 +1,7 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { walletService, WalletService } from "../wallet/wallet.service";
+import { responsibleService, ResponsibleService } from "../responsible/responsible.service";
 import type { WalletTransaction } from "../wallet/types";
-import { bets } from "./schema";
 import {
   CashOutUnavailableError,
   ODDS_SCALE,
@@ -34,6 +34,13 @@ export interface CashOutResult {
   betId: string;
   offerMinor: bigint;
   balanceAfterMinor: bigint;
+  /**
+   * True when this request found the cash-out already taken and returned the
+   * original outcome rather than performing a second one. The caller shows the
+   * customer what they were paid either way; the flag is for logs and tests,
+   * which need to tell "paid now" from "paid a moment ago".
+   */
+  replayed?: boolean;
 }
 
 function parseOddsToScaled(value: string): bigint {
@@ -46,7 +53,44 @@ export class CashOutService {
   constructor(
     private readonly wallet: WalletService = walletService,
     private readonly config: CashOutConfig = DEFAULT_CASHOUT_CONFIG,
+    private readonly responsible: ResponsibleService = responsibleService,
   ) {}
+
+  /**
+   * May this account cash out at all?
+   *
+   * INSIDE THE SERVICE, NOT IN A ROUTE. A check that lives only in a caller is
+   * a check that the next caller forgets — and this service is reachable from a
+   * route, a background job, an admin tool and a test.
+   *
+   * WHY CASH-OUT IS GATED LIKE PLACING A BET RATHER THAN LIKE A WITHDRAWAL.
+   * Withdrawal deliberately permits a self-excluded customer, because trapping
+   * someone's money would punish them for using the protection. Cash-out is not
+   * that: it is a *wagering decision* — choosing to exit a position at a price —
+   * and self-exclusion exists to stop wagering decisions. Nothing is trapped by
+   * refusing it, because the bet still settles normally and still pays out. So
+   * the rule is the same one placement uses: ACTIVE, and not excluded at the
+   * identity level.
+   *
+   * The identity-level check matters separately from the status. Self-exclusion
+   * is registered against a verified identity so it survives re-registration;
+   * someone who excludes themselves and signs up again gets a fresh ACTIVE
+   * account, and only `assertNotExcluded` catches them.
+   */
+  private async assertMayCashOut(tx: WalletTransaction, userId: string): Promise<void> {
+    const [account] = await tx.execute<{ status: string }>(sql`
+      SELECT status::text AS status FROM users WHERE id = ${userId}::uuid
+    `);
+    if (!account) {
+      throw new CashOutUnavailableError("ACCOUNT_NOT_ELIGIBLE", "this account cannot cash out");
+    }
+    if (account.status !== "ACTIVE") {
+      throw new CashOutUnavailableError("ACCOUNT_NOT_ELIGIBLE", "this account cannot cash out");
+    }
+    // Runs in the cash-out transaction, so an exclusion committed concurrently
+    // is either seen here or lands after this request — never half-applied.
+    await this.responsible.assertNotExcluded(tx, userId);
+  }
 
   /** Prices a cash-out without taking it. Read-only. */
   async quote(betId: string): Promise<CashOutQuote> {
@@ -83,15 +127,48 @@ export class CashOutService {
     return this.wallet.withMoneyTransaction(async ({ tx, credit }) => {
       const bet = await this.loadBet(tx, params.betId, true);
 
+      /*
+       * Ownership first, and with the same message a missing bet would give.
+       * Distinguishing "not yours" from "does not exist" tells a prober which
+       * bet ids are real.
+       */
       if (bet.userId !== params.userId) {
-        throw new CashOutUnavailableError("BET_NOT_PENDING", "this bet does not belong to you");
+        throw new CashOutUnavailableError("ACCOUNT_NOT_ELIGIBLE", "this account cannot cash out");
       }
+
+      /*
+       * A REPLAY RETURNS THE ORIGINAL RESULT.
+       *
+       * A cash-out that committed and then lost its response — a dropped
+       * connection, a client timeout, a retried fetch — must not come back as
+       * an error. The customer has been paid; telling them it failed invites a
+       * second attempt and a support ticket about money they already have.
+       *
+       * The bet itself is the idempotency key here, which is stronger than a
+       * client-supplied one: a bet can be fully cashed out exactly once, so
+       * this holds even for a client that generates a fresh key on every retry.
+       */
+      if (bet.status === "CASHED_OUT" && bet.cashoutValueMinor !== null) {
+        const [current] = await tx.execute<{ balance: string }>(sql`
+          SELECT cached_balance_minor::text AS balance
+          FROM wallets WHERE id = ${bet.walletId}::uuid
+        `);
+        return {
+          betId: params.betId,
+          offerMinor: bet.cashoutValueMinor,
+          balanceAfterMinor: BigInt(current?.balance ?? "0"),
+          replayed: true,
+        };
+      }
+
       if (bet.status !== "PENDING") {
         throw new CashOutUnavailableError(
           "BET_NOT_PENDING",
           `this bet is already ${bet.status.toLowerCase()}`,
         );
       }
+
+      await this.assertMayCashOut(tx, params.userId);
 
       const quote = quoteCashOut(
         bet.stakeMinor,
@@ -204,7 +281,7 @@ export class CashOutService {
       const bet = await this.loadBet(tx, params.betId, true);
 
       if (bet.userId !== params.userId) {
-        throw new CashOutUnavailableError("BET_NOT_PENDING", "this bet does not belong to you");
+        throw new CashOutUnavailableError("ACCOUNT_NOT_ELIGIBLE", "this account cannot cash out");
       }
       if (bet.status !== "PENDING") {
         throw new CashOutUnavailableError(
@@ -212,6 +289,8 @@ export class CashOutService {
           `this bet is already ${bet.status.toLowerCase()}`,
         );
       }
+
+      await this.assertMayCashOut(tx, params.userId);
 
       const [state] = await tx.execute<{
         cashed_out: string;
@@ -368,11 +447,13 @@ export class CashOutService {
       user_id: string;
       status: string;
       stake_minor: string;
+      cashout_value_minor: string | null;
       wallet_id: string | null;
     }>(
       lock
         ? sql`
             SELECT b.id, b.user_id, b.status::text AS status, b.stake_minor::text AS stake_minor,
+                   b.cashout_value_minor::text AS cashout_value_minor,
                    w.id AS wallet_id
             FROM bets b
             LEFT JOIN wallets w
@@ -383,6 +464,7 @@ export class CashOutService {
           `
         : sql`
             SELECT b.id, b.user_id, b.status::text AS status, b.stake_minor::text AS stake_minor,
+                   b.cashout_value_minor::text AS cashout_value_minor,
                    w.id AS wallet_id
             FROM bets b
             LEFT JOIN wallets w
@@ -438,6 +520,8 @@ export class CashOutService {
       userId: row.user_id,
       status: row.status,
       stakeMinor: BigInt(row.stake_minor),
+      cashoutValueMinor:
+        row.cashout_value_minor === null ? null : BigInt(row.cashout_value_minor),
       walletId: row.wallet_id,
       legs,
     };

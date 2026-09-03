@@ -44,7 +44,7 @@ const registerSchema = z.object({
 export const POST = publicRoute(
   "register",
   RATE_RULES.register,
-  async ({ request, ip }: RouteContext) => {
+  async ({ request }: RouteContext) => {
     const body = registerSchema.parse(await request.json());
 
     try {

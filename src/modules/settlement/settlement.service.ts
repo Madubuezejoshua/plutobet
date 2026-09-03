@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { betLegs, bets, exposure } from "../betting/schema";
+import { betLegs, bets } from "../betting/schema";
 import { markets, selections } from "../odds/schema";
 import type { MarketKey } from "../odds/canonical";
 import { walletService, WalletService } from "../wallet/wallet.service";

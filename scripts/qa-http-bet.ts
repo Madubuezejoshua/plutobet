@@ -133,7 +133,6 @@ async function main() {
   const before = await cashBalance(email);
   console.log(`CASH BEFORE: ${before} kobo\n`);
 
-  const leg = { selectionId: pick.selection_id, odds: pick.price };
   const place = (stake: string, key: string, odds = pick.price) =>
     http("/api/bets", {
       method: "POST",

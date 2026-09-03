@@ -126,7 +126,7 @@ describe("result ingestion", () => {
 
   it("ignores matches that have not reached their assumed finish time", async () => {
     const ctx = context();
-    const market = await seedMarket(ctx); // kicks off in 3 hours
+    await seedMarket(ctx); // kicks off in 3 hours, so it is not yet assumed finished
     const provider = providerReturning([]);
     const ingestion = new ResultIngestionService(
       provider,

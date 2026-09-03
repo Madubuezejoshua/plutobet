@@ -32,7 +32,16 @@ export class CashOutUnavailableError extends Error {
       | "BET_NOT_PENDING"
       | "LEG_ALREADY_LOST"
       | "LEG_NOT_PRICEABLE"
-      | "VALUE_TOO_SMALL",
+      | "VALUE_TOO_SMALL"
+      /*
+       * The account may not make this decision right now: suspended, closed,
+       * self-excluded, in a cooling-off period, or not the owner of the bet.
+       *
+       * Deliberately one reason for all of them. Telling an unauthenticated or
+       * wrong caller WHICH of those applies leaks the state of somebody else's
+       * account, and the customer's own state is already on their account page.
+       */
+      | "ACCOUNT_NOT_ELIGIBLE",
     message: string,
   ) {
     super(message);
