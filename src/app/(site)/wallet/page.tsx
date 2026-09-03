@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/modules/auth/auth-options";
 import Link from "next/link";
+import { ArrowDownToLine, ArrowUpFromLine, ReceiptText } from "lucide-react";
+import { authOptions } from "@/modules/auth/auth-options";
 import { balancesForUser, walletForUser } from "@/modules/wallet/lookup";
 import { walletService } from "@/modules/wallet/wallet.service";
 import { naira as formatNaira } from "@/lib/money";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Wallet" };
 
 const LABELS: Record<string, string> = {
   DEPOSIT: "Deposit",
@@ -27,19 +30,23 @@ const LABELS: Record<string, string> = {
  * that produced it, so it is what actually happened. A recomputed figure
  * could disagree with the ledger and there would be no way to tell which was
  * right.
+ *
+ * The redesign changed the presentation and NOT the arithmetic. Cash, bonus
+ * and held funds are still three separate figures, for the reason stated
+ * below, and the headline is still cash alone.
  */
 export default async function WalletPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/api/auth/signin");
+  if (!session?.user) redirect("/signin?callbackUrl=%2Fwallet");
 
   const walletId = await walletForUser(session.user.id);
   if (!walletId) {
     return (
-      <>
-        <section className="card empty">
-          <p>This account has no NGN wallet yet.</p>
+      <PageShell title="Wallet" width="narrow">
+        <section className="sb-panel sb-pad">
+          <p className="sb-muted" style={{ margin: 0 }}>This account has no NGN wallet yet.</p>
         </section>
-      </>
+      </PageShell>
     );
   }
 
@@ -49,12 +56,23 @@ export default async function WalletPage() {
   ]);
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Wallet</h1>
-        <p className="balance">{formatNaira(balances.cashMinor)}</p>
-        <p className="muted small">Cash balance · yours to withdraw</p>
-      </header>
+    <PageShell title="Wallet" sub="Your balance and every entry behind it.">
+      <section className="sb-balance">
+        <p className="sb-balance__label">Cash balance · yours to withdraw</p>
+        <p className="sb-balance__value">{formatNaira(balances.cashMinor)}</p>
+
+        <div className="sb-balance__actions">
+          <Link href="/deposit" className="sb-btn sb-btn--primary">
+            <ArrowDownToLine size={15} aria-hidden="true" /> Deposit
+          </Link>
+          <Link href="/withdraw" className="sb-btn sb-btn--onshell">
+            <ArrowUpFromLine size={15} aria-hidden="true" /> Withdraw
+          </Link>
+          <Link href="/bets" className="sb-btn sb-btn--onshell">
+            <ReceiptText size={15} aria-hidden="true" /> My bets
+          </Link>
+        </div>
+      </section>
 
       {/*
         Bonus and locked funds are shown separately rather than folded into one
@@ -63,74 +81,81 @@ export default async function WalletPage() {
         moment.
       */}
       {balances.bonusMinor > 0n || balances.lockedMinor > 0n ? (
-        <section className="metrics">
-          <div className="card metric">
-            <span className="metric-label">Cash</span>
-            <strong className="metric-value">{formatNaira(balances.cashMinor)}</strong>
-            <span className="muted small">Withdrawable</span>
+        <div className="sb-stats">
+          <div className="sb-stat">
+            <span className="sb-stat__label">Cash</span>
+            <strong className="sb-stat__value">{formatNaira(balances.cashMinor)}</strong>
+            <span className="sb-xs sb-muted">Withdrawable</span>
           </div>
           {balances.bonusMinor > 0n ? (
-            <div className="card metric">
-              <span className="metric-label">Bonus</span>
-              <strong className="metric-value">{formatNaira(balances.bonusMinor)}</strong>
-              <span className="muted small">Not withdrawable yet</span>
+            <div className="sb-stat">
+              <span className="sb-stat__label">Bonus</span>
+              <strong className="sb-stat__value">{formatNaira(balances.bonusMinor)}</strong>
+              <span className="sb-xs sb-muted">Not withdrawable yet</span>
             </div>
           ) : null}
           {balances.lockedMinor > 0n ? (
-            <div className="card metric">
-              <span className="metric-label">On hold</span>
-              <strong className="metric-value">{formatNaira(balances.lockedMinor)}</strong>
-              <span className="muted small">Withdrawal in progress or under review</span>
+            <div className="sb-stat">
+              <span className="sb-stat__label">On hold</span>
+              <strong className="sb-stat__value">{formatNaira(balances.lockedMinor)}</strong>
+              <span className="sb-xs sb-muted">Withdrawal in progress or under review</span>
             </div>
           ) : null}
-        </section>
+        </div>
       ) : null}
 
-      <p style={{ display: "flex", gap: 10, margin: "4px 0 16px" }}>
-        <Link href="/deposit" className="btn primary">Deposit</Link>
-        <Link href="/withdraw" className="btn ghost">Withdraw</Link>
-      </p>
+      <section className="sb-panel">
+        <div className="sb-panel__head">
+          <h2 className="sb-panel__title">Recent activity</h2>
+        </div>
 
-      <section className="card">
-        <h2>Recent activity</h2>
         {statement.entries.length === 0 ? (
-          <p className="muted small">No transactions yet.</p>
+          <div className="sb-empty">
+            <ReceiptText className="sb-empty__icon" size={26} aria-hidden="true" />
+            <p className="sb-empty__title">No transactions yet</p>
+            <p className="sb-small">Your deposits, bets and winnings will appear here.</p>
+          </div>
         ) : (
-          <table className="statement">
-            <thead>
-              <tr>
-                <th scope="col">When</th>
-                <th scope="col">Type</th>
-                <th scope="col" className="right">Amount</th>
-                <th scope="col" className="right">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {statement.entries.map((entry) => {
-                const signed = entry.direction === "CREDIT" ? entry.amountMinor : -entry.amountMinor;
-                return (
-                  <tr key={entry.id}>
-                    <td>
-                      {entry.createdAt.toLocaleString("en-NG", {
-                        day: "2-digit",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td>{LABELS[entry.type] ?? entry.type}</td>
-                    <td className={signed < 0n ? "right debit" : "right credit"}>
-                      {signed > 0n ? "+" : ""}
-                      {formatNaira(signed)}
-                    </td>
-                    <td className="right muted">{formatNaira(entry.balanceAfterMinor)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="sb-tablewrap">
+            <table className="sb-table">
+              <thead>
+                <tr>
+                  <th scope="col">When</th>
+                  <th scope="col">Type</th>
+                  <th scope="col" className="sb-table__num">Amount</th>
+                  <th scope="col" className="sb-table__num">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statement.entries.map((entry) => {
+                  const signed = entry.direction === "CREDIT" ? entry.amountMinor : -entry.amountMinor;
+                  return (
+                    <tr key={entry.id}>
+                      <td>
+                        {entry.createdAt.toLocaleString("en-NG", {
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td>{LABELS[entry.type] ?? entry.type}</td>
+                      <td
+                        className="sb-table__num"
+                        style={{ color: signed < 0n ? "var(--sb-danger)" : "var(--sb-up)", fontWeight: 700 }}
+                      >
+                        {signed > 0n ? "+" : ""}
+                        {formatNaira(signed)}
+                      </td>
+                      <td className="sb-table__num sb-muted">{formatNaira(entry.balanceAfterMinor)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
-    </>
+    </PageShell>
   );
 }

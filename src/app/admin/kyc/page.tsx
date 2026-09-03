@@ -20,7 +20,7 @@ export default async function AdminKycPage() {
   try {
     await requirePermission("kyc.review");
   } catch (error) {
-    if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof AdminRequiredError) redirect("/signin");
     if (error instanceof PermissionDeniedError) {
       return (
         <>

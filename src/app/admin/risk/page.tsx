@@ -13,7 +13,7 @@ export default async function RiskPage() {
   try {
     await requirePermission("risk.read");
   } catch (error) {
-    if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof AdminRequiredError) redirect("/signin");
     if (error instanceof PermissionDeniedError) {
       return (
         <>

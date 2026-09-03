@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/modules/auth/auth-options";
 import { kycService } from "@/modules/kyc/kyc.service";
 import { KycForm } from "./kyc-form";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Verify your identity" };
@@ -16,25 +17,23 @@ const TIER_LABEL: Record<number, string> = {
 
 export default async function KycPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/api/auth/signin");
+  if (!session?.user) redirect("/signin?callbackUrl=%2Fkyc");
 
   const status = await kycService.statusFor(session.user.id);
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Verify your identity</h1>
-        <p className="muted">
-          Current level: <strong>{TIER_LABEL[status.tier] ?? status.tier}</strong>
-        </p>
-      </header>
-
+    <PageShell
+      title="Verify your identity"
+      sub={<>Current level: <strong>{TIER_LABEL[status.tier] ?? status.tier}</strong></>}
+      back={{ href: "/account", label: "Account" }}
+      width="narrow"
+    >
       <KycForm
         tier={status.tier}
         hasIdentity={status.hasIdentity}
         pendingDocument={status.document?.status === "PENDING"}
         rejectionNote={status.document?.status === "REJECTED" ? status.document.note : null}
       />
-    </>
+    </PageShell>
   );
 }

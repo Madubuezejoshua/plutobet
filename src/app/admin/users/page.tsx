@@ -31,7 +31,7 @@ export default async function AdminUsersPage({
   try {
     identity = await requirePermission("users.read");
   } catch (error) {
-    if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof AdminRequiredError) redirect("/signin");
     if (error instanceof PermissionDeniedError) {
       return (
         <>

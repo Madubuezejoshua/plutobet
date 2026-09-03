@@ -33,7 +33,7 @@ export default async function AdminDashboardPage() {
   try {
     identity = await requirePermission("dashboard.read");
   } catch (error) {
-    if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof AdminRequiredError) redirect("/signin");
     if (error instanceof PermissionDeniedError) {
       return (
         <>

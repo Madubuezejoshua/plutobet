@@ -22,7 +22,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   try {
     identity = await requireAdminIdentity();
   } catch (error) {
-    if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof AdminRequiredError) redirect("/signin");
     throw error;
   }
 

@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/modules/auth/auth-options";
 import { loyaltyService, TIERS } from "@/modules/promotions/loyalty.service";
 import { UTILITY_ROUTES } from "@/lib/navigation";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Rewards" };
@@ -16,7 +17,7 @@ export const metadata = { title: "Rewards" };
  */
 export default async function RewardsPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) redirect(UTILITY_ROUTES.signIn);
+  if (!session?.user) redirect(`${UTILITY_ROUTES.signIn}?callbackUrl=%2Frewards`);
 
   const standing = await loyaltyService.standingFor(session.user.id).catch((error: unknown) => {
     console.error("[rewards] standing unavailable", error);
@@ -25,12 +26,11 @@ export default async function RewardsPage() {
 
   if (!standing) {
     return (
-      <>
-        <header className="page-head">
-          <h1>Rewards</h1>
-        </header>
-        <p className="notice error">Your rewards standing is unavailable right now.</p>
-      </>
+      <PageShell title="Rewards" width="narrow">
+        <p className="sb-note sb-note--error" role="alert">
+          Your rewards standing is unavailable right now.
+        </p>
+      </PageShell>
     );
   }
 
@@ -46,35 +46,41 @@ export default async function RewardsPage() {
         );
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Rewards</h1>
-        <p className="muted">
-          {standing.tier.name} · {standing.points.toString()} points
-        </p>
-      </header>
-
-      <section className="card">
-        <h2>Your tier</h2>
-        <p className="balance">{standing.tier.name}</p>
+    <PageShell
+      title="Rewards"
+      sub={`${standing.tier.name} · ${standing.points.toString()} points`}
+      back={{ href: "/account", label: "Account" }}
+    >
+      <section className="sb-balance">
+        <p className="sb-balance__label">Your tier</p>
+        <p className="sb-balance__value">{standing.tier.name}</p>
 
         {standing.next ? (
           <>
-            <p className="muted small">
+            <p className="sb-small" style={{ color: "var(--sb-shell-muted)", margin: "var(--sb-3) 0 6px" }}>
               {standing.pointsToNext.toString()} more points to {standing.next.name}
             </p>
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
+            <div
+              className="sb-progress sb-progress--onshell"
+              role="progressbar"
+              aria-valuenow={progressPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Progress to ${standing.next.name}`}
+            >
+              <div className="sb-progress__fill" style={{ width: `${progressPercent}%` }} />
             </div>
           </>
         ) : (
-          <p className="muted small">You have reached the highest tier.</p>
+          <p className="sb-small" style={{ color: "var(--sb-shell-muted)", marginBottom: 0 }}>
+            You have reached the highest tier.
+          </p>
         )}
       </section>
 
-      <section className="card">
-        <h2>Tiers</h2>
-        <table className="statement">
+      <section className="sb-panel" style={{ marginBottom: "var(--sb-3)" }}>
+        <div className="sb-panel__head"><h2 className="sb-panel__title">Tiers</h2></div>
+        <table className="sb-table">
           <tbody>
             {TIERS.map((tier) => (
               <tr key={tier.key}>
@@ -83,33 +89,33 @@ export default async function RewardsPage() {
                   {tier.key === standing.tier.key ? (
                     <>
                       {" "}
-                      <span className="pill ok">You</span>
+                      <span className="sb-pill sb-pill--won">You</span>
                     </>
                   ) : null}
                 </td>
-                <td className="right muted small">
+                <td className="sb-table__num sb-muted sb-small">
                   {tier.threshold.toString()} lifetime points
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="muted small legal">
+        <p className="sb-xs sb-muted" style={{ padding: "var(--sb-3)", margin: 0 }}>
           One point per ₦1 staked. Points earned are never taken away by redeeming a reward, so
           spending them cannot drop you a tier.
         </p>
       </section>
 
-      <section className="card">
-        <h2>Redeeming</h2>
-        <p className="muted small">
+      <section className="sb-panel sb-pad sb-stack">
+        <h2 className="sb-panel__title">Redeeming</h2>
+        <p className="sb-small sb-muted" style={{ margin: 0 }}>
           There is nothing to redeem points for yet. Rewards appear here once the catalogue
           exists — a spend button that leads nowhere would be worse than none.
         </p>
-        <Link href="/promotions" className="btn ghost">
+        <Link href="/promotions" className="sb-btn sb-btn--ghost">
           See promotions
         </Link>
       </section>
-    </>
+    </PageShell>
   );
 }

@@ -25,7 +25,7 @@ export default async function ReportsPage({
   try {
     await requirePermission("reports.read");
   } catch (error) {
-    if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof AdminRequiredError) redirect("/signin");
     if (error instanceof PermissionDeniedError) {
       return (
         <>

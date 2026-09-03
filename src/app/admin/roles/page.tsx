@@ -16,7 +16,7 @@ export default async function RolesPage() {
   try {
     identity = await requirePermission("admin.roles.read");
   } catch (error) {
-    if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof AdminRequiredError) redirect("/signin");
     if (error instanceof PermissionDeniedError) {
       return (
         <>

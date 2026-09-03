@@ -1,13 +1,15 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { sql } from "drizzle-orm";
+import { Ticket } from "lucide-react";
 import { db } from "@/db/pooled";
 import { authOptions } from "@/modules/auth/auth-options";
 import { naira } from "@/lib/money";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My bets" };
-
 
 type BetRow = {
   id: string;
@@ -27,10 +29,17 @@ type BetRow = {
  * Shows the LOCKED odds on every leg, not the current price. That is what the
  * bet actually settles against, and showing today's price would quietly
  * misrepresent what the user is holding.
+ *
+ * "Returned" is what was actually paid, read from the bet row — never
+ * recomputed here. A settled bet whose displayed return disagreed with the
+ * ledger would be indistinguishable, to the customer, from being underpaid.
+ *
+ * There is no cash-out control on this page. The service exists but no
+ * authenticated route does, so a button would be a promise nothing can keep.
  */
 export default async function BetsPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/api/auth/signin");
+  if (!session?.user) redirect("/signin?callbackUrl=%2Fbets");
 
   const rows = await db.execute<BetRow>(sql`
     SELECT
@@ -64,23 +73,30 @@ export default async function BetsPage() {
     LIMIT 50
   `);
 
-  return (
-    <>
-      <header className="page-head">
-        <h1>My bets</h1>
-        <p className="muted">
-          {rows.length === 0 ? "You have not placed a bet yet." : `${rows.length} most recent`}
-        </p>
-      </header>
+  const open = rows.filter((bet) => bet.status === "PENDING").length;
 
+  return (
+    <PageShell
+      title="My bets"
+      sub={
+        rows.length === 0
+          ? "You have not placed a bet yet."
+          : `${rows.length} most recent${open > 0 ? ` · ${open} still open` : ""}`
+      }
+    >
       {rows.length === 0 ? (
-        <section className="card empty">
-          <p>
-            Nothing here yet. <a href="/sports">Browse the odds</a> to place your first bet.
-          </p>
+        <section className="sb-panel">
+          <div className="sb-empty">
+            <Ticket className="sb-empty__icon" size={28} aria-hidden="true" />
+            <p className="sb-empty__title">No bets yet</p>
+            <p className="sb-small">Your tickets appear here the moment one is accepted.</p>
+            <p style={{ marginTop: "var(--sb-4)" }}>
+              <Link href="/sports" className="sb-btn sb-btn--primary">Browse the odds</Link>
+            </p>
+          </div>
         </section>
       ) : (
-        <section className="bet-list">
+        <section className="sb-panel">
           {rows.map((bet) => {
             const settled = bet.status !== "PENDING";
             const paid =
@@ -93,10 +109,17 @@ export default async function BetsPage() {
                     : null;
 
             return (
-              <article key={bet.id} className="card bet">
-                <div className="bet-head">
-                  <span className={`pill ${statusClass(bet.status)}`}>{label(bet.status)}</span>
-                  <time dateTime={new Date(bet.placed_at).toISOString()}>
+              <article key={bet.id} className="sb-ticket">
+                <div className="sb-ticket__head">
+                  <span className={`sb-pill ${pillClass(bet.status)}`}>{label(bet.status)}</span>
+                  <span className="sb-small sb-muted">
+                    {bet.legs.length > 1 ? `${bet.legs.length}-fold` : "Single"}
+                  </span>
+                  <time
+                    className="sb-small sb-muted"
+                    dateTime={new Date(bet.placed_at).toISOString()}
+                    style={{ marginLeft: "auto" }}
+                  >
                     {new Date(bet.placed_at).toLocaleString("en-NG", {
                       day: "2-digit",
                       month: "short",
@@ -106,46 +129,59 @@ export default async function BetsPage() {
                   </time>
                 </div>
 
-                <ul className="bet-legs">
+                <div>
                   {bet.legs.map((leg, index) => (
-                    <li key={index}>
-                      <div>
-                        <strong>{leg.selection}</strong>
-                        <span className="muted small"> {leg.fixture}</span>
+                    <div className="sb-ticket__leg" key={index}>
+                      <div style={{ minWidth: 0 }}>
+                        <strong style={{ display: "block" }}>{leg.selection}</strong>
+                        <span className="sb-xs sb-muted">{leg.fixture}</span>
                       </div>
-                      <span className={leg.result === "LOST" ? "muted" : ""}>
+                      <span
+                        className="sb-ticket__legodds"
+                        style={{ color: leg.result === "LOST" ? "var(--sb-faint)" : undefined }}
+                      >
                         {Number(leg.odds).toFixed(2)}
                       </span>
-                    </li>
+                      {leg.result && leg.result !== "PENDING" ? (
+                        <span className={`sb-pill ${pillClass(leg.result)}`}>{label(leg.result)}</span>
+                      ) : null}
+                    </div>
                   ))}
-                </ul>
+                </div>
 
-                <dl className="totals">
+                <dl className="sb-ticket__foot">
                   <div>
-                    <dt>Stake</dt>
-                    <dd>{naira(bet.stake_minor)}</dd>
+                    <dt className="sb-xs sb-muted">Stake</dt>
+                    <dd style={{ margin: 0, fontWeight: 700 }}>{naira(bet.stake_minor)}</dd>
                   </div>
                   <div>
-                    <dt>{bet.legs.length > 1 ? `${bet.legs.length} legs` : "Odds"}</dt>
-                    <dd>{Number(bet.total_odds_decimal).toFixed(2)}</dd>
+                    <dt className="sb-xs sb-muted">Total odds</dt>
+                    <dd style={{ margin: 0, fontWeight: 700 }}>
+                      {Number(bet.total_odds_decimal).toFixed(2)}
+                    </dd>
                   </div>
-                  <div>
-                    <dt>{settled ? "Returned" : "To return"}</dt>
-                    <dd className={paid && BigInt(paid) > 0n ? "credit" : undefined}>
-                      {settled
-                        ? paid
-                          ? naira(paid)
-                          : "—"
-                        : naira(bet.potential_return_minor)}
+                  <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                    <dt className="sb-xs sb-muted">{settled ? "Returned" : "To return"}</dt>
+                    <dd
+                      style={{
+                        margin: 0,
+                        fontWeight: 800,
+                        fontSize: "var(--sb-t-lg)",
+                        color: paid && BigInt(paid) > 0n ? "var(--sb-up)" : undefined,
+                      }}
+                    >
+                      {settled ? (paid ? naira(paid) : "—") : naira(bet.potential_return_minor)}
                     </dd>
                   </div>
                 </dl>
+
+                <p className="sb-ticket__ref">Reference {bet.id.slice(0, 8)}</p>
               </article>
             );
           })}
         </section>
       )}
-    </>
+    </PageShell>
   );
 }
 
@@ -162,9 +198,11 @@ function label(status: string): string {
   }
 }
 
-function statusClass(status: string): string {
-  if (status === "WON") return "won";
-  if (status === "LOST") return "critical";
-  if (status === "PENDING") return "warning";
+/** Colour is a second signal only; the pill always carries its own word. */
+function pillClass(status: string): string {
+  if (status === "WON") return "sb-pill--won";
+  if (status === "LOST") return "sb-pill--lost";
+  if (status === "PENDING") return "sb-pill--open";
+  if (status === "VOID") return "sb-pill--void";
   return "";
 }

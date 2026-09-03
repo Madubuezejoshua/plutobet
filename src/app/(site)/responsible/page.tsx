@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
 import { authOptions } from "@/modules/auth/auth-options";
 import { ResponsibleControls } from "./controls";
+import { PageShell } from "@/components/sportsbook/page-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Safer gambling" };
@@ -25,7 +26,7 @@ type ActiveLimitRow = {
  */
 export default async function ResponsiblePage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/api/auth/signin");
+  if (!session?.user) redirect("/signin?callbackUrl=%2Fresponsible");
 
   // The limit in force plus any future-dated increase, so the page can show
   // "raised to X, live on Y" rather than silently appearing not to work.
@@ -42,12 +43,12 @@ export default async function ResponsiblePage() {
   `);
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Safer gambling</h1>
-        <p className="muted">Set your own limits. Lowering one applies straight away.</p>
-      </header>
-
+    <PageShell
+      title="Safer gambling"
+      sub="Set your own limits. Lowering one applies straight away."
+      back={{ href: "/account", label: "Account" }}
+      width="narrow"
+    >
       <ResponsibleControls
         limits={limits.map((row) => ({
           type: row.type,
@@ -58,6 +59,6 @@ export default async function ResponsiblePage() {
         coolOffUntil={account?.cool_off_until ? new Date(account.cool_off_until).toISOString() : null}
         status={account?.status ?? "ACTIVE"}
       />
-    </>
+    </PageShell>
   );
 }

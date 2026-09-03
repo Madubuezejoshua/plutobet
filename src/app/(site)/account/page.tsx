@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import {
+  ArrowDownToLine, ArrowUpFromLine, BadgeCheck, Gift, LogOut, Lock,
+  ShieldCheck, SlidersHorizontal, Ticket, Wallet,
+} from "lucide-react";
 import { authOptions } from "@/modules/auth/auth-options";
 import { UTILITY_ROUTES } from "@/lib/navigation";
 import { profileService } from "@/modules/users/profile.service";
 import { maskPhone } from "@/modules/notifications/phone";
 import type { UserStatus } from "@/modules/users/schema";
+import { PageShell } from "@/components/sportsbook/page-shell";
 import { VerifyEmail } from "./verify-email";
 
 export const dynamic = "force-dynamic";
@@ -34,9 +39,21 @@ const STATUS_EXPLANATION: Record<UserStatus, string> = {
   CLOSED: "This account is closed.",
 };
 
+const MANAGE = [
+  { href: "/account/security", label: "Security", sub: "Password, devices, sessions", Icon: Lock },
+  { href: "/account/preferences", label: "Preferences", sub: "Odds format, notifications", Icon: SlidersHorizontal },
+  { href: "/wallet", label: "Wallet", sub: "Balance and statement", Icon: Wallet },
+  { href: "/bets", label: "My bets", sub: "Open and settled tickets", Icon: Ticket },
+  { href: UTILITY_ROUTES.deposit, label: "Deposit", sub: "Your dedicated account number", Icon: ArrowDownToLine },
+  { href: UTILITY_ROUTES.withdraw, label: "Withdraw", sub: "Cash out to your bank", Icon: ArrowUpFromLine },
+  { href: UTILITY_ROUTES.verify, label: "Verification", sub: "BVN, NIN and documents", Icon: BadgeCheck },
+  { href: UTILITY_ROUTES.responsible, label: "Safer gambling", sub: "Limits and self-exclusion", Icon: ShieldCheck },
+  { href: "/referrals", label: "Invite friends", sub: "Your code and what it pays", Icon: Gift },
+];
+
 export default async function AccountPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) redirect(UTILITY_ROUTES.signIn);
+  if (!session?.user) redirect(`${UTILITY_ROUTES.signIn}?callbackUrl=%2Faccount`);
 
   const profile = await profileService.get(session.user.id);
   const displayName =
@@ -45,36 +62,33 @@ export default async function AccountPage() {
     profile.email;
 
   return (
-    <>
-      <header className="page-head">
-        <h1>Account</h1>
-        <p className="muted">{displayName}</p>
-      </header>
-
+    <PageShell title="Account" sub={displayName}>
       {profile.status !== "ACTIVE" ? (
-        <p className="notice error">{STATUS_EXPLANATION[profile.status]}</p>
+        <p className="sb-note sb-note--error" role="alert" style={{ marginBottom: "var(--sb-3)" }}>
+          {STATUS_EXPLANATION[profile.status]}
+        </p>
       ) : null}
 
-      <section className="card">
-        <h2>Details</h2>
-        <table className="statement">
+      <section className="sb-panel" style={{ marginBottom: "var(--sb-3)" }}>
+        <div className="sb-panel__head"><h2 className="sb-panel__title">Details</h2></div>
+        <table className="sb-table">
           <tbody>
             <tr>
-              <td className="muted">Email</td>
-              <td className="right">
+              <td className="sb-muted">Email</td>
+              <td className="sb-table__num">
                 {profile.email}{" "}
-                <span className={profile.emailVerified ? "pill ok" : "pill warning"}>
+                <span className={profile.emailVerified ? "sb-pill sb-pill--won" : "sb-pill sb-pill--void"}>
                   {profile.emailVerified ? "Verified" : "Unverified"}
                 </span>
                 <VerifyEmail verified={profile.emailVerified} />
               </td>
             </tr>
             <tr>
-              <td className="muted">Phone</td>
-              <td className="right">
+              <td className="sb-muted">Phone</td>
+              <td className="sb-table__num">
                 {profile.phoneNumber ? maskPhone(profile.phoneNumber) : "Not added"}{" "}
                 {profile.phoneNumber ? (
-                  <span className={profile.phoneVerified ? "pill ok" : "pill warning"}>
+                  <span className={profile.phoneVerified ? "sb-pill sb-pill--won" : "sb-pill sb-pill--void"}>
                     {profile.phoneVerified ? "Verified" : "Unverified"}
                   </span>
                 ) : null}
@@ -82,13 +96,13 @@ export default async function AccountPage() {
             </tr>
             {profile.username ? (
               <tr>
-                <td className="muted">Username</td>
-                <td className="right">{profile.username}</td>
+                <td className="sb-muted">Username</td>
+                <td className="sb-table__num">{profile.username}</td>
               </tr>
             ) : null}
             <tr>
-              <td className="muted">Date of birth</td>
-              <td className="right">
+              <td className="sb-muted">Date of birth</td>
+              <td className="sb-table__num">
                 {profile.dateOfBirth ? (
                   new Date(profile.dateOfBirth).toLocaleDateString("en-NG", {
                     day: "numeric",
@@ -96,29 +110,29 @@ export default async function AccountPage() {
                     year: "numeric",
                   })
                 ) : (
-                  <span className="pill warning">Not on file</span>
+                  <span className="sb-pill sb-pill--void">Not on file</span>
                 )}
               </td>
             </tr>
             <tr>
-              <td className="muted">Verification</td>
-              <td className="right">
-                <span className={profile.kycLevel >= 1 ? "pill ok" : "pill warning"}>
+              <td className="sb-muted">Verification</td>
+              <td className="sb-table__num">
+                <span className={profile.kycLevel >= 1 ? "sb-pill sb-pill--won" : "sb-pill sb-pill--void"}>
                   {TIER_LABEL[profile.kycLevel] ?? `Tier ${profile.kycLevel}`}
                 </span>
               </td>
             </tr>
             <tr>
-              <td className="muted">Status</td>
-              <td className="right">
-                <span className={profile.status === "ACTIVE" ? "pill ok" : "pill critical"}>
+              <td className="sb-muted">Status</td>
+              <td className="sb-table__num">
+                <span className={profile.status === "ACTIVE" ? "sb-pill sb-pill--won" : "sb-pill sb-pill--lost"}>
                   {profile.status.replace(/_/g, " ")}
                 </span>
               </td>
             </tr>
             <tr>
-              <td className="muted">Member since</td>
-              <td className="right">
+              <td className="sb-muted">Member since</td>
+              <td className="sb-table__num">
                 {profile.createdAt.toLocaleDateString("en-NG", {
                   day: "numeric",
                   month: "long",
@@ -131,9 +145,9 @@ export default async function AccountPage() {
       </section>
 
       {!profile.dateOfBirth ? (
-        <section className="card">
-          <h2>Date of birth missing</h2>
-          <p className="muted small">
+        <section className="sb-panel sb-pad" style={{ marginBottom: "var(--sb-3)" }}>
+          <h2 className="sb-panel__title">Date of birth missing</h2>
+          <p className="sb-small sb-muted" style={{ margin: 0 }}>
             This account was created before we recorded dates of birth. We are legally required to
             confirm every account holder is 18 or over, so please contact support to add it.
           </p>
@@ -141,71 +155,38 @@ export default async function AccountPage() {
       ) : null}
 
       {profile.kycLevel === 0 ? (
-        <section className="card">
-          <h2>Verify to withdraw</h2>
-          <p className="muted small">
+        <section className="sb-panel sb-pad sb-stack" style={{ marginBottom: "var(--sb-3)" }}>
+          <h2 className="sb-panel__title">Verify to withdraw</h2>
+          <p className="sb-small sb-muted" style={{ margin: 0 }}>
             Unverified accounts cannot withdraw. Confirming your BVN or NIN takes a minute and
             unlocks cash-out up to ₦50,000 a day.
           </p>
-          <Link href={UTILITY_ROUTES.verify} className="btn primary">
+          <Link href={UTILITY_ROUTES.verify} className="sb-btn sb-btn--primary">
             Verify identity
           </Link>
         </section>
       ) : null}
 
-      {profile.referralCode ? (
-        <section className="card">
-          <h2>Invite a friend</h2>
-          <p className="muted small">Share your code. Rewards arrive with promotions in phase 14.</p>
-          <p className="account-number">{profile.referralCode}</p>
-        </section>
-      ) : null}
-
-      <section className="section">
-        <div className="section-head">
-          <h2>Manage</h2>
-        </div>
-        <div className="tile-row">
-          <Link href="/account/security" className="tile">
-            <span className="ico" aria-hidden="true">🔒</span>
-            Security
-          </Link>
-          <Link href="/account/preferences" className="tile">
-            <span className="ico" aria-hidden="true">⚙️</span>
-            Preferences
-          </Link>
-          <Link href="/wallet" className="tile">
-            <span className="ico" aria-hidden="true">👛</span>
-            Wallet
-          </Link>
-          <Link href="/bets" className="tile">
-            <span className="ico" aria-hidden="true">🎫</span>
-            My Bets
-          </Link>
-          <Link href={UTILITY_ROUTES.deposit} className="tile">
-            <span className="ico" aria-hidden="true">➕</span>
-            Deposit
-          </Link>
-          <Link href={UTILITY_ROUTES.withdraw} className="tile">
-            <span className="ico" aria-hidden="true">➖</span>
-            Withdraw
-          </Link>
-          <Link href={UTILITY_ROUTES.verify} className="tile">
-            <span className="ico" aria-hidden="true">🪪</span>
-            Verification
-          </Link>
-          <Link href={UTILITY_ROUTES.responsible} className="tile">
-            <span className="ico" aria-hidden="true">🛡️</span>
-            Limits
-          </Link>
+      <section className="sb-panel sb-pad" style={{ marginBottom: "var(--sb-3)" }}>
+        <h2 className="sb-panel__title" style={{ marginBottom: "var(--sb-3)" }}>Manage</h2>
+        <div className="sb-tiles">
+          {MANAGE.map(({ href, label, sub, Icon }) => (
+            <Link key={href} href={href} className="sb-tile">
+              <Icon size={18} className="sb-tile__icon" aria-hidden="true" />
+              <span>
+                <span className="sb-tile__title">{label}</span>
+                <span className="sb-tile__sub">{sub}</span>
+              </span>
+            </Link>
+          ))}
         </div>
       </section>
 
-      <p style={{ margin: "8px 0 40px" }}>
-        <Link href={UTILITY_ROUTES.signOut} className="btn ghost">
-          Sign out
+      <p style={{ margin: 0 }}>
+        <Link href={UTILITY_ROUTES.signOut} className="sb-btn sb-btn--ghost">
+          <LogOut size={15} aria-hidden="true" /> Sign out
         </Link>
       </p>
-    </>
+    </PageShell>
   );
 }

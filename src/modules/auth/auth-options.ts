@@ -74,6 +74,19 @@ export const authOptions: NextAuthOptions = {
   get secret() {
     return requiredAuthSecret();
   },
+  /*
+   * Branded sign-in, in place of NextAuth's built-in page.
+   *
+   * This is presentation only. It changes WHERE the credentials form is drawn,
+   * not what happens when it is submitted: the same provider, the same
+   * `authorize()` below, the same password verification and the same status
+   * checks. `error` points at the same page so a failed attempt returns to the
+   * form with `?error=` rather than to a framework error screen.
+   */
+  pages: {
+    signIn: "/signin",
+    error: "/signin",
+  },
   session: {
     strategy: "jwt",
     maxAge: 8 * 60 * 60,

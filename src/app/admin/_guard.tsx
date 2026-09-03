@@ -31,7 +31,7 @@ export async function guardAdminPage(
   try {
     return { ok: true, identity: await requirePermission(permission) };
   } catch (error) {
-    if (error instanceof AdminRequiredError) redirect("/api/auth/signin");
+    if (error instanceof AdminRequiredError) redirect("/signin");
     if (error instanceof PermissionDeniedError) {
       return {
         ok: false,
