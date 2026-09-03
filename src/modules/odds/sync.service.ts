@@ -3,6 +3,7 @@ import { db } from "@/db/pooled";
 import { batchClassifier, type BatchClassifier } from "@/modules/sports/classify-batch";
 import { OutOfBudgetError } from "./budget";
 import { events, markets, oddsSnapshots, selections } from "./schema";
+import { invalidateLiveVersion } from "./live-version-cache";
 import type { BookmakerOdds, OddsProvider, OddsSnapshot } from "./provider";
 
 /**
@@ -352,6 +353,25 @@ export class OddsSyncService {
   }
 
   private async persist(snapshots: OddsSnapshot[]): Promise<void> {
+    /*
+     * Repricing changes what the live board shows, so the cached version digest
+     * is dropped once the writes are done — not before, or a poll landing in
+     * between would repopulate the cache with the pre-write digest and hold it
+     * for a full TTL.
+     *
+     * The `finally` is what makes that true even when a snapshot fails
+     * part-way: some prices may already have been written, and leaving a stale
+     * digest cached after a partial write is the case most likely to show
+     * somebody an old price.
+     */
+    try {
+      await this.persistSnapshots(snapshots);
+    } finally {
+      if (snapshots.length > 0) await invalidateLiveVersion(this.config.sport);
+    }
+  }
+
+  private async persistSnapshots(snapshots: OddsSnapshot[]): Promise<void> {
     for (const snap of snapshots) {
       // Append-only history: odds-movement charts, and evidence of what price
       // a user was shown when they placed a bet.

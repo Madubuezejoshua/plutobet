@@ -1,5 +1,10 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
+import {
+  invalidateLiveVersion,
+  readCachedVersion,
+  writeCachedVersion,
+} from "./live-version-cache";
 
 /**
  * Live odds and scores for the client.
@@ -75,6 +80,28 @@ export interface LiveSnapshot {
  * while the board differs. The count catches that at negligible cost.
  */
 export async function liveVersion(sportKey: string): Promise<string> {
+  /*
+   * Served from a two-second cache when one is warm. See
+   * `live-version-cache.ts` for why that is safe: this digest decides whether a
+   * client is told to refresh, and nothing prices a bet from it.
+   *
+   * A cache miss, a malformed value and Redis being unreachable all arrive here
+   * as null and are treated identically — compute it.
+   */
+  const cached = await readCachedVersion(sportKey);
+  if (cached !== null) return cached;
+
+  return writeThrough(sportKey, await computeLiveVersion(sportKey));
+}
+
+/** Stores a freshly computed digest and hands it back. */
+async function writeThrough(sportKey: string, version: string): Promise<string> {
+  await writeCachedVersion(sportKey, version);
+  return version;
+}
+
+/** The digest itself, always from the database. */
+async function computeLiveVersion(sportKey: string): Promise<string> {
   const [row] = await db.execute<{ newest: string | null; n: number }>(sql`
     SELECT
       to_char(max(GREATEST(e.updated_at, m.updated_at, s.updated_at)),
@@ -205,6 +232,20 @@ export async function suspendEventMarkets(eventId: string, reason: string): Prom
 
   if (rows.length > 0) {
     console.info(`[live] suspended ${rows.length} markets on ${eventId}: ${reason}`);
+
+    /*
+     * Drop the cached version so the next poll sees the suspension immediately
+     * rather than up to a TTL later.
+     *
+     * The sport is read from the event rather than assumed, and a failure here
+     * is swallowed by `invalidateLiveVersion`: a suspension that succeeded must
+     * not be reported as failed because a cache key could not be deleted. The
+     * TTL is the correctness bound; this is the latency improvement.
+     */
+    const [event] = await db.execute<{ sport: string }>(sql`
+      SELECT sport FROM events WHERE id = ${eventId}::uuid
+    `);
+    if (event?.sport) await invalidateLiveVersion(event.sport);
   }
   return rows.length;
 }

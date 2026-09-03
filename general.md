@@ -86,9 +86,9 @@ browser during this pass — not that it looks right in the source.
 | | |
 |---|---|
 | Branch | `ui/plutobet-sportsbook-redesign` |
-| HEAD | `7985ed0` — "Let a customer actually cash out" |
-| Working tree | **NOT clean** — 13 entries |
-| Commits ahead of `main` | **12** (read from `git rev-list`, not from memory) |
+| HEAD | `fceff5f` — "Bring accounts with no date of birth back inside the age gate" |
+| Working tree | **NOT clean** — 4 entries |
+| Commits ahead of `main` | **13** (read from `git rev-list`, not from memory) |
 | Behind `main` | 0 |
 | `origin/main` | `83cb633` |
 | `plutobet/main` | `83cb633` |
@@ -111,7 +111,7 @@ browser during this pass — not that it looks right in the source.
 | 5b | Cash-out: eligibility gate, replay, concurrency | **DONE** |
 | 5c | Cash-out: authenticated route, UI, audit, admin visibility | **DONE** |
 | 5d | **Date-of-birth backfill** | **DONE** |
-| 5e | Live-version Redis cache | NOT STARTED |
+| 5e | **Live-version Redis cache** | **DONE** |
 | 5f | Withdrawal bank list | NOT STARTED |
 | 5g | Edit bet | NOT STARTED |
 | 5h | Legacy style bridge removal | NOT STARTED |
@@ -242,25 +242,64 @@ Sixteen of seventeen were dead imports. The seventeenth was not:
 restated it as a literal `interval '3 hours'`, so the two could drift apart. The
 query uses the constant now.
 
+### Stage 5e — the live-version cache
+
+`VERIFIED_BY_INTEGRATION_TEST`, `live-version-cache.acceptance.spec.ts`, 8 tests
+against real Postgres and real Redis.
+
+`/api/live` computed the version digest on **every** poll so an unchanged board
+could answer 304 without building a snapshot. Right shape, wrong cost: the digest
+is a three-table aggregate and the board polls every five seconds per viewer, so
+a hundred people watching one match meant twenty aggregates a second to answer
+"nothing has changed" a hundred times.
+
+**Why this is safe to cache.** The digest is a change detector, not a price and
+not an authorisation. Nothing prices a bet from it — placement re-reads every
+selection under a row lock and compares against the odds the customer was shown.
+That separation is what makes caching defensible, and the module says so: if
+anything ever prices from this value, delete the cache rather than reason about
+it.
+
+**Two layers, in this order:**
+
+1. A **2-second TTL**, shorter than the 5-second poll. This is the correctness
+   bound and it holds whether or not any invalidation fires — including for a
+   write path nobody remembered to hook up.
+2. **Explicit invalidation** after repricing and after suspending an event's
+   markets. This is a latency improvement on top, not the guarantee.
+
+Putting the TTL first is the point: an invalidation-only cache is correct exactly
+until someone adds a write path and forgets, and the symptom is stale odds.
+
+**Redis down is not an outage.** Every path falls back to the direct query and
+answers correctly, just more expensively. A suspension — the safety control —
+is never rolled back because a cache key could not be deleted, and that is
+asserted. Failures are logged once per process rather than once per poll, so an
+outage does not bury its own cause.
+
+Tested: cached value equals the uncached query; a warm key never touches the
+database; **staleness is bounded by the TTL with no invalidation at all**; a
+suspension drops the key immediately; twenty concurrent readers agree on one
+digest; Redis failure degrades to the query; a malformed cached value is ignored
+rather than handed to a client as an ETag it could never match.
+
 ### Exact next action
 
 
-Stage 5e — the `/api/live` version cache.
+Stage 5f — the withdrawal bank list.
 
-`liveVersion()` runs a three-table aggregate on every poll, and the board polls
-every five seconds per viewer. Before writing code, establish from the code:
+The withdraw form asks for a numeric NIP bank code typed from memory. Before
+writing code, establish from the code:
 
-1. What `liveVersion()` actually queries and what the ETag is derived from.
-2. Where Redis is already used and what the failure behaviour is when it is
-   unavailable (`src/db/redis.ts`, the rate limiter, the odds budget).
-3. Whether any placement decision reads the cached value — it must not; a stale
-   version may never authorise a bet, and prices used for placement stay
-   authoritative on the server.
+1. What `PaymentProvider` exposes today and where the interface is declared.
+2. How the sandbox provider is structured, so the fixture path matches it.
+3. Where provider responses are already cached, if anywhere.
 
-Then: Redis-backed cache with explicit invalidation when live data changes, a
-bounded TTL as recovery, correct 304 behaviour, a safe fallback that degrades to
-the direct query when Redis is down, and tests for hit, miss, invalidation,
-concurrency and Redis failure.
+Then: a provider-abstraction `listBanks()`, an authenticated server route,
+safe caching, server-side validation of the submitted code against the
+provider list, honest failure UI, and fixture-based contract tests. Real
+provider communication stays `BLOCKED_BY_KEY` — never hard-code a production
+bank list.
 
 ### Files being modified right now
 
@@ -313,6 +352,7 @@ None in flight. The working tree is clean at the commit named above.
 | `npx next build` | **exit 0**; `/account/date-of-birth`, `/api/account/date-of-birth` and `/api/bets/[id]/cashout` all emitted | after 5d |
 | `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, 62 tables | after 5d |
 | `npx vitest run` on betting, settlement, payments, users | **28 files, 345 passed, 0 failed** | after 5d |
+| `npx vitest run` on odds | **9 files, 117 passed, 1 skipped, 0 failed** | after 5e |
 | `node scripts/secret-scan.mjs` | clean | baseline, `4b65c02` |
 
 The full suite is re-run from a clean state in stage 9; totals will rise because
@@ -333,6 +373,8 @@ this pass adds tests, and any figure that changes is corrected here.
 | 8 | The age gate used the database's local date, the service used UTC | **FIXED**, `0028` |
 | 9 | Every betting fixture was accidentally a legacy account | **FIXED** |
 | 10 | The admin compliance page said missing-DOB accounts were "not blocked" | **FIXED** — they are |
+
+| 11 | `/api/live` recomputed a three-table aggregate on every poll | **FIXED**, 5e |
 
 Cash-out and the date-of-birth flow are not yet `VERIFIED_IN_REAL_BROWSER`;
 stage 4 covers that. Blockers inherited from the previous pass are in §23.
