@@ -75,6 +75,31 @@ describe("navigation registry", () => {
     }
   });
 
+  it("makes every planned product say what it is actually waiting on", () => {
+    /*
+     * The placeholder used to assert one blocker for all three planned
+     * products — "it needs a provider we have not connected". That is true of a
+     * streamed casino and a licensed draw, and false of Fantasy, which needs
+     * building rather than connecting. A page that reads as honest while giving
+     * a reason that is not the real one is a fabricated blocker, which is the
+     * same defect as a fabricated feature.
+     *
+     * Required here rather than defaulted in the component, so that adding a
+     * planned product forces somebody to say why it is not available.
+     */
+    for (const item of NAV_ITEMS.filter((candidate) => candidate.status === "PLANNED")) {
+      expect(item.waitingOn, `${item.key} does not say why it is unavailable`).toBeTruthy();
+      expect(item.waitingOn!.length, `${item.key}'s reason is too short to mean anything`)
+        .toBeGreaterThan(20);
+    }
+  });
+
+  it("does not put a reason on a product that is live", () => {
+    for (const item of NAV_ITEMS.filter((candidate) => candidate.status === "LIVE")) {
+      expect(item.waitingOn, `${item.key} is live but claims to be waiting`).toBeUndefined();
+    }
+  });
+
   it("resolves a path to its longest matching entry", () => {
     expect(navItemForPath("/")?.key).toBe("home");
     expect(navItemForPath("/sports")?.key).toBe("sports");

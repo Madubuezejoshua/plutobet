@@ -19,6 +19,13 @@ import { PageShell } from "@/components/sportsbook/page-shell";
  *
  * It reads its copy from the navigation registry, so a product's description
  * is written once and a status change here is a one-line edit there.
+ *
+ * INCLUDING THE REASON. This used to state one blocker for all three planned
+ * products — "it needs a provider we have not connected" — which is true of a
+ * streamed casino and a licensed draw, and false of Fantasy, which needs
+ * building rather than connecting. Each product now carries its own reason in
+ * the registry. A placeholder that reads as honest while giving a reason that
+ * is not the real one is a fabricated blocker.
  */
 export function ComingSoon({ productKey }: { productKey: string }) {
   const item = navItem(productKey);
@@ -46,8 +53,8 @@ export function ComingSoon({ productKey }: { productKey: string }) {
         </p>
 
         <p className="sb-small sb-muted" style={{ maxWidth: 420, margin: "var(--sb-3) auto 0" }}>
-          It needs a provider we have not connected. We would rather show you nothing than a page
-          that pretends to work — when it is real, it will appear here.
+          {item.waitingOn} We would rather show you nothing than a page that pretends to work —
+          when it is real, it will appear here.
         </p>
 
         <div

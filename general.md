@@ -116,8 +116,8 @@ browser during this pass — not that it looks right in the source.
 | 5g | **Edit bet** | **BLOCKED_BY_PRODUCT_DECISION** |
 | 5h | **Legacy style bridge removal** | **DONE** — bridge deleted |
 | 5i | **Prompt-injection corpus** | **DONE** — 53 attacks, 59 tests, 3 defects found |
-| 5j | Personalisation / Admin AI | NOT STARTED |
-| 5k | Fantasy / Lucky Numbers | NOT STARTED |
+| 5j | **Personalisation / Admin AI** | **BLOCKED_BY_PRODUCT_DECISION** (+ `BLOCKED_BY_KEY` for Admin AI) |
+| 5k | **Fantasy / Lucky Numbers** | **DONE** — honest unavailable pages; a fabricated blocker fixed |
 | 6 | Load and reliability testing | NOT STARTED |
 | 7 | Full E2E suite against a disposable database | NOT STARTED |
 | 8 | Security re-verification | NOT STARTED |
@@ -517,17 +517,86 @@ those would make a normal answer look like a fault. The assertion now checks
 what the attack is actually about — that no price is returned and the answer
 says it cannot find the fixture.
 
+### Stage 5j — personalisation and Admin AI are blocked, and by what
+
+Searched the repository. **There is no specification for either.** The only
+reference is one backlog line, `docs/who-does-what.md` D9, saying both are
+greenfield. Every historical report agrees and puts the source-match count at
+zero: `PROJECT_STATUS.md`, `PLUTOBET_STATUS.md` C6/C7, `GPT.md`. "Phase 19" and
+"Phase 23" are named; the phase document itself is not in the repository.
+
+**Personalisation is `BLOCKED_BY_PRODUCT_DECISION`** — and specifically *not*
+`BLOCKED_BY_KEY`. It needs no model. The data exists and the arithmetic is
+ordinary. What does not exist is the part that matters on a gambling product:
+**what is recommended, to whom, and when it is withheld.** Undecided, and not a
+developer's to decide:
+
+- What is surfaced — a fixture, a market, a stake size? A recommended *stake* is
+  a different product, and a different regulatory object, from a recommended
+  fixture.
+- On what signal. Betting history is the obvious one and it is also the signal
+  that most reliably identifies somebody losing.
+- **When it is suppressed.** For a customer under a deposit limit, in cool-off,
+  showing loss-chasing behaviour, or flagged by the risk console. A recommender
+  with no suppression rule is a system that pushes hardest at the customer it
+  should be pushing at least.
+- Whether it is **marketing**. `user_preferences.marketing_emails` already
+  records a consent this product would have to respect, and Nigerian rules on
+  gambling advertising bear on the answer.
+
+Building it without those means writing the responsible-gambling policy of a
+money feature into a recommender, which the owner's instruction forbids. Recorded
+as blocked with the decisions named, rather than shipped to look complete.
+
+The parts of personalisation that are *not* promotional already work: the "Your
+competitions" rail (favourites, whose reachability was fixed in stage 3) and the
+stored display preferences.
+
+**Admin AI is `BLOCKED_BY_KEY` and `BLOCKED_BY_PRODUCT_DECISION`, both.** No
+model is connected. Separately, nobody has decided which admin actions an
+assistant may take — the admin console approves withdrawals, adjusts exposure
+and settles bets, and an assistant over those needs its own tool registry and
+permission model before a line of it is worth writing.
+
+### Stage 5k — the unavailable pages were honest, and one reason was not
+
+Fantasy, Lucky Numbers and Live Casino all render `ComingSoon`: the product
+name, what it is, a plain "Not available yet", and two routes to something that
+works. No fake tiles, no dummy fixtures, no dead buttons. That is the outcome
+the owner asked for and it was already in place.
+
+One defect. `FAILED` → fixed. **The placeholder told every visitor the same
+reason** — "It needs a provider we have not connected." That is true of a
+streamed casino and true of a licensed draw. It is **false of Fantasy**, which
+needs building; it is our own work, not a provider's. A page that reads as
+honest while giving a reason that is not the real one is a fabricated blocker,
+and that is the same defect as a fabricated feature — it just flatters us
+instead of the product.
+
+Each planned product now carries its own reason in the navigation registry, and
+`navigation.acceptance.spec.ts` asserts that every `PLANNED` item has one and
+that no `LIVE` item does — so adding a planned product forces somebody to say
+why it is unavailable. Verified in the browser: all three pages served their own
+sentence.
+
 ### Exact next action
 
 
-**Stage 5j — personalisation and Admin AI.**
+**Stage 6 — load and reliability testing.**
 
-Establish what exists, what is reachable without a model key, and what is
-genuinely `BLOCKED_BY_KEY`. Anything that can be made to work without a key gets
-built; anything that cannot gets an honest unavailable state rather than a
-screen that pretends. Then **5k**, Fantasy and Lucky Numbers, on the same test —
-`/fantasy` already renders an honest "not available yet" page, and the question
-is whether the others match it.
+Measure p50/p95/p99 and statement counts on the paths D8 names as uncovered:
+the board, casino callbacks, live-feed polling at scale, and Pluto concurrency.
+Bet placement under contention is already covered. Against the **disposable
+local database only**, and the synthetic benchmark fixtures are not to be
+deleted — that needs owner approval on a dry-run fingerprint.
+
+Then stage 7 (the full end-to-end journey), 8 (security re-verification), 9
+(complete gates from clean, twice), 10 (the truthful rewrite and changelog) and
+11 (merge and push, only if every gate passes).
+
+Still outstanding from stage 3, and not to be lost: the remaining viewports —
+430×932, 768×1024, 1024×768, 1366×768, 1920×1080 — plus the accessibility pass
+(0 critical/serious violations) and keyboard navigation.
 
 Then, still outstanding for stage 3: the remaining viewports the owner named —
 430×932, 768×1024, 1024×768, 1366×768, 1920×1080 — as a responsive sweep, plus
@@ -613,10 +682,10 @@ build. Every one is a full run, not a subset.
 | `npx tsc --noEmit` | **exit 0**, 0 errors | this checkpoint |
 | `npx eslint .` | **exit 0**, 0 errors, 0 warnings | this checkpoint |
 | `npx next build` | **Compiled successfully** | this checkpoint |
-| `npx vitest run` | **75 files, 973 passed, 1 skipped, 0 failed**, exit 0 | this checkpoint |
+| `npx vitest run` | **75 files, 975 passed, 1 skipped, 0 failed**, exit 0 | this checkpoint |
 | `npx playwright test` | **118 passed, 6 skipped, 0 failed** (desktop + Pixel 7) | this checkpoint |
 | `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, exit 0 | this checkpoint |
-| `node scripts/secret-scan.mjs` | **clean**, 441 files, 15 rules | this checkpoint |
+| `node scripts/secret-scan.mjs` | **clean**, 447 files, 15 rules | this checkpoint |
 
 The six Playwright skips are the measured-column check, which `test.skip`s on
 the mobile project because a phone viewport is narrower than the column. They
@@ -657,6 +726,12 @@ this pass adds tests, and any figure that changes is corrected here.
 | 20 | The screenshot capture deleted the audit it was meant to sit beside | **FIXED**, stage 4 |
 | 21 | The merged audit table was one column short of its header | **FIXED**, stage 4 |
 | 22 | The review server inherited production `AUTH_SECRET` and `IDENTITY_PEPPER` from `.env` | **FIXED** — review-only values, and a loopback check that refuses to start otherwise |
+| 23 | `setDepositLimit` changed a protection with no confirmation required | **FIXED**, 5i |
+| 24 | `setOddsFormat` and `setDepositLimit` were advertised to the model with no handler | **FIXED**, 5i |
+| 25 | `getHeadToHead` returned a raw `PostgresError` for a malformed id | **FIXED**, 5i |
+| 26 | The unavailable-product page gave a blocking reason that was false for Fantasy | **FIXED**, 5k |
+| 27 | Personalisation has no rules for what to recommend, or when to withhold it | **BLOCKED_BY_PRODUCT_DECISION** — not built, by instruction |
+| 28 | Admin AI has no model and no decision on which admin actions it may take | **BLOCKED_BY_KEY** and **BLOCKED_BY_PRODUCT_DECISION** |
 
 Cash-out and the date-of-birth flow still are **not** `VERIFIED_IN_REAL_BROWSER`
 as complete money journeys. The date-of-birth *control* is audited (row:
@@ -796,12 +871,12 @@ described at the top of this file.
 |---|---|---|
 | Types | `npx tsc --noEmit` | **exit 0** |
 | Lint | `npm run lint` | **exit 0** — 0 errors, **0 warnings** |
-| Tests | `npx vitest run` | **75 files, 973 passed, 1 skipped, 0 failed** |
+| Tests | `npx vitest run` | **75 files, 975 passed, 1 skipped, 0 failed** |
 | The 1 skip | — | the opt-in live provider contract (`ODDS_LIVE_CONTRACT`) — **not counted as passing** |
 | Browser | `npx playwright test` | **118 passed, 6 skipped, 0 failed** — desktop 1440×900 and a Pixel 7 profile |
 | The 6 skips | — | the measured-column check, which is meaningless on a viewport narrower than the column |
 | Build | `npx next build` | **exit 0** |
-| Secret scan | `node scripts/secret-scan.mjs` | clean — 441 files, 15 rules |
+| Secret scan | `node scripts/secret-scan.mjs` | clean — 447 files, 15 rules |
 | Whitespace | `git diff --check` | clean |
 | Migrations | `node scripts/check-migrations.mjs` | **29 of 29** applied to a clean database |
 | Restore verifier | `npm run db:verify-restore` | 8 of 8 pass; ledger balanced, 0 negative wallets |
@@ -812,7 +887,7 @@ described at the top of this file.
 | Database roles | `npm run db:audit-roles` | **exit 1**, correctly — §20 |
 | CI | GitHub Actions | green on both remotes for `main`. **This branch has not been pushed**, so no CI run exists for it |
 
-Test count is **973**, from 844 at the start of this pass: +129 covering cash-out
+Test count is **975**, from 844 at the start of this pass: +131 covering cash-out
 exposure, eligibility and its HTTP surface, the date-of-birth gate, the
 live-version cache, the withdrawal bank list, the browser suite's own fixtures,
 and the adversarial corpus for Pluto. The 15 lint warnings the previous run recorded are gone — 14 were dead

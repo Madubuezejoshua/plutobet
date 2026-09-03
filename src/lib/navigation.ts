@@ -43,6 +43,17 @@ export interface NavItem {
   status: ProductStatus;
   /** One line describing the product, used on placeholders and the homepage. */
   blurb: string;
+  /**
+   * Why a PLANNED product is not available, in the customer's terms.
+   *
+   * Required on every PLANNED item and asserted by a test, because the
+   * placeholder previously told every visitor the same sentence — "it needs a
+   * provider we have not connected" — which is true of a streamed casino and a
+   * licensed draw, and simply false of Fantasy, which needs building. A page
+   * that looks honest while stating a reason that is not the real one is a
+   * fabricated blocker, and it is the same defect as a fabricated feature.
+   */
+  waitingOn?: string;
   /** Redirects to sign-in when there is no session. */
   requiresAuth?: boolean;
   /** Grouping for the mobile drawer. */
@@ -99,6 +110,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     href: "/live-casino",
     status: "PLANNED",
     blurb: "Real dealers, streamed in real time.",
+    waitingOn: "It needs a live studio provider, and we have not connected one.",
     group: "GAMING",
   },
   {
@@ -115,6 +127,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     href: "/fantasy",
     status: "PLANNED",
     blurb: "Build a squad, score against other players.",
+    waitingOn: "We have not built it yet. It is our own work, not a provider's.",
     group: "GAMING",
   },
   {
@@ -123,6 +136,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     href: "/lucky-numbers",
     status: "PLANNED",
     blurb: "Draw-based number games.",
+    waitingOn: "Draw games need a licensed draw operator, and we have not appointed one.",
     group: "GAMING",
   },
 
