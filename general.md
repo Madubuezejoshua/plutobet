@@ -5,10 +5,15 @@ Every other document in the repository is either a runbook, an owner checklist,
 or historical evidence of one pass. Where any of them disagrees with this file,
 this file is right.
 
-**Last updated:** 2026-09-02
-**Branch described:** `ui/plutobet-sportsbook-redesign` (branched from `main`)
-**Merged to `main`:** no. **Pushed:** no. **Deployed:** no.
-Commit count and remote state are recorded in §0, read from git.
+**Last updated:** 2026-09-05
+**Branch described:** `main`, which now carries the completed
+`ui/plutobet-sportsbook-redesign` work
+**Merged to `main`:** **yes**, by fast-forward. **Pushed:** **yes**, to both
+remotes. **Deployed:** **yes to Vercel production, unintentionally** — a
+pre-existing integration deploys on every `main` push; §0 explains what that does
+and does not mean. **Railway: not deployed.**
+Commit count and remote state are recorded in §0 and read from git, never
+repeated from this header.
 
 **No credential, connection string, one-time code, personal detail or other
 secret value appears anywhere in this document, and none may be added to it.**
@@ -91,12 +96,11 @@ browser during this pass — not that it looks right in the source.
 | Working tree | **clean** |
 | Commits ahead of `main` | **26** (read from `git rev-list --count main..HEAD`) |
 | Behind `main` | 0 |
-| `origin/main` | `84aab07` — **pushed 2026-09-05**, fast-forward from `83cb633` |
-| `plutobet/main` | `84aab07` — **pushed 2026-09-05**, fast-forward from `83cb633` |
-| Redesign branch pushed | **yes**, to both remotes at `84aab07` |
-| Merged to `main` | **yes** — fast-forward, no conflict, no history rewritten |
-| Both remotes identical | **yes** — commit `84aab0777d26b46633f744ef3f13702837ad0316`, tree `3d44fe7ee90fd8f3a5f0b554583b81013d41ab95` on both |
-| CI on that exact commit | **passed on both** — "typecheck, test, build" `success` |
+| `origin/main` and `plutobet/main` | **both pushed 2026-09-05**, fast-forward from `83cb633`. They carry the **same commit and the same tree as each other** — verify with the command below rather than trusting a hash written here |
+| The merge commit | `84aab07` — the commit that carried the merge into `main`. `main` has since advanced by documentation-only commits; the *code* is that tree |
+| Redesign branch pushed | **yes**, to both remotes, at `84aab07` |
+| Merged to `main` | **yes** — fast-forward, no conflict, no history rewritten, no force |
+| CI | **passed on both repositories**, on every commit pushed to `main` in this pass — "typecheck, test, build" `success` |
 | Deployed | **YES, UNINTENTIONALLY — read the next section** |
 
 > A previous version of this file said "seven commits". It was wrong, and a
@@ -104,12 +108,21 @@ browser during this pass — not that it looks right in the source.
 > counts and HEAD are read from git at every checkpoint, never repeated from a
 > document.
 >
-> **A checkpoint cannot contain its own hash**, which is why the row above names
-> HEAD by its subject line and not by an abbreviation. Writing the hash in was
-> tried and produced exactly the stale value this note exists to prevent: the
-> commit that carries the number is created *after* the number is written, so it
-> is wrong the instant it is saved. The subject is stable; the hash is read with
-> `git rev-parse HEAD`. If anything here disagrees with git, **git is right.**
+> **A checkpoint cannot contain its own hash, and it cannot contain the hash it
+> is about to create on the remote either.** Both were tried in this pass and
+> both went stale immediately: the commit carrying a number is written *before*
+> that commit exists, and pushing it then moves the remote past whatever it
+> claimed. So no remote hash is written here any more. What is written is the
+> **property that stays true** — both remotes carry the same commit and the same
+> tree — and the command that proves it on demand:
+>
+> ```
+> git ls-remote origin refs/heads/main
+> git ls-remote plutobet refs/heads/main      # expect the same hash
+> git rev-parse "origin/main^{tree}" "plutobet/main^{tree}"   # expect one value twice
+> ```
+>
+> If anything in this document disagrees with git, **git is right.**
 
 ### A production deployment happened, and it was not asked for
 
@@ -121,8 +134,8 @@ deployment.
 | | |
 |---|---|
 | What fired it | A pre-existing Vercel ↔ GitHub integration on that repository that deploys on every push to `main`. It was not invoked by hand and no deployment command was run |
-| Deployments created | Two, both by `vercel[bot]`: environment **Production** (id 6281959437) and **Preview** (id 6281910541) |
-| Result | Both `state=success`, "Deployment has completed" |
+| Deployments created | One **Production** deployment by `vercel[bot]` **per push to `main`**, plus a Preview on the first. Every one so far reports `state=success` |
+| How many so far | Every `main` push in this pass deployed. Do not read a count from this document — it goes stale on the next push. Read it from Vercel, or from `GET /repos/Madubuezejoshua/plutobet/deployments` |
 | The other remote | `plutobet-ai/plutobet_ai` created **no** deployment — it has no such integration |
 | Railway | **Not deployed.** The prohibition named Railway specifically and Railway was never touched |
 
@@ -204,7 +217,7 @@ pinned in CI.
 | 8 | **Security re-verification** | **DONE** for what this pass changed |
 | 9 | Complete gates, twice | **DONE** — vitest and playwright each run twice after the final code change, identical results |
 | 10 | Truthful `general.md` rewrite + changelog | **DONE** — 5 off-vocabulary labels retired, §15 rewritten, `NEXT_WORK_REPORT.md` §37 |
-| 11 | Merge and push, only if every gate passes | **DONE** — both remotes at `84aab07`, identical trees, CI green on both. A Vercel production deploy fired as a side effect; see §0 |
+| 11 | Merge and push, only if every gate passes | **DONE** — merged at `84aab07` by fast-forward, both remotes carry identical commits and trees, CI green on both. A Vercel production deploy fires on every `main` push; see §0 |
 
 ### Completed this pass, with evidence
 
@@ -476,9 +489,12 @@ First run: **28 passed, 12 failed**, and both causes were real.
 
 ### Stage 3 finished — and the page container had been deleted with the bridge
 
-The desktop and Pixel 7 projects both pass: **118 passed, 6 skipped** (the six
-skips are the column check below, which is meaningless on a phone). Two defects
-beyond the ones already recorded:
+The desktop and Pixel 7 projects both passed **at that point in the pass**: 118
+passed, 6 skipped (the six skips are the column check below, which is meaningless
+on a phone). *That figure is a waypoint, not the current one — the suite later
+grew to 139 passed / 13 skipped when the accessibility and responsive files were
+added. §4 carries the current totals.* Two defects beyond the ones already
+recorded:
 
 3. `FAILED` → fixed. **The mobile header overflowed.** The signed-in header
    measured 446px inside a 412px viewport, so every authenticated page scrolled
@@ -512,10 +528,15 @@ did:
 
 ### Stage 4 — the interaction audit, generated rather than written
 
-`artifacts/ui-review/INTERACTION_AUDIT.md`: **32 rows**, 16 controls in each of
+`artifacts/ui-review/INTERACTION_AUDIT.md`: **38 rows**, 19 controls in each of
 two projects, every one clicked or submitted in a real browser against a
 disposable local database. `artifacts/ui-review/00-contact-sheet.png`: **28
 labelled thumbnails**, desktop and 390px mobile, visually inspected.
+
+It was 32 rows when this stage was first written. The six added since are Pluto's
+chat and mode disclosure, and cash-out — found missing by an audit of the audit —
+and both artefacts were **re-generated after the final fix** rather than left
+showing an earlier state of the interface.
 
 Both are produced by `scripts/build-ui-review.mjs` from what the run actually
 did. Nothing in that table is written from reading the source — if a control is
@@ -818,23 +839,28 @@ the blocker was resolved.
 
 ---
 
-**(Resolved 2026-09-05.) The owner had to authenticate git.**
+**RESOLVED 2026-09-05 — everything below is a record of a blocker that no longer
+exists. Nothing here describes the current state.**
 
-Stages 1–10 are complete and every developer-owned gate passes. Stage 11 — push
-and merge — is stopped at the first step because this machine has **no GitHub
-credential**: no entry in Windows Credential Manager, no `~/.ssh` key, no
-`GITHUB_TOKEN`/`GH_TOKEN`, no `gh` CLI, and no `~/.git-credentials`. `git fetch`
-succeeds because both repositories are public and read anonymously; `git push`
-fails with *"could not read Username for 'https://github.com'"*.
+For part of this pass the push **was** stopped at its first step, because the
+machine held **no GitHub credential**: no entry in Windows Credential Manager, no
+`~/.ssh` key, no `GITHUB_TOKEN`/`GH_TOKEN`, no `gh` CLI, and no
+`~/.git-credentials`. `git fetch` succeeded because both repositories are public
+and read anonymously; `git push` failed with *"could not read Username for
+'https://github.com'"*.
 
-The brief's instruction for exactly this case was followed: **nothing was
-forced, and the merge into `main` was deliberately not performed.** The
-completed work sits on the feature branch. Merging locally while unable to push
-would only move the branch that cannot be published.
+The brief's instruction for exactly that case was followed: **nothing was
+forced, and the merge into `main` was deliberately not performed** while it could
+not be published. The owner then authenticated, and the sequence below was run
+and completed.
 
-**The safe next commands, in order, once the owner has authenticated** (Git
-Credential Manager is already configured as the helper, so the first push will
-open its sign-in; or set a `GITHUB_TOKEN`):
+There was also a transient failure worth remembering because it looks like an
+auth problem and is not: `fatal: unable to access … Could not resolve host:
+github.com` is **DNS**, not credentials. It never reaches the sign-in step. The
+fix is `ipconfig /flushdns`, or setting a working DNS server on the adapter.
+
+**The sequence that was run** (Git Credential Manager was already configured as
+the helper, so the first push opened its browser sign-in):
 
 ```
 git fetch origin --prune && git fetch plutobet --prune
@@ -846,24 +872,28 @@ git push origin main && git push plutobet main
 git rev-parse origin/main plutobet/main      # expect: identical
 ```
 
-The merge is a **fast-forward**: `main` is 0 commits behind the branch and both
-remotes are still at `83cb633`, so no conflict resolution is required and no
-history is rewritten. Re-run the gate set on `main` after the merge before
-pushing it.
+It ran as a **fast-forward**: `main` was 0 commits behind the branch and both
+remotes were still at `83cb633`, so nothing had to be resolved and no history was
+rewritten. `tsc`, `eslint` and the secret scan were re-run on `main` before it
+was pushed; the merged tree was byte-identical to the branch tree already covered
+by the full suites, so re-running those would have re-measured the same content.
 
-**Do not deploy.** This task did not authorise a Railway deployment or any live
-provider activation, and neither was performed.
+**Railway was not deployed**, and no live provider was activated. A **Vercel**
+production deployment did fire on the `main` push — see the deployment section
+above, which is the current statement on it.
 
 ### Files being modified right now
 
 
-**Nothing. The working tree is clean** and all work is committed in the two
-commits this pass added:
+**Nothing. The working tree is clean**, and `main` on both remotes carries every
+commit of this pass. What it added:
 
 | Commit | What it carries |
 |---|---|
 | `b2f6878` | The accessibility pass (axe + keyboard), the 7-viewport sweep, the review server's credential neutralisation, and findings 31–38 |
 | `0ab5ae4` | The footer layout fix (finding 39), re-captured screenshots and contact sheet, and the stage 9 gate results |
+| `84aab07` | The MSVC redistributable confirmed installed and the DLL workaround retired. **This is the commit the merge fast-forwarded to** |
+| after it | Documentation-only commits recording the merge, the green CI, and the Vercel deployment |
 
 ### Decisions and assumptions made
 
@@ -1174,8 +1204,8 @@ product that also promises casino, virtuals, in-play, fantasy and more.
 | Can a test account complete a bet end to end? | **Yes.** `VERIFIED_END_TO_END` — one account, one run, 14 steps: register, fund, bet, win, loss, void, correction, cash-out, refusals, and the ledger still agreeing at the end (§0, stage 7) |
 | Can a stranger's real money enter or leave? | **No.** No payment credentials exist |
 | Does a winning bet get paid without a human? | **Yes** — proven once on a real fixture, §14 |
-| Is the customer interface finished? | **Redesigned, and verified in a real browser** at two viewports — 118 Playwright tests, 32 audited interactions, 28 screenshots (§5, §6). Not merged, not deployed. Five viewports the owner named are still unmeasured, and there is no accessibility pass yet |
-| Is the deployment usable? | **No.** `NEXTAUTH_URL` and the runtime database role remain, §23 |
+| Is the customer interface finished? | **Redesigned and verified in a real browser** — 139 Playwright tests, **38 audited interactions**, 28 screenshots, **all seven owner-named viewports swept**, and an accessibility pass at **0 critical / 0 serious** (§5, §6, §8). **Merged to `main` on both remotes.** |
+| Is the deployment usable? | **Not for real customers.** `NEXTAUTH_URL` and the runtime database role remain, §23. Note a Vercel production deployment now exists — see §0 for what it does and does not mean |
 | Is it legal to operate? | **No.** No licence, §16 |
 
 Two readiness questions, and they are different:
@@ -1203,50 +1233,66 @@ this product or its reporting.
 Run from the repository root. Every figure below is from the run on the branch
 described at the top of this file.
 
+**Run on 2026-09-04/05. The suites were run TWICE after the final code change,
+with identical results both times**, to catch order dependence and flakiness.
+
 | Gate | Command | Result |
 |---|---|---|
 | Types | `npx tsc --noEmit` | **exit 0** |
 | Lint | `npm run lint` | **exit 0** — 0 errors, **0 warnings** |
-| Tests | `npx vitest run` | **75 files, 975 passed, 1 skipped, 0 failed** |
+| Tests | `npx vitest run` | **76 files, 989 passed, 1 skipped, 0 failed** — ×2, identical |
 | The 1 skip | — | the opt-in live provider contract (`ODDS_LIVE_CONTRACT`) — **not counted as passing** |
-| Browser | `npx playwright test` | **118 passed, 6 skipped, 0 failed** — desktop 1440×900 and a Pixel 7 profile |
-| The 6 skips | — | the measured-column check, which is meaningless on a viewport narrower than the column |
-| Build | `npx next build` | **exit 0** |
-| Secret scan | `node scripts/secret-scan.mjs` | clean — 447 files, 15 rules |
+| Browser | `npx playwright test` | **139 passed, 13 skipped, 0 failed** — ×2, identical |
+| The 13 skips | — | 6 measured-column checks, meaningless on a viewport narrower than the column; 7 responsive sweeps, which override the viewport themselves and so run once on the desktop project rather than twice |
+| Accessibility | `npx playwright test e2e/accessibility.spec.ts` | **0 critical, 0 serious** across 25 pages in both projects; the advisory set is empty too. Keyboard focus and keyboard-trap tests pass |
+| Responsive | `npx playwright test e2e/viewports.spec.ts` | **7 viewports × 13 pages**, all pass |
+| Build | `npm run build` | **exit 0** |
+| Secret scan | `node scripts/secret-scan.mjs` | clean — **452 files**, 15 rules |
 | Whitespace | `git diff --check` | clean |
-| Migrations | `node scripts/check-migrations.mjs` | **29 of 29** applied to a clean database |
-| Restore verifier | `npm run db:verify-restore` | 8 of 8 pass; ledger balanced, 0 negative wallets |
-| Admin queries | `npm run admin:smoke` | clean |
-| Sync benchmark | `npm run bench:sync` | completed at 200 and 775 events — §21 |
+| Migrations | `node scripts/check-migrations.mjs` | **29 of 29** applied to a clean database, 62 tables |
+| Admin queries | `npm run admin:smoke` | **18 of 18** clean, exit 0 |
+| Database roles | `npm run db:audit-roles` | **exit 0** — the runtime role owns nothing and cannot `DROP`, `ALTER` or `TRUNCATE` the ledger. **Local stack only**; see the limit below |
 | Demo readiness | `npm run readiness:demo` | **exit 1**, correctly — §3 |
 | Real-money readiness | `npm run readiness:real-money` | **exit 1**, correctly — §3 |
-| Database roles | `npm run db:audit-roles` | **exit 1**, correctly — §20 |
-| CI | GitHub Actions | green on both remotes for `main`. **This branch has not been pushed**, so no CI run exists for it |
+| CI | GitHub Actions | **green on both remotes** for every commit pushed to `main` in this pass — "typecheck, test, build" `success` |
 
-Test count is **975**, from 844 at the start of this pass: +131 covering cash-out
-exposure, eligibility and its HTTP surface, the date-of-birth gate, the
-live-version cache, the withdrawal bank list, the browser suite's own fixtures,
-and the adversarial corpus for Pluto. The 15 lint warnings the previous run recorded are gone — 14 were dead
-imports and one duplicated a policy the SQL restated as a literal.
+**Not re-run in this pass, and therefore not re-asserted**: `db:verify-restore`
+and `bench:sync`. Their previous results stand where they are recorded (§21), but
+a figure from an earlier run is not evidence about this tree and is not presented
+as one.
 
-The browser row is new and is the only gate here that opens one. It is listed
-because five defects in this pass were invisible to every other gate: an
-accessible name, a missing 404, a mobile overflow, an unreachable control, and a
-page container deleted along with the file that happened to define it.
+**The limit on the role audit.** It proves the *runtime* role owns nothing, which
+is the property that matters. The owner role in the local stack is the embedded
+cluster's superuser, so it does **not** demonstrate that the production owner
+role is correctly restricted. Runtime privilege stays unmarked until it is tested
+with the real restricted credential — `BLOCKED_BY_OWNER_CONFIGURATION`.
+
+Test count is **989**, from 844 at the start of this pass. The browser and
+accessibility rows are the only gates here that open a browser, and they earn
+their place: **nine** defects in this pass were invisible to every other gate —
+an accessible name, a missing 404, a mobile overflow, an unreachable control, a
+deleted page container, prose links marked by colour alone, secondary text
+failing contrast, an orphan ARIA row, and a footer that stopped mid-screen. The
+last of those was found by looking at a screenshot, which is not a gate at all.
 
 ---
 
 ## 5. The customer-facing interface
 
-Status: **redesigned, verified in a real browser at two viewports, not merged
-and not deployed.**
+Status: **redesigned, verified in a real browser, and merged to `main` on both
+remotes.**
 
-Evidence: 118 Playwright tests across desktop 1440×900 and a Pixel 7 profile,
-32 audited interactions in `artifacts/ui-review/INTERACTION_AUDIT.md`, and 28
-screenshots on the contact sheet. **Not yet done**, and not to be lost in the
-good news: five of the seven viewports the owner named (430×932, 768×1024,
-1024×768, 1366×768, 1920×1080) are unmeasured, and there is no accessibility
-pass — no axe run, no keyboard-navigation test.
+Evidence: **139 Playwright tests** across desktop 1440×900 and a Pixel 7 profile,
+**38 audited interactions** in `artifacts/ui-review/INTERACTION_AUDIT.md`, 28
+screenshots on the contact sheet, a **7-viewport responsive sweep** covering
+every size the owner named (390×844, 430×932, 768×1024, 1024×768, 1366×768,
+1440×900, 1920×1080), and an **accessibility pass at 0 critical / 0 serious**
+with keyboard focus and keyboard-trap tests passing.
+
+**What is still not claimed**, and must not be lost in the good news: this is not
+a screen-reader pass. axe is a static rule engine over the accessibility tree,
+so a clean run means no rule fired — not that the product is usable with NVDA,
+JAWS or VoiceOver. No assistive-technology walkthrough has been done.
 
 ### What changed and why
 
@@ -1335,8 +1381,8 @@ The distinction is not pedantry. Every one of these rows previously said
 `IMPLEMENTED_NOT_LIVE_TESTED`, which the document defined as "a route that exists" — a
 claim from reading the source that reads like a claim from using the product.
 For most of the rows below, the destination page *is* browser-verified by the
-118-test Playwright suite even where the control itself was never clicked; that
-is worth something, and it is not the same thing.
+Playwright suite even where the control itself was never clicked; that is worth
+something, and it is not the same thing.
 
 ### Header and global chrome
 
@@ -2063,11 +2109,17 @@ after its gates have run; "what was attempted" belongs in `NEXT_WORK_REPORT.md`.
 
 ### 2026-09-04 — the accessibility pass, and a review server that phoned home
 
-**Stages 3 and 9 completed.** Branch `ui/plutobet-sportsbook-redesign` at
-`0ab5ae4`, **25 commits ahead of `main`**, not merged, not pushed, not deployed.
-Stage 11 is `BLOCKED_BY_OWNER_CONFIGURATION`: this machine holds no GitHub
-credential, so the push could not be made and the merge was deliberately not
-performed — §0 carries the exact commands for the owner.
+**Stages 3, 9, 10 and 11 completed.** The redesign branch was merged into `main`
+by **fast-forward** at `84aab07` and pushed to **both** remotes, which carry
+identical commits and trees. **CI passed on both repositories** for every commit
+pushed to `main`.
+
+The push was blocked for part of this pass — the machine had no GitHub
+credential — and the merge was deliberately withheld rather than performed
+locally against a branch that could not be published. The owner authenticated on
+2026-09-05 and the sequence completed. **One consequence nobody asked for: a
+Vercel production deployment fires on every push to `main`, and it fired. See
+§0.**
 
 **Security.** The review server generated its own auth secrets and pinned every
 database URL to loopback, then inherited every other credential from `.env`: the
@@ -2119,4 +2171,6 @@ final fix, and the interaction audit is 38 generated rows. Cash-out is now
 `embedded-postgres` could not start and vitest reported it as "No test files
 found". Worked around for the gate runs; **the owner installed the
 redistributable on 2026-09-05 and it is verified as the real fix** — see §0. Git
-also had no configured identity and has no GitHub credential.
+had no configured identity either; it is set repo-locally to the author already
+in the history. The GitHub credential the push needed was supplied by the owner
+on the same day.
