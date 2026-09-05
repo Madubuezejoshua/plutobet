@@ -86,20 +86,28 @@ browser during this pass — not that it looks right in the source.
 | | |
 |---|---|
 | Branch | `ui/plutobet-sportsbook-redesign` |
-| HEAD | `e9f3462` — "Say only what the evidence says, in the words the brief allows" |
-| Working tree | **NOT clean** — stage 3/4 work in flight, listed below |
-| Commits ahead of `main` | **23** (read from `git rev-list`, not from memory) |
+| HEAD | the commit titled **"Record where this stops, and the exact commands to finish it"** — read its hash with `git rev-parse HEAD` |
+| Last content commit | `0ab5ae4` — "Let the footer reach the bottom, and re-photograph what changed" |
+| Working tree | **clean** |
+| Commits ahead of `main` | **26** (read from `git rev-list --count main..HEAD`) |
 | Behind `main` | 0 |
-| `origin/main` | `83cb633` |
-| `plutobet/main` | `83cb633` |
-| Redesign branch pushed | **no** |
-| Merged to `main` | no |
+| `origin/main` | `83cb633` — fetched 2026-09-04, **unchanged** |
+| `plutobet/main` | `83cb633` — fetched 2026-09-04, **unchanged** |
+| Redesign branch pushed | **no — `BLOCKED_BY_OWNER_CONFIGURATION`, see below** |
+| Merged to `main` | no — deliberately not, see below |
 | Deployed | no |
 
 > A previous version of this file said "seven commits". It was wrong, and a
 > later version said `23b595d`/21 after two more commits had landed. Commit
 > counts and HEAD are read from git at every checkpoint, never repeated from a
 > document.
+>
+> **A checkpoint cannot contain its own hash**, which is why the row above names
+> HEAD by its subject line and not by an abbreviation. Writing the hash in was
+> tried and produced exactly the stale value this note exists to prevent: the
+> commit that carries the number is created *after* the number is written, so it
+> is wrong the instant it is saved. The subject is stable; the hash is read with
+> `git rev-parse HEAD`. If anything here disagrees with git, **git is right.**
 
 ### Environment prerequisite on the current development machine
 
@@ -150,7 +158,7 @@ Node is v24.20.0, matching the `node-version: '24'` pinned in CI.
 | 8 | **Security re-verification** | **DONE** for what this pass changed |
 | 9 | Complete gates, twice | **DONE** — vitest and playwright each run twice after the final code change, identical results |
 | 10 | Truthful `general.md` rewrite + changelog | **DONE** — 5 off-vocabulary labels retired, §15 rewritten, `NEXT_WORK_REPORT.md` §37 |
-| 11 | Merge and push, only if every gate passes | NOT STARTED |
+| 11 | Merge and push, only if every gate passes | **BLOCKED_BY_OWNER_CONFIGURATION** — every gate passes; the push has no credential |
 
 ### Completed this pass, with evidence
 
@@ -753,34 +761,52 @@ is not evidence.
 ### Exact next action
 
 
-**Stage 9 — the complete gate set, run twice.**
+**The owner must authenticate git. Nothing else is outstanding.**
 
-Stage 3 is now finished: the responsive sweep and the accessibility pass both
-ran and both pass. What remains:
+Stages 1–10 are complete and every developer-owned gate passes. Stage 11 — push
+and merge — is stopped at the first step because this machine has **no GitHub
+credential**: no entry in Windows Credential Manager, no `~/.ssh` key, no
+`GITHUB_TOKEN`/`GH_TOKEN`, no `gh` CLI, and no `~/.git-credentials`. `git fetch`
+succeeds because both repositories are public and read anonymously; `git push`
+fails with *"could not read Username for 'https://github.com'"*.
 
-1. `node scripts/check-migrations.mjs` against a clean database.
-2. The readiness scripts (`readiness:demo`, `readiness:real-money`) and the admin
-   smoke test. These are expected to report blockers; the blockers are the
-   result, and they must not be removed to get green.
-3. **The complete set, run twice**, because a suite that passes once may be
-   passing on state the first run left behind.
-4. Then stage 10's dated changelog, and stage 11 (merge and push, only if every
-   gate passes).
+The brief's instruction for exactly this case was followed: **nothing was
+forced, and the merge into `main` was deliberately not performed.** The
+completed work sits on the feature branch. Merging locally while unable to push
+would only move the branch that cannot be published.
+
+**The safe next commands, in order, once the owner has authenticated** (Git
+Credential Manager is already configured as the helper, so the first push will
+open its sign-in; or set a `GITHUB_TOKEN`):
+
+```
+git fetch origin --prune && git fetch plutobet --prune
+git log --oneline origin/main..main          # expect: empty
+git push origin   ui/plutobet-sportsbook-redesign
+git push plutobet ui/plutobet-sportsbook-redesign
+git switch main && git merge --ff-only ui/plutobet-sportsbook-redesign
+git push origin main && git push plutobet main
+git rev-parse origin/main plutobet/main      # expect: identical
+```
+
+The merge is a **fast-forward**: `main` is 0 commits behind the branch and both
+remotes are still at `83cb633`, so no conflict resolution is required and no
+history is rewritten. Re-run the gate set on `main` after the merge before
+pushing it.
+
+**Do not deploy.** This task did not authorise a Railway deployment or any live
+provider activation, and neither was performed.
 
 ### Files being modified right now
 
 
-Uncommitted at this checkpoint. Stage 3/4 work plus the environment fix:
+**Nothing. The working tree is clean** and all work is committed in the two
+commits this pass added:
 
-| File | Why |
+| Commit | What it carries |
 |---|---|
-| `e2e/viewports.spec.ts` | the 7-viewport responsive sweep (new, **not yet run**) |
-| `e2e/accessibility.spec.ts` | axe + keyboard navigation (new, **not yet run**) |
-| `e2e/interactions.spec.ts` | Pluto and cash-out rows, missing from the audit |
-| `src/modules/admin/__tests__/rbac-http.acceptance.spec.ts` | a flaky super-admin fixture, replaced with a deterministic grant |
-| `package.json`, `package-lock.json` | `@axe-core/playwright` was present in `node_modules` but in **neither** file, so CI's `npm ci` would not have had it |
-| `general.md` | this checkpoint |
-| `NEXT_WORK_REPORT.md`, `OWNER_LAUNCH_CHECKLIST.md` | the running log and the owner questions |
+| `b2f6878` | The accessibility pass (axe + keyboard), the 7-viewport sweep, the review server's credential neutralisation, and findings 31–38 |
+| `0ab5ae4` | The footer layout fix (finding 39), re-captured screenshots and contact sheet, and the stage 9 gate results |
 
 ### Decisions and assumptions made
 
@@ -955,6 +981,8 @@ the previous pass are in §23.
 | Applying the ₦630 exposure repair | Same |
 | Any Railway deployment | Not authorised by this task |
 | Any live provider activation | Not authorised, and no credentials exist |
+| **Pushing either branch to either remote** | No GitHub credential on this machine. Not forced, not worked around |
+| **Merging into `main`** | Deliberate. The merge is a clean fast-forward and every gate passes, but merging while unable to push would only move a branch that cannot be published. The brief's instruction for a blocked push is to leave the commits on the feature branch |
 | Edit bet, personalisation, Admin AI | The rules that define them do not exist, and are not a developer's to invent. Questions listed in `OWNER_LAUNCH_CHECKLIST.md` |
 | A screen-reader pass | **Not done.** axe is a static rule engine over the accessibility tree, and a clean run means no rule fired — not that the product is usable with NVDA, JAWS or VoiceOver. Keyboard navigation and the automated rule set are covered; an actual assistive-technology walkthrough is not, and no automated check substitutes for it |
 | Replaying the injection corpus through a live model | `BLOCKED_BY_KEY`. The corpus runs against the layer today; how a model answers it cannot be known without one |
@@ -1978,8 +2006,11 @@ after its gates have run; "what was attempted" belongs in `NEXT_WORK_REPORT.md`.
 
 ### 2026-09-04 — the accessibility pass, and a review server that phoned home
 
-**Stage 3 completed; stage 9 gates run.** Branch `ui/plutobet-sportsbook-redesign`,
-24 commits ahead of `main`, not merged, not pushed, not deployed.
+**Stages 3 and 9 completed.** Branch `ui/plutobet-sportsbook-redesign` at
+`0ab5ae4`, **25 commits ahead of `main`**, not merged, not pushed, not deployed.
+Stage 11 is `BLOCKED_BY_OWNER_CONFIGURATION`: this machine holds no GitHub
+credential, so the push could not be made and the merge was deliberately not
+performed — §0 carries the exact commands for the owner.
 
 **Security.** The review server generated its own auth secrets and pinned every
 database URL to loopback, then inherited every other credential from `.env`: the
@@ -2017,6 +2048,17 @@ failed** · migrations 29 of 29 on a clean database · admin smoke 18 of 18 · r
 audit clean. `readiness:demo` and `readiness:real-money` remain red on owner,
 key, contract and regulatory items, which is the correct result.
 
+**Layout.** On short pages the footer stopped mid-screen and left a band of pale
+canvas beneath it. No automated check catches it — the page does not overflow
+and nothing errors — and it was found by opening a screenshot, which is why the
+brief asks for screenshots and not only a green suite. Finding 39.
+
+**Artefacts.** 28 screenshots and the contact sheet were re-captured *after* the
+final fix, and the interaction audit is 38 generated rows. Cash-out is now
+`VERIFIED_IN_REAL_BROWSER` for the **quote**; taking the offer remains
+`VERIFIED_BY_INTEGRATION_TEST`, and the two are recorded as different claims.
+
 **Environment.** This machine is missing the MSVC redistributable, so
 `embedded-postgres` could not start and vitest reported it as "No test files
-found". Worked around locally; the owner fix is recorded in §0.
+found". Worked around locally; the owner fix is recorded in §0. Git also had no
+configured identity and has no GitHub credential.
