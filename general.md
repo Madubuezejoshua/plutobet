@@ -148,7 +148,7 @@ Node is v24.20.0, matching the `node-version: '24'` pinned in CI.
 | 6 | **Load and reliability testing** | **DONE** for the read paths; casino callbacks have no route to load |
 | 7 | **Full E2E journey** | **DONE** — 14 steps, one account, one run; 2 defects found |
 | 8 | **Security re-verification** | **DONE** for what this pass changed |
-| 9 | Complete gates, twice | NOT STARTED |
+| 9 | Complete gates, twice | **DONE** — vitest and playwright each run twice after the final code change, identical results |
 | 10 | Truthful `general.md` rewrite + changelog | **DONE** — 5 off-vocabulary labels retired, §15 rewritten, `NEXT_WORK_REPORT.md` §37 |
 | 11 | Merge and push, only if every gate passes | NOT STARTED |
 
@@ -840,10 +840,33 @@ described above was worked around. Every one is a full run, not a subset.
 | `npx eslint .` | **exit 0**, 0 errors, 0 warnings | 2026-09-04 |
 | `node scripts/secret-scan.mjs` | **clean**, 450 files, 15 rules | 2026-09-04 |
 | `git diff --check` | **exit 0**, no whitespace or conflict markers | 2026-09-04 |
-| `npx vitest run` | **76 files, 989 passed, 1 skipped, 0 failed**, exit 0, 511s | 2026-09-04 |
+| `npx vitest run` | **76 files, 989 passed, 1 skipped, 0 failed**, exit 0 — **run twice after the final code change, identical both times** | 2026-09-04 |
 | `npm run build` | **exit 0**, `deploy: target=local (no migrations)` | 2026-09-04 |
-| `npx playwright test` | **139 passed, 13 skipped, 0 failed**, exit 0, 6.6m (desktop + Pixel 7) | 2026-09-04 |
-| `node scripts/check-migrations.mjs` | not yet re-run at this checkpoint | — |
+| `npx playwright test` | **139 passed, 13 skipped, 0 failed**, exit 0, 6.9m (desktop + Pixel 7) — **run twice, identical** | 2026-09-04 |
+| Screenshots + contact sheet | **28 screenshots** re-captured after the final fix; `artifacts/ui-review/00-contact-sheet.png` regenerated | 2026-09-04 |
+| Interaction audit | **38 rows**, generated from the run, `artifacts/ui-review/INTERACTION_AUDIT.md` | 2026-09-04 |
+| `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, 62 tables, exit 0 | 2026-09-04 |
+| `npx tsx scripts/smoke-admin.ts` | **18 of 18** admin queries clean, exit 0 | 2026-09-04 |
+| `npx tsx scripts/audit-db-roles.ts` | **exit 0** — the runtime role owns nothing and cannot DROP, ALTER or TRUNCATE the ledger | 2026-09-04 |
+| `readiness:demo` | **NOT DEMO READY**, 1 blocker — correct, see below | 2026-09-04 |
+| `readiness:real-money` | **NOT REAL_MONEY_READY**, 13 blockers — correct, see below | 2026-09-04 |
+
+**The two readiness scripts are red and that is the right answer.** Every
+blocker they name is an owner, key, contract or regulatory item: no payment
+provider, no SMS or email provider, no KYC provider, no error reporting, no
+licence, no settlement bank account, no rotated credentials, no restore drill,
+and no real deposit or payout on record. **None is a developer defect and none
+was removed to obtain a green result.** The single demo blocker — `NEXTAUTH_URL`
+points at localhost — is an artefact of running the check against the local
+stack; it is owner configuration at deployment time, not code.
+
+**One honest limit on the role audit.** It proves the *runtime* role `bet_app`
+owns nothing and cannot alter the ledger, which is the property that matters.
+The owner role in this local stack is the embedded cluster's superuser, so this
+run does **not** demonstrate the production owner role is correctly restricted.
+Per the owner's instruction, runtime privilege is not marked complete until it
+is tested with the actual restricted production credential, which does not exist
+yet — `BLOCKED_BY_OWNER_CONFIGURATION`.
 
 **The vitest total moved from 975 to 989** because this pass added tests. The
 single skip is `provider-contract.acceptance.spec.ts`, a `describe.skipIf` that
@@ -909,13 +932,20 @@ trap. Getting there took five defects; they are findings 33, 34, 35 and 38.
 | 35 | **An orphan `role="row"` on `/live`** (`aria-required-parent`, **critical**). The column strip claimed table semantics its rows did not carry, promising a structure a screen reader would fail to find | **FIXED** — presentational, matching `match-board.tsx` |
 | 36 | `@axe-core/playwright` was installed in `node_modules` but recorded in **neither** `package.json` nor `package-lock.json`, so CI's `npm ci` would not have had it and the accessibility gate would have failed on a clean checkout | **FIXED** — added to `devDependencies` and the lockfile |
 | 37 | The new Pluto interaction test located the chat field by `input[type='text']`, which cannot match an input that sets no `type`. The app was right and the test was wrong | **FIXED** — located by accessible name, which also fails if the field loses its label |
+| 39 | **On a short page the footer stopped mid-screen.** `.sb` is `min-height: 100dvh`, but nothing made the middle grow, so on any page with an empty state — results, livescore, promotions with nothing running — the dark footer sat wherever the content ended and left a band of pale canvas beneath it, which reads as a page that failed to finish loading. Found by looking at a screenshot; no automated check measures it, because the page does not overflow and nothing errors | **FIXED** — the shell lays out as a column with a growing middle, scoped to `.sb-app` so the session-free 404 page is untouched. Re-verified in the browser and by the full suite |
 | 38 | **Two labels on `/account/preferences` were near-invisible.** They set `color: var(--ink)` — the LEGACY dark theme's near-white `#e9edf5` — on a white card, about 1.1:1. Stage 5h deleted the bridge that used to re-point `--ink` at a readable colour, and these two inline styles were missed, so the page shipped with unreadable text. **Stage 5h's claim that all seven dependent files were converted was wrong**: it audited classes and did not catch legacy variables in inline `style` props | **FIXED** — both use `var(--sb-ink)`, and a repository-wide search now confirms **zero** legacy `var(--…)` references in any `.tsx` file |
 
-Cash-out and the date-of-birth flow still are **not** `VERIFIED_IN_REAL_BROWSER`
-as complete money journeys. The date-of-birth *control* is audited (row:
-`/register`, date of birth); the cash-out journey needs a placed bet with a
-priced offer and is covered by stage 7, not stage 4. Blockers inherited from the
-previous pass are in §23.
+**Cash-out is now priced in a real browser**, and that is an upgrade with a
+limit. The audit row `/bets → Cash out` is `VERIFIED_IN_REAL_BROWSER` in both
+projects: the control was clicked and the server quoted through
+`GET /api/bets/<id>/cashout`. **Taking** the offer — the request that moves
+money — is not browser-verified; it is covered end to end by stage 7's journey
+test through the same route. So the quote is `VERIFIED_IN_REAL_BROWSER` and the
+take is `VERIFIED_BY_INTEGRATION_TEST`, and the two are not the same claim.
+
+The date-of-birth *control* is audited (row: `/register`, date of birth) but the
+full completion flow is not a browser journey either. Blockers inherited from
+the previous pass are in §23.
 
 ### Deliberately not performed
 
@@ -962,6 +992,7 @@ previous pass are in §23.
 | 23 | [Blocked work, by what blocks it](#23-blocked-work-by-what-blocks-it) |
 | 24 | [What the owner should do next, in order](#24-what-the-owner-should-do-next-in-order) |
 | 25 | [Document map](#25-document-map) |
+| 26 | [Changelog](#26-changelog) |
 
 ---
 
@@ -1392,6 +1423,31 @@ makes them impossible to review together.
 Breakpoints: 1180px drops the betslip to a sheet, 900px collapses the rail and
 raises the bottom bar, 720px hides the Over/Under columns, 600px and 480px tune
 padding and figure sizes, 440px stacks paired form fields.
+
+### What has actually been measured
+
+**Status: `VERIFIED_IN_REAL_BROWSER`, 2026-09-04.** The table above used to be
+the whole of this section, and every row in it was a statement about intent read
+off the source. It is now backed by a run.
+
+| Check | Result |
+|---|---|
+| axe-core across **25 pages**, desktop 1440×900 and a Pixel 7 profile | **0 critical, 0 serious** — and the advisory (moderate/minor) set is empty too |
+| Rule set | `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` |
+| Keyboard: visible focus | Every control reached by tabbing carries a focus indicator — outline, box-shadow or `:focus-visible` |
+| Keyboard: no trap | 60 tab presses reach far more than a handful of distinct controls |
+| Responsive sweep | **7 viewports × 13 pages** — 390×844, 430×932, 768×1024, 1024×768, 1366×768, 1440×900, 1920×1080 — each page answers, logs nothing, and does not scroll sideways |
+
+`e2e/accessibility.spec.ts` and `e2e/viewports.spec.ts`.
+
+**It took five defects to get there**, and the row above claiming "Colour —
+never the only signal" was among the things that turned out not to be true:
+every prose link in the product, including the two safer-gambling routes, was
+marked by colour alone. Findings 33, 34, 35 and 38.
+
+**What this does not prove.** axe is a static rule engine over the accessibility
+tree; a clean run means no rule fired. It is not a screen-reader pass, and none
+has been done — see "Deliberately not performed" in §0.
 
 ---
 
@@ -1912,3 +1968,55 @@ a directory is the wrong instinct on a money system.
 | `docs/history/PLUTOBET_CORE_FLOW_VALIDATION.md` | `docs/history/PLUTOBET_CORE_FLOW_VALIDATION.md` | The core-flow validation and its six bugs |
 | `docs/history/DEVELOPER_COMPLETION_REPORT.md` | `docs/history/DEVELOPER_COMPLETION_REPORT.md` | The money-formatter and poll-fairness pass |
 | `docs/history/GPT.md` | `docs/history/GPT.md` | The cold-read engineering audit, and its section on how documentation drifted optimistic |
+
+---
+
+## 26. Changelog
+
+Dated, newest first. One entry per completed pass. A pass appears here only
+after its gates have run; "what was attempted" belongs in `NEXT_WORK_REPORT.md`.
+
+### 2026-09-04 — the accessibility pass, and a review server that phoned home
+
+**Stage 3 completed; stage 9 gates run.** Branch `ui/plutobet-sportsbook-redesign`,
+24 commits ahead of `main`, not merged, not pushed, not deployed.
+
+**Security.** The review server generated its own auth secrets and pinned every
+database URL to loopback, then inherited every other credential from `.env`: the
+live odds key, the production Inngest queue, production Redis, and the **B2 KYC
+document bucket**. The interaction suite uploads a KYC document, so review runs
+were writing test files into the production store of customers' identity
+documents. All are blanked, and `/api/health` was used to prove it: the odds key
+read `set` before and `missing` after. Separately, the script's loopback check
+examined only the four variable names it set, while the application reads three
+higher-precedence aliases first — so one addition to `.env` would have opened the
+money path against production with the safety check still passing. Findings 31
+and 32.
+
+**Accessibility, first time measured.** axe across 25 pages in two browser
+profiles, at a critical/serious bar, plus keyboard focus and keyboard-trap tests.
+Four site-wide defects: prose links marked by colour alone (including both
+safer-gambling routes), secondary text tokens chosen against white but used on
+the canvas, a suspended price rendered at 1.9:1, an orphan `role="row"` on
+`/live`, and two labels on `/account/preferences` left at the legacy dark
+theme's near-white — roughly 1.1:1, unreadable. That last one also proved stage
+5h's "all seven files converted" claim wrong: it had audited classes and never
+looked inside inline `style` props. Findings 33 to 35 and 38.
+
+**Responsive.** The 7-viewport sweep was written in an earlier session and had
+never been run. It runs and passes.
+
+**Tooling.** `@axe-core/playwright` was in `node_modules` but in neither
+`package.json` nor the lockfile, so CI's `npm ci` would not have had it. Finding
+36.
+
+**Gates.** tsc 0 · eslint 0/0 · secret-scan clean over 450 files ·
+`git diff --check` clean · vitest **76 files, 989 passed, 1 skipped, 0 failed,
+run twice with identical results** · playwright **139 passed, 13 skipped, 0
+failed** · migrations 29 of 29 on a clean database · admin smoke 18 of 18 · role
+audit clean. `readiness:demo` and `readiness:real-money` remain red on owner,
+key, contract and regulatory items, which is the correct result.
+
+**Environment.** This machine is missing the MSVC redistributable, so
+`embedded-postgres` could not start and vitest reported it as "No test files
+found". Worked around locally; the owner fix is recorded in §0.

@@ -68,7 +68,7 @@ export async function SportsbookShell({
 
   return (
     <BetslipProvider>
-      <div className="sb">
+      <div className="sb sb-app">
         <SportsbookHeader
           signedIn={signedIn}
           balanceMinor={balanceMinor}
@@ -76,7 +76,14 @@ export async function SportsbookShell({
           activeSport={activeSport}
         />
         {needsDateOfBirth ? <DateOfBirthBanner /> : null}
-        {children}
+        {/*
+          The growing middle, so the footer reaches the bottom of a SHORT page.
+          `.sb` is already `min-height: 100dvh`, so on a page with an empty state
+          — results, livescore, promotions with nothing running — the footer sat
+          wherever the content happened to end and left a pale band of canvas
+          beneath it, which reads as a page that failed to finish loading.
+        */}
+        <div className="sb-main">{children}</div>
         <SportsbookFooter />
         <MobileBar signedIn={signedIn} balanceMinor={balanceMinor} />
       </div>

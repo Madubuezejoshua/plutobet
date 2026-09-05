@@ -20,6 +20,24 @@
   line-height: 1.45;
 }
 
+/*
+ * The shell lays out as a column so the footer can be pushed to the bottom.
+ *
+ * Scoped to `.sb-app` rather than `.sb`, because `not-found.tsx` renders `.sb`
+ * WITHOUT this structure — it deliberately sits outside the shell so a 404 does
+ * not depend on a session or a database — and turning it into a flex container
+ * would change a layout that has nothing to grow.
+ */
+.sb-app { display: flex; flex-direction: column; }
+
+/*
+ * `1 0 auto`, not `1`: the shorthand `flex: 1` sets `flex-basis: 0`, which makes
+ * the middle ignore its own content height and hand the board's intrinsic size
+ * over to the flex algorithm. `auto` keeps the content's height and only grows
+ * to fill what is left over.
+ */
+.sb-main { flex: 1 0 auto; min-width: 0; }
+
 .sb-shellgrid {
   max-width: var(--sb-max);
   margin: 0 auto;
