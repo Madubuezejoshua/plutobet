@@ -91,11 +91,13 @@ browser during this pass — not that it looks right in the source.
 | Working tree | **clean** |
 | Commits ahead of `main` | **26** (read from `git rev-list --count main..HEAD`) |
 | Behind `main` | 0 |
-| `origin/main` | `83cb633` — fetched 2026-09-04, **unchanged** |
-| `plutobet/main` | `83cb633` — fetched 2026-09-04, **unchanged** |
-| Redesign branch pushed | **no — `BLOCKED_BY_OWNER_CONFIGURATION`, see below** |
-| Merged to `main` | no — deliberately not, see below |
-| Deployed | no |
+| `origin/main` | `84aab07` — **pushed 2026-09-05**, fast-forward from `83cb633` |
+| `plutobet/main` | `84aab07` — **pushed 2026-09-05**, fast-forward from `83cb633` |
+| Redesign branch pushed | **yes**, to both remotes at `84aab07` |
+| Merged to `main` | **yes** — fast-forward, no conflict, no history rewritten |
+| Both remotes identical | **yes** — commit `84aab0777d26b46633f744ef3f13702837ad0316`, tree `3d44fe7ee90fd8f3a5f0b554583b81013d41ab95` on both |
+| CI on that exact commit | **passed on both** — "typecheck, test, build" `success` |
+| Deployed | **YES, UNINTENTIONALLY — read the next section** |
 
 > A previous version of this file said "seven commits". It was wrong, and a
 > later version said `23b595d`/21 after two more commits had landed. Commit
@@ -108,6 +110,46 @@ browser during this pass — not that it looks right in the source.
 > commit that carries the number is created *after* the number is written, so it
 > is wrong the instant it is saved. The subject is stable; the hash is read with
 > `git rev-parse HEAD`. If anything here disagrees with git, **git is right.**
+
+### A production deployment happened, and it was not asked for
+
+**Pushing `main` triggered a Vercel PRODUCTION deployment of
+`Madubuezejoshua/plutobet`, and it succeeded.** This is recorded prominently
+because the task that authorised the push explicitly did not authorise a
+deployment.
+
+| | |
+|---|---|
+| What fired it | A pre-existing Vercel ↔ GitHub integration on that repository that deploys on every push to `main`. It was not invoked by hand and no deployment command was run |
+| Deployments created | Two, both by `vercel[bot]`: environment **Production** (id 6281959437) and **Preview** (id 6281910541) |
+| Result | Both `state=success`, "Deployment has completed" |
+| The other remote | `plutobet-ai/plutobet_ai` created **no** deployment — it has no such integration |
+| Railway | **Not deployed.** The prohibition named Railway specifically and Railway was never touched |
+
+**What this means, stated plainly.** The redesigned sportsbook is now live on
+that Vercel project, running against whatever environment variables the Vercel
+project holds. This document cannot say what those are — they live in an owner
+dashboard, not in the repository — so **whether production is now serving
+against the production database is an owner question, and it is the first thing
+to check.**
+
+**What it does not mean.** No provider was activated, no credential was rotated
+or created, and nothing in this repository points at production: the review
+server is pinned to loopback and refuses otherwise (findings 31 and 32), and all
+testing in this pass ran on a disposable local database.
+
+**Owner actions, in order:**
+
+1. Open the Vercel project and confirm which environment variables Production
+   holds, and whether that is intended for this release.
+2. If it is not, **roll back to the previous production deployment in Vercel**,
+   which is a one-click action and does not require a git revert.
+3. Decide whether `main` should auto-deploy at all. If not, disconnect the
+   integration or set Vercel's production branch to something other than `main`
+   before the next push.
+
+**Any future push to `main` on that remote will deploy again.** That is now a
+known property of this repository and anyone pushing should expect it.
 
 ### Environment prerequisite on the current development machine
 
@@ -162,7 +204,7 @@ pinned in CI.
 | 8 | **Security re-verification** | **DONE** for what this pass changed |
 | 9 | Complete gates, twice | **DONE** — vitest and playwright each run twice after the final code change, identical results |
 | 10 | Truthful `general.md` rewrite + changelog | **DONE** — 5 off-vocabulary labels retired, §15 rewritten, `NEXT_WORK_REPORT.md` §37 |
-| 11 | Merge and push, only if every gate passes | **BLOCKED_BY_OWNER_CONFIGURATION** — every gate passes; the push has no credential |
+| 11 | Merge and push, only if every gate passes | **DONE** — both remotes at `84aab07`, identical trees, CI green on both. A Vercel production deploy fired as a side effect; see §0 |
 
 ### Completed this pass, with evidence
 
@@ -765,7 +807,18 @@ is not evidence.
 ### Exact next action
 
 
-**The owner must authenticate git. Nothing else is outstanding.**
+**Check the Vercel production deployment that the push triggered.** See "A
+production deployment happened" above — that is the only urgent item.
+
+Everything else below describes work that is now **finished**: the owner
+authenticated git on 2026-09-05, both branches were pushed to both remotes, the
+fast-forward merge into `main` was completed, and CI passed on the exact final
+commit on both repositories. The historical text is kept because it records how
+the blocker was resolved.
+
+---
+
+**(Resolved 2026-09-05.) The owner had to authenticate git.**
 
 Stages 1–10 are complete and every developer-owned gate passes. Stage 11 — push
 and merge — is stopped at the first step because this machine has **no GitHub
@@ -985,8 +1038,8 @@ the previous pass are in §23.
 | Applying the ₦630 exposure repair | Same |
 | Any Railway deployment | Not authorised by this task |
 | Any live provider activation | Not authorised, and no credentials exist |
-| **Pushing either branch to either remote** | No GitHub credential on this machine. Not forced, not worked around |
-| **Merging into `main`** | Deliberate. The merge is a clean fast-forward and every gate passes, but merging while unable to push would only move a branch that cannot be published. The brief's instruction for a blocked push is to leave the commits on the feature branch |
+| Any Railway deployment | Not authorised, and Railway was never contacted. **Note that a Vercel deployment did occur — see §0** |
+| Any force push, reset or history rewrite | Not needed. Both pushes were fast-forwards onto remotes that had not moved |
 | Edit bet, personalisation, Admin AI | The rules that define them do not exist, and are not a developer's to invent. Questions listed in `OWNER_LAUNCH_CHECKLIST.md` |
 | A screen-reader pass | **Not done.** axe is a static rule engine over the accessibility tree, and a clean run means no rule fired — not that the product is usable with NVDA, JAWS or VoiceOver. Keyboard navigation and the automated rule set are covered; an actual assistive-technology walkthrough is not, and no automated check substitutes for it |
 | Replaying the injection corpus through a live model | `BLOCKED_BY_KEY`. The corpus runs against the layer today; how a model answers it cannot be known without one |
