@@ -102,11 +102,26 @@ export function LiveBoard({
       ) : null}
 
       <section className="sb-panel sb-board sb-board--3">
-        <div className="sb-cols" role="row">
-          <span role="columnheader">Match</span>
-          <span className="sb-cols__odds" role="columnheader">1</span>
-          <span className="sb-cols__odds" role="columnheader">X</span>
-          <span className="sb-cols__odds" role="columnheader">2</span>
+        {/*
+          A VISUAL column legend, not a table header.
+
+          This carried `role="row"` with `role="columnheader"` children, and axe
+          reported `aria-required-parent` as CRITICAL: a row must live inside a
+          table, grid or rowgroup, and nothing here is one. The rows below are
+          plain `.sb-row` divs with no cell roles, so the strip was the only part
+          of the board claiming table semantics — it promised a structure a
+          screen reader would then fail to find.
+
+          Making it presentational is what `match-board.tsx` already does, and it
+          is the honest description: the odds controls below carry their own
+          accessible names, so nothing is lost by hiding a legend that only
+          repeats "1 X 2".
+        */}
+        <div className="sb-cols" aria-hidden="true">
+          <span>Match</span>
+          <span className="sb-cols__odds">1</span>
+          <span className="sb-cols__odds">X</span>
+          <span className="sb-cols__odds">2</span>
         </div>
 
         {snapshot.events.map((event) => {

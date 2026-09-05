@@ -86,9 +86,9 @@ browser during this pass — not that it looks right in the source.
 | | |
 |---|---|
 | Branch | `ui/plutobet-sportsbook-redesign` |
-| HEAD | `23b595d` — "Measure the read paths under load, and the limiter that shields them" |
-| Working tree | **NOT clean** — stage 7/8 work, committed next |
-| Commits ahead of `main` | **21** (read from `git rev-list`, not from memory) |
+| HEAD | `e9f3462` — "Say only what the evidence says, in the words the brief allows" |
+| Working tree | **NOT clean** — stage 3/4 work in flight, listed below |
+| Commits ahead of `main` | **23** (read from `git rev-list`, not from memory) |
 | Behind `main` | 0 |
 | `origin/main` | `83cb633` |
 | `plutobet/main` | `83cb633` |
@@ -96,8 +96,35 @@ browser during this pass — not that it looks right in the source.
 | Merged to `main` | no |
 | Deployed | no |
 
-> A previous version of this file said "seven commits". It was wrong. Commit
-> counts are read from git, never repeated from a document.
+> A previous version of this file said "seven commits". It was wrong, and a
+> later version said `23b595d`/21 after two more commits had landed. Commit
+> counts and HEAD are read from git at every checkpoint, never repeated from a
+> document.
+
+### Environment prerequisite on the current development machine
+
+**This is a machine fact, not a repository defect.** It is recorded here because
+it stops every database-backed gate dead and the symptom names the wrong cause.
+
+The test suite starts a real PostgreSQL through `embedded-postgres`. On this
+machine the **Microsoft Visual C++ 2015–2022 x64 Redistributable is missing**, so
+`initdb.exe` and `postgres.exe` cannot load `vcruntime140.dll` and exit
+`3221225781` (`0xC0000135`, STATUS_DLL_NOT_FOUND). Vitest reports this as **"No
+test files found"** alongside a Postgres init error — the glob is fine; the
+database never started. Checked against the binaries' PE import tables, they need
+`vcruntime140.dll` only: `msvcp140.dll` is not imported, the `api-ms-win-crt-*`
+API sets ship with Windows 11, and `ucrtbase.dll` is present.
+
+| | |
+|---|---|
+| Owner action (needs admin) | Install the VC++ 2015–2022 x64 Redistributable |
+| Workaround used for this pass | A Microsoft-signed `vcruntime140.dll` (14.44.35211.0, signature verified `Valid`) placed in a scratch directory that is prepended to `PATH` for test commands |
+| Why on `PATH` and not in `node_modules` | DLL search reaches `PATH`, so nothing inside `node_modules` is modified and `npm ci` cannot silently undo it |
+
+Also on this machine, `node` and `git` are installed but **absent from `PATH`**;
+commands must prepend `C:\Program Files\nodejs` and `C:\Program Files\Git\cmd`.
+Node is v24.20.0, matching the `node-version: '24'` pinned in CI.
+
 ### Stages
 
 
@@ -105,8 +132,8 @@ browser during this pass — not that it looks right in the source.
 |---|---|---|
 | 1 | Read every instruction, report and runbook; inspect git state | **DONE** |
 | 2 | Repository audit + task matrix | **DONE** |
-| 3 | Redesign verification in a real browser | **DONE** — 118 passed, 6 skipped, desktop + Pixel 7 |
-| 4 | Interaction audit of every enabled control | **DONE** — 32 rows, generated from the run |
+| 3 | Redesign verification in a real browser | **DONE** — desktop + Pixel 7 in depth, a 7-viewport sweep that ran and passed, and an accessibility pass at 0 critical/serious |
+| 4 | Interaction audit of every enabled control | **DONE** — generated from the run; Pluto and cash-out added after an audit of the audit found them missing |
 | 5a | Cash-out: repair partial cash-out and exposure | **DONE** |
 | 5b | Cash-out: eligibility gate, replay, concurrency | **DONE** |
 | 5c | Cash-out: authenticated route, UI, audit, admin visibility | **DONE** |
@@ -122,7 +149,7 @@ browser during this pass — not that it looks right in the source.
 | 7 | **Full E2E journey** | **DONE** — 14 steps, one account, one run; 2 defects found |
 | 8 | **Security re-verification** | **DONE** for what this pass changed |
 | 9 | Complete gates, twice | NOT STARTED |
-| 10 | Truthful `general.md` rewrite + changelog | NOT STARTED |
+| 10 | Truthful `general.md` rewrite + changelog | **DONE** — 5 off-vocabulary labels retired, §15 rewritten, `NEXT_WORK_REPORT.md` §37 |
 | 11 | Merge and push, only if every gate passes | NOT STARTED |
 
 ### Completed this pass, with evidence
@@ -336,7 +363,17 @@ system's variables at the new tokens so pages still carrying legacy classes
 rendered in the new palette during the migration. Seven files still depended on
 it — `kyc-form`, `responsible/controls`, `account/preferences`,
 `account/security`, `account/verify-email`, `pluto-chat` and one stray class in
-`results` — and all seven are converted.
+`results` — and all seven had their classes converted.
+
+> **This section previously said the conversion was complete. It was not.** The
+> stage 5h audit looked for legacy *classes* and did not look for legacy
+> *variables* inside inline `style` props, and two survived in
+> `account/preferences`: `color: var(--ink)`, which without the bridge resolves
+> to the legacy dark theme's near-white `#e9edf5` and rendered as roughly 1.1:1
+> on a white card — text a customer could not read. It was found by the axe run
+> in this pass, not by the audit that declared the work done. Both are fixed,
+> and a repository-wide search now confirms **zero** legacy `var(--…)`
+> references in any `.tsx` file. Finding 38.
 
 The structural part was `.field`, whose label text was a bare child and now
 carries the `sb-field__label` span the new form language expects. Two
@@ -716,44 +753,34 @@ is not evidence.
 ### Exact next action
 
 
-**Stage 9 — the complete gate set from a clean state, run twice.**
+**Stage 9 — the complete gate set, run twice.**
 
-Every gate, in order, from a clean checkout: typecheck, lint, build, the full
-vitest suite, the browser suite, migrations against a fresh database, the secret
-scan, and the readiness scripts. Twice, because a suite that passes once may be
-passing on state the first run left behind.
+Stage 3 is now finished: the responsive sweep and the accessibility pass both
+ran and both pass. What remains:
 
-Then 10 (the truthful rewrite and dated changelog) and 11 (merge and push —
-only if every gate passes).
-
-Still outstanding from stage 3, and not to be lost: the remaining viewports —
-430×932, 768×1024, 1024×768, 1366×768, 1920×1080 — plus the accessibility pass
-(0 critical/serious violations) and keyboard navigation.
-
-Then, still outstanding for stage 3: the remaining viewports the owner named —
-430×932, 768×1024, 1024×768, 1366×768, 1920×1080 — as a responsive sweep, plus
-the accessibility pass (0 critical/serious violations) and keyboard navigation.
-Recorded here because stage 3 is marked DONE for the two profiles actually run,
-and that distinction must not be lost.
+1. `node scripts/check-migrations.mjs` against a clean database.
+2. The readiness scripts (`readiness:demo`, `readiness:real-money`) and the admin
+   smoke test. These are expected to report blockers; the blockers are the
+   result, and they must not be removed to get green.
+3. **The complete set, run twice**, because a suite that passes once may be
+   passing on state the first run left behind.
+4. Then stage 10's dated changelog, and stage 11 (merge and push, only if every
+   gate passes).
 
 ### Files being modified right now
 
 
-Eleven entries, all stage 3/4 work, committed together with this checkpoint:
+Uncommitted at this checkpoint. Stage 3/4 work plus the environment fix:
 
 | File | Why |
 |---|---|
-| `src/styles/surfaces.css` | the restored `.sb-page` container |
-| `e2e/pages.spec.ts` | the measured-column regression test |
-| `e2e/interactions.spec.ts` | per-project audit files (new) |
-| `scripts/build-ui-review.mjs` | merges the audit, builds the contact sheet (new) |
-| `scripts/review-server.mjs` | the guarded review server (new) |
-| `scripts/capture-ui-screenshots.mjs` | stop deleting the audit |
-| `src/components/sportsbook/header.tsx` | mobile overflow |
-| `src/styles/sportsbook.css` | mobile overflow |
-| `src/components/sportsbook/league-rail.tsx` | reachable favouriting |
-| `.gitignore` | admit the two review deliverables, exclude `.env.review.local` |
-| `artifacts/ui-review/` | the two deliverables themselves |
+| `e2e/viewports.spec.ts` | the 7-viewport responsive sweep (new, **not yet run**) |
+| `e2e/accessibility.spec.ts` | axe + keyboard navigation (new, **not yet run**) |
+| `e2e/interactions.spec.ts` | Pluto and cash-out rows, missing from the audit |
+| `src/modules/admin/__tests__/rbac-http.acceptance.spec.ts` | a flaky super-admin fixture, replaced with a deterministic grant |
+| `package.json`, `package-lock.json` | `@axe-core/playwright` was present in `node_modules` but in **neither** file, so CI's `npm ci` would not have had it |
+| `general.md` | this checkpoint |
+| `NEXT_WORK_REPORT.md`, `OWNER_LAUNCH_CHECKLIST.md` | the running log and the owner questions |
 
 ### Decisions and assumptions made
 
@@ -804,29 +831,38 @@ Eleven entries, all stage 3/4 work, committed together with this checkpoint:
 ### Latest gate results
 
 
-| Gate | Result | When |
-|---|---|---|
-All of these were run at this checkpoint, in this order, against the restored
-build. Every one is a full run, not a subset.
+Run on **2026-09-04** on the current machine, after the missing MSVC runtime
+described above was worked around. Every one is a full run, not a subset.
 
 | Gate | Result | When |
 |---|---|---|
-| `npx tsc --noEmit` | **exit 0**, 0 errors | this checkpoint |
-| `npx eslint .` | **exit 0**, 0 errors, 0 warnings | this checkpoint |
-| `npx next build` | **Compiled successfully** | this checkpoint |
-| `npx vitest run` | **75 files, 975 passed, 1 skipped, 0 failed**, exit 0 | this checkpoint |
-| `npx playwright test` | **118 passed, 6 skipped, 0 failed** (desktop + Pixel 7) | this checkpoint |
-| `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, exit 0 | this checkpoint |
-| `node scripts/secret-scan.mjs` | **clean**, 447 files, 15 rules | this checkpoint |
+| `npx tsc --noEmit` | **exit 0**, 0 errors | 2026-09-04 |
+| `npx eslint .` | **exit 0**, 0 errors, 0 warnings | 2026-09-04 |
+| `node scripts/secret-scan.mjs` | **clean**, 450 files, 15 rules | 2026-09-04 |
+| `git diff --check` | **exit 0**, no whitespace or conflict markers | 2026-09-04 |
+| `npx vitest run` | **76 files, 989 passed, 1 skipped, 0 failed**, exit 0, 511s | 2026-09-04 |
+| `npm run build` | **exit 0**, `deploy: target=local (no migrations)` | 2026-09-04 |
+| `npx playwright test` | **139 passed, 13 skipped, 0 failed**, exit 0, 6.6m (desktop + Pixel 7) | 2026-09-04 |
+| `node scripts/check-migrations.mjs` | not yet re-run at this checkpoint | — |
 
-The six Playwright skips are the measured-column check, which `test.skip`s on
-the mobile project because a phone viewport is narrower than the column. They
-are skips by design, not failures being hidden.
+**The vitest total moved from 975 to 989** because this pass added tests. The
+single skip is `provider-contract.acceptance.spec.ts`, a `describe.skipIf` that
+runs only when `ODDS_API_KEY` is set; it is deliberately unset, so the skip is
+by design and not a failure being hidden. There are **no** `.only`, no
+`test.todo` and no other skips.
 
-The full suite is re-run from a clean state in stage 9, twice, as instructed.
+The browser suite grew from 118 to 152 tests because this pass added the
+7-viewport responsive sweep and the accessibility file. **All 13 skips are by
+design and none hides a failure**: six are the measured-column check, which
+`test.skip`s on the mobile project because a phone viewport is narrower than the
+column it measures, and seven are the responsive sweep, which overrides the
+viewport itself and so runs once on the desktop project rather than twice.
 
-The full suite is re-run from a clean state in stage 9; totals will rise because
-this pass adds tests, and any figure that changes is corrected here.
+**The accessibility bar is met**: 0 critical and 0 serious violations across 25
+pages in both projects, and axe's advisory (moderate/minor) set is empty too.
+Both keyboard tests pass — every focusable control shows a focus indicator, and
+60 tab presses reach far more than a handful of distinct controls, so there is no
+trap. Getting there took five defects; they are findings 33, 34, 35 and 38.
 
 ### Known failures and blockers
 
@@ -866,6 +902,14 @@ this pass adds tests, and any figure that changes is corrected here.
 | 28 | Admin AI has no model and no decision on which admin actions it may take | **BLOCKED_BY_KEY** and **BLOCKED_BY_PRODUCT_DECISION** |
 | 29 | A refused bet dropped the reason; the customer could not tell no-funds from a closed market | **FIXED**, 7 |
 | 30 | My own journey helper used a bucket-blind `wallets` predicate | **FIXED** before it could mislead — recorded because it is the mistake the rules name |
+| 31 | **The review server reached real providers.** It neutralised the database and auth secrets but inherited every other credential from `.env`: `ODDS_API_KEY` (live, metered), the `B2_*` pair that is the **KYC document bucket**, `INNGEST_*` (the production job queue) and `UPSTASH_*` (production Redis). The interaction suite uploads a KYC document, so a review run was writing test files into the production store of customers' identity documents | **FIXED** — blanked explicitly, and **verified**: `/api/health` reported `ODDS_API_KEY` as `set` before and `missing` after, with the local database and Redis still connected |
+| 32 | **The review server's loopback check could not see the URLs the app actually reads.** `db-direct.ts` resolves `DATABASE_URL_UNPOOLED` and `POSTGRES_URL_NON_POOLING` **before** `DIRECT_DATABASE_URL`; `pooled.ts` reads `POSTGRES_URL` before `DATABASE_URL`; `redis.ts` reads `KV_URL` before `REDIS_URL`. The check only ever examined the four names the script sets, so had `.env` gained one alias, the money path would have opened against production and the safety check would still have passed. `.env` does not define any of them — luck, not design | **FIXED** — the aliases are blanked, and a guard refuses to start if `.env` holds a credential this script does not neutralise |
+| 33 | **Links in prose were marked by colour alone** on every page (`link-in-text-block`, serious). Includes "take control of your betting" and "Set a limit" — the safer-gambling routes, the worst place in the product for a link to be missable | **FIXED** — prose links underlined |
+| 34 | **Secondary text failed contrast site-wide** (`color-contrast`, serious). `--sb-muted` and `--sb-faint` were chosen against white, but the page ground is `--sb-canvas`; muted measured 4.28:1 there. Worse, a **suspended or closed odds price** rendered at **1.9:1** — a number the customer cannot read | **FIXED** — tokens re-based on the worst ground they are used on |
+| 35 | **An orphan `role="row"` on `/live`** (`aria-required-parent`, **critical**). The column strip claimed table semantics its rows did not carry, promising a structure a screen reader would fail to find | **FIXED** — presentational, matching `match-board.tsx` |
+| 36 | `@axe-core/playwright` was installed in `node_modules` but recorded in **neither** `package.json` nor `package-lock.json`, so CI's `npm ci` would not have had it and the accessibility gate would have failed on a clean checkout | **FIXED** — added to `devDependencies` and the lockfile |
+| 37 | The new Pluto interaction test located the chat field by `input[type='text']`, which cannot match an input that sets no `type`. The app was right and the test was wrong | **FIXED** — located by accessible name, which also fails if the field loses its label |
+| 38 | **Two labels on `/account/preferences` were near-invisible.** They set `color: var(--ink)` — the LEGACY dark theme's near-white `#e9edf5` — on a white card, about 1.1:1. Stage 5h deleted the bridge that used to re-point `--ink` at a readable colour, and these two inline styles were missed, so the page shipped with unreadable text. **Stage 5h's claim that all seven dependent files were converted was wrong**: it audited classes and did not catch legacy variables in inline `style` props | **FIXED** — both use `var(--sb-ink)`, and a repository-wide search now confirms **zero** legacy `var(--…)` references in any `.tsx` file |
 
 Cash-out and the date-of-birth flow still are **not** `VERIFIED_IN_REAL_BROWSER`
 as complete money journeys. The date-of-birth *control* is audited (row:
@@ -881,6 +925,10 @@ previous pass are in §23.
 | Applying the ₦630 exposure repair | Same |
 | Any Railway deployment | Not authorised by this task |
 | Any live provider activation | Not authorised, and no credentials exist |
+| Edit bet, personalisation, Admin AI | The rules that define them do not exist, and are not a developer's to invent. Questions listed in `OWNER_LAUNCH_CHECKLIST.md` |
+| A screen-reader pass | **Not done.** axe is a static rule engine over the accessibility tree, and a clean run means no rule fired — not that the product is usable with NVDA, JAWS or VoiceOver. Keyboard navigation and the automated rule set are covered; an actual assistive-technology walkthrough is not, and no automated check substitutes for it |
+| Replaying the injection corpus through a live model | `BLOCKED_BY_KEY`. The corpus runs against the layer today; how a model answers it cannot be known without one |
+| Load-testing casino callbacks | There is no callback route to load |
 
 ---
 
@@ -1074,7 +1122,15 @@ page container deleted along with the file that happened to define it.
 
 ## 5. The customer-facing interface
 
-Status: **redesigned, complete for review, not merged and not deployed.**
+Status: **redesigned, verified in a real browser at two viewports, not merged
+and not deployed.**
+
+Evidence: 118 Playwright tests across desktop 1440×900 and a Pixel 7 profile,
+32 audited interactions in `artifacts/ui-review/INTERACTION_AUDIT.md`, and 28
+screenshots on the contact sheet. **Not yet done**, and not to be lost in the
+good news: five of the seven viewports the owner named (430×932, 768×1024,
+1024×768, 1366×768, 1920×1080) are unmeasured, and there is no accessibility
+pass — no axe run, no keyboard-navigation test.
 
 ### What changed and why
 

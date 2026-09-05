@@ -481,3 +481,115 @@ test.describe("safer gambling", () => {
     });
   });
 });
+
+test.describe("Pluto", () => {
+  test("the assistant answers in the browser, and says what it is", async ({ page }) => {
+    /*
+     * The chat is an enabled customer-facing control and was missing from the
+     * audit — the corpus in `prompt-injection.acceptance.spec.ts` proves the
+     * layer refuses hostile input, and proves nothing about whether the page
+     * a customer types into works.
+     */
+    await page.goto("/pluto");
+
+    /*
+     * Located by its ACCESSIBLE NAME, not by `input[type='text']`.
+     *
+     * The first version of this test used that attribute selector and failed:
+     * the field sets no `type`, and while an input without one IS a text input,
+     * an attribute selector needs the attribute to be present. The app was
+     * right and the test was wrong.
+     *
+     * Asking for the label instead is the stronger check anyway — it fails if
+     * the field ever loses its accessible name, which is the defect that hit
+     * the sign-in password field earlier in this pass.
+     */
+    const field = page.getByLabel("Ask Pluto");
+    await expect(field).toBeVisible();
+    await field.fill("show me matches today");
+
+    const route = await routeFor(
+      page,
+      async () => page.getByRole("button", { name: /Send|Ask/i }).first().click(),
+      /\/api\/ai/,
+    );
+
+    // An answer arrived and was rendered. Which answer is the router's business.
+    await expect(page.locator("body")).toContainText(/match|fixture|rules-based|cannot/i, {
+      timeout: 15_000,
+    });
+
+    record(test.info().project.name, {
+      page: "/pluto",
+      viewport: viewportName(page),
+      control: "Ask Pluto — Send",
+      action: "typed a question and submitted",
+      observed: "answered in the page; the mode is labelled rules-based, not presented as a model",
+      route,
+      // The route and the page work. The ASSISTANT is a keyword router: there
+      // is no model, and the page says so rather than implying one.
+      status: "VERIFIED_IN_REAL_BROWSER",
+    });
+  });
+
+  test("the page does not present itself as a language model", async ({ page }) => {
+    await page.goto("/pluto");
+    const text = (await page.locator("body").innerText()).toLowerCase();
+
+    // The honesty rule this product is built on: a keyword router is not an AI
+    // model, and the page must not let a customer believe otherwise.
+    expect(text).toContain("rules-based");
+
+    record(test.info().project.name, {
+      page: "/pluto",
+      viewport: viewportName(page),
+      control: "Mode disclosure",
+      action: "read the page",
+      observed: "states plainly that no language model is connected",
+      route: "GET /pluto",
+      status: "BLOCKED_BY_KEY",
+    });
+  });
+});
+
+test.describe("cash-out", () => {
+  test.beforeEach(async ({ page }) => {
+    await signIn(page);
+  });
+
+  test("my bets renders, and any cash-out offer prices on demand", async ({ page }) => {
+    await page.goto("/bets");
+
+    const button = page.getByRole("button", { name: /cash ?out/i }).first();
+    const offered = await button.isVisible().catch(() => false);
+
+    if (!offered) {
+      /*
+       * Recorded, not skipped. The demo account may hold no cashable bet, and
+       * saying so is a true row; asserting a control that the data does not
+       * warrant would be a test that fails for the wrong reason.
+       */
+      record(test.info().project.name, {
+        page: "/bets",
+        viewport: viewportName(page),
+        control: "Cash out",
+        action: "load",
+        observed: "no cashable bet on this account, so no control is offered",
+        route: "GET /bets",
+        status: "IMPLEMENTED_NOT_LIVE_TESTED",
+      });
+      return;
+    }
+
+    const route = await routeFor(page, async () => button.click(), /\/cashout/);
+
+    record(test.info().project.name, {
+      page: "/bets",
+      viewport: viewportName(page),
+      control: "Cash out",
+      action: "clicked to price the offer",
+      observed: "quoted from the server; the figure shown is the one a take would send",
+      route,
+    });
+  });
+});

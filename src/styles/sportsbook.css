@@ -587,9 +587,9 @@
   font-size: var(--sb-t-sm);
   line-height: 1.4;
 }
-.sb-note--warn { background: var(--sb-warn-wash); color: var(--sb-warn); }
+.sb-note--warn { background: var(--sb-warn-wash); color: var(--sb-warn-ink); }
 .sb-note--error { background: var(--sb-danger-wash); color: var(--sb-danger); }
-.sb-note--ok { background: var(--sb-brand-wash); color: var(--sb-brand-strong); }
+.sb-note--ok { background: var(--sb-brand-wash); color: var(--sb-success-ink); }
 
 .sb-stake {
   width: 100%;
@@ -911,7 +911,7 @@
   color: var(--sb-muted);
   text-align: center;
 }
-.sb-auth__foot a { color: var(--sb-brand-strong); font-weight: 700; }
+.sb-auth__foot a { color: var(--sb-success-ink); font-weight: 700; }
 
 /* ------------------------------------------------------------------ fields */
 
@@ -994,7 +994,33 @@
 .sb-steps__line { flex: 1; height: 2px; background: var(--sb-border); }
 
 .sb-legal { margin: var(--sb-3) 0 0; font-size: var(--sb-t-xs); color: var(--sb-muted); line-height: 1.5; }
-.sb-legal a { color: var(--sb-brand-strong); }
+
+/*
+ * A LINK INSIDE A SENTENCE IS UNDERLINED.
+ *
+ * axe reported `link-in-text-block` as SERIOUS on every page in the product.
+ * These links were marked by colour alone, which is invisible to a reader with
+ * a colour vision deficiency and to anyone on a poor screen: "take control of
+ * your betting" and "Set a limit" read as ordinary words, and those two are the
+ * safer-gambling routes, which makes it the worst place in the product for a
+ * link to be missable.
+ *
+ * Tailwind's preflight sets `text-decoration: inherit` on anchors, so a link in
+ * prose loses the browser's underline unless something asks for it back. This
+ * asks for it back — scoped to PROSE (`p`), so the navigation, odds tiles,
+ * buttons and card links that are identified by shape and position are left
+ * alone. Underlining those would make the board look like a 1996 link farm and
+ * would not help anybody, because none of them relies on colour to be found.
+ */
+.sb-legal a,
+.sb-auth__foot a,
+.sb p a,
+footer p a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.sb-legal a { color: var(--sb-success-ink); }
 
 /* The one spinner. Only ever shown for work that is genuinely in flight. */
 .sb-spin { animation: sb-rotate 900ms linear infinite; }

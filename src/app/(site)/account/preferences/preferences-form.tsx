@@ -132,7 +132,7 @@ export function PreferencesForm({ initial }: { initial: PreferencesView }) {
               onChange={() => save({ oddsChangePolicy: policy.value })}
             />
             <span>
-              <span style={{ color: "var(--ink)", fontWeight: 600 }}>{policy.label}</span>
+              <span style={{ color: "var(--sb-ink)", fontWeight: 600 }}>{policy.label}</span>
               <br />
               <span className="sb-hint">{policy.hint}</span>
             </span>
@@ -220,7 +220,7 @@ function Toggle({
         onChange={(e) => onChange(e.target.checked)}
       />
       <span>
-        <span style={{ color: "var(--ink)", fontWeight: 600 }}>{label}</span>
+        <span style={{ color: "var(--sb-ink)", fontWeight: 600 }}>{label}</span>
         <br />
         <span className="sb-hint">{hint}</span>
       </span>

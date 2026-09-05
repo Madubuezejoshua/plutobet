@@ -35,11 +35,31 @@
   --sb-border: #dde2e8;
   --sb-border-strong: #c6ced8;
 
-  /* ----------------------------------------------------------------- text */
+  /*
+   * ----------------------------------------------------------------- text
+   *
+   * THE SECONDARY TEXT TOKENS ARE CONTRAST-BOUND, NOT TASTE-BOUND.
+   *
+   * `--sb-muted` was #697586 and `--sb-faint` #93a0b0. Both were chosen against
+   * `--sb-surface` (#ffffff), where muted scrapes 4.68:1 — and almost nothing in
+   * this product sits on pure white. The page ground is `--sb-canvas` (#f3f5f7),
+   * and against THAT muted measured 4.28:1 and faint far worse. An axe run
+   * across 25 pages reported `color-contrast` as SERIOUS on nearly every one.
+   *
+   * The ratios below are measured against `--sb-canvas`, the WORST ground these
+   * are used on, so they hold on white and on every surface in between:
+   *
+   *   --sb-muted  #4f5a67  6.4:1    --sb-faint  #5e6a78  5.0:1
+   *
+   * The two stay a step apart so the hierarchy survives the fix. If either is
+   * ever lightened, re-run `e2e/accessibility.spec.ts` — it is the check that
+   * caught this, and eyeballing a grey against a near-white is exactly the
+   * judgement people get wrong.
+   */
   --sb-ink: #17202a;
   --sb-ink-2: #3d4a58;
-  --sb-muted: #697586;
-  --sb-faint: #93a0b0;
+  --sb-muted: #4f5a67;
+  --sb-faint: #5e6a78;
 
   /* --------------------------------------------------------------- status */
   --sb-live: #e5233d;
@@ -51,6 +71,24 @@
   --sb-up: #067647;
   --sb-down: #c2283b;
 
+  /*
+   * STATUS COLOURS AS TEXT, WHICH IS A DIFFERENT JOB FROM STATUS COLOURS AS FILL.
+   *
+   * `--sb-brand-strong` and `--sb-warn` are chosen to be seen as a BLOCK — a
+   * button, a bar, a dot — where the eye only has to notice them. Used as small
+   * text on their own 10–12% washes they measure 3.1:1 and 3.2:1, and axe
+   * reported both as SERIOUS on the status pill, the "Not available yet" note,
+   * the bet-placed confirmation and the auth-screen links.
+   *
+   * Darkening the fills would have dulled every button and dot in the product to
+   * fix text nobody reads as a fill, so the text weight gets its own token. Both
+   * measure against their wash over `--sb-surface`, which is where they appear:
+   *
+   *   --sb-success-ink  #00753f  5.3:1     --sb-warn-ink  #8a5a12  5.2:1
+   */
+  --sb-success-ink: #00753f;
+  --sb-warn-ink: #8a5a12;
+
   /* ------------------------------------------------------------ odds tile */
   --sb-odds-bg: #eef1f4;
   --sb-odds-bg-hover: #e2e7ec;
@@ -58,7 +96,14 @@
   --sb-odds-selected-bg: var(--sb-brand-strong);
   --sb-odds-selected-ink: #ffffff;
   --sb-odds-disabled-bg: #f2f4f6;
-  --sb-odds-disabled-ink: #a8b2be;
+  /*
+   * A SUSPENDED PRICE STILL HAS TO BE READ. This was #a8b2be, which measures
+   * 1.9:1 on the disabled tile — decorative-grey, not text. A customer looking
+   * at a suspended or closed market needs to see WHICH price is unavailable,
+   * and "disabled" is carried by the tile's background, the cursor and the
+   * title attribute, not by making the number illegible. 4.7:1 here.
+   */
+  --sb-odds-disabled-ink: #626e7d;
 
   /* ---------------------------------------------------------------- shape */
   --sb-r-xs: 3px;

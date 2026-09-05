@@ -8,7 +8,6 @@ import {
   createWalletTestContext,
   type WalletTestContext,
 } from "@/modules/wallet/__tests__/helpers";
-import { bootstrapSuperAdmin } from "../bootstrap";
 import { permissionsForRoles } from "../permissions";
 
 /**
@@ -72,6 +71,31 @@ async function makeUser(role: "ADMIN" | "USER"): Promise<string> {
     RETURNING id::text
   `);
   return row!.id;
+}
+
+/**
+ * Makes `userId` a super admin, deterministically.
+ *
+ * THIS USED TO CALL `bootstrapSuperAdmin`, AND THAT MADE THE SUITE FLAKY.
+ *
+ * The bootstrap is a first-administrator convenience: it returns
+ * `{ granted: false, skipped: "SUPER_ADMIN_ALREADY_EXISTS" }` the moment any
+ * super admin exists, which is correct behaviour and exactly wrong as test
+ * setup. Every file here shares one database, so whether this call did anything
+ * depended on which spec reached it first. The return value was ignored, so
+ * when it did nothing the "super admin" was a plain administrator with no
+ * permissions, and the test failed with a 403 that looks like a broken
+ * permission check rather than broken setup.
+ *
+ * It failed roughly one run in ten. A flaky test on an authorisation control is
+ * worse than a failing one: it trains people to re-run, and eventually somebody
+ * makes it stable by weakening the assertion.
+ *
+ * Granting directly is what the rest of this file already does for fixtures,
+ * and `bootstrap.acceptance.spec.ts` covers the bootstrap itself.
+ */
+async function makeSuperAdmin(userId: string): Promise<void> {
+  await grantRole(userId, "SUPER_ADMIN", userId);
 }
 
 async function grantRole(userId: string, role: string, byUserId: string): Promise<void> {
@@ -198,7 +222,7 @@ describe("A4 — SUPPORT_AGENT versus higher-trust roles", () => {
 
   it("refuses a SUPPORT_AGENT at the roles endpoint, and lets a SUPER_ADMIN further", async () => {
     const superAdminId = await makeUser("ADMIN");
-    await bootstrapSuperAdmin(ctx.database, superAdminId);
+    await makeSuperAdmin(superAdminId);
     const supportId = await makeUser("ADMIN");
     await grantRole(supportId, "SUPPORT_AGENT", superAdminId);
     const targetId = await makeUser("ADMIN");
@@ -248,7 +272,7 @@ describe("A4 — SUPPORT_AGENT versus higher-trust roles", () => {
 
   it("grants NOTHING when a SUPPORT_AGENT attempts an escalation", async () => {
     const superAdminId = await makeUser("ADMIN");
-    await bootstrapSuperAdmin(ctx.database, superAdminId);
+    await makeSuperAdmin(superAdminId);
     const supportId = await makeUser("ADMIN");
     await grantRole(supportId, "SUPPORT_AGENT", superAdminId);
     const targetId = await makeUser("ADMIN");
@@ -270,7 +294,7 @@ describe("A4 — SUPPORT_AGENT versus higher-trust roles", () => {
 
   it("a refusal does not leak what it refused", async () => {
     const superAdminId = await makeUser("ADMIN");
-    await bootstrapSuperAdmin(ctx.database, superAdminId);
+    await makeSuperAdmin(superAdminId);
     const supportId = await makeUser("ADMIN");
     await grantRole(supportId, "SUPPORT_AGENT", superAdminId);
     const targetId = await makeUser("ADMIN");

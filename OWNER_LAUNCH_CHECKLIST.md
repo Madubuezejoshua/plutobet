@@ -381,6 +381,52 @@ coverage addresses, and it should be resolved before, not after, a public launch
 
 ---
 
+## Decisions only you can make
+
+These are **not** blocked on a key, a contract or effort. They are blocked
+because building them means deciding the financial or responsible-gambling rules
+of a money feature, and a developer inventing those is how a betting product
+acquires rules nobody chose. Each is recorded in `general.md` as
+`BLOCKED_BY_PRODUCT_DECISION` with the same questions.
+
+### Edit bet
+
+Nothing in the repository defines it. Needed before it can be built:
+
+1. **Eligibility** — which bets, how long after placement, before or after
+   kick-off.
+2. **Fees** — is there a charge, and is it a percentage or a flat amount.
+3. **Odds-change consent** — a rebooked bet is priced again. Does the customer
+   agree to the new price, and how is that agreement recorded.
+4. **Promotional stakes** — a bonus-funded bet edited into a different one is a
+   wagering-requirement question, not a betting one.
+
+### Personalisation
+
+The data exists and it needs no model. What does not exist:
+
+1. **What is surfaced** — a fixture, a market, or a stake size. A recommended
+   *stake* is a different product, and a different regulatory object, from a
+   recommended fixture.
+2. **On what signal.** Betting history is the obvious one, and it is also the
+   signal that most reliably identifies somebody losing.
+3. **When it is suppressed** — for a customer under a deposit limit, in
+   cool-off, showing loss-chasing behaviour, or flagged by the risk console. A
+   recommender with no suppression rule pushes hardest at the customer it should
+   push at least.
+4. **Whether it counts as marketing.** `user_preferences.marketing_emails`
+   already records a consent this would have to respect, and Nigerian rules on
+   gambling advertising bear on the answer.
+
+### Admin AI
+
+Additionally blocked by the absence of an LLM key. Beyond that: **which admin
+actions may an assistant take** over a console that approves withdrawals,
+adjusts exposure and settles bets. That needs its own tool registry and
+permission model, and the list is yours to set.
+
+---
+
 ## Known contamination to clear before launch
 
 `npm run db:clean-benchmark` (dry run by default) reports **400 synthetic

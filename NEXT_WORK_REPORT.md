@@ -1262,3 +1262,112 @@ the ₦630 residual exposure is still there, both awaiting owner approval.
 *No real money, no real customer data, no live payment credentials, and no
 production data were involved. The bet described here is on a real fixture with
 real odds, funded by a ledger-recorded QA credit that is not a deposit.*
+
+---
+
+## 37. Developer-completion, UI integration and end-to-end verification — 2026-09-03
+
+A single pass with one instruction: finish what a developer can finish without
+buying a key, signing a contract, opening an owner's console, obtaining a
+licence, or making a product decision that is not a developer's to make. Then
+prove it, and say only what the proof supports.
+
+`general.md` §0 carries the resumable checkpoint and the full stage table. This
+is the running log of what the pass did.
+
+### 37.1 What was built
+
+**Cash-out**, from broken to reachable. Partial cash-out had never worked: a
+CHECK constraint from migration `0007` refused exactly the state migration
+`0016` created, so every partial call died on Postgres 23514. Nothing noticed,
+because there was no route, no UI and no test that called it. Migration `0027`
+replaces the constraint and adds `released_liability_minor`, which fixes the
+second defect — the partial released a proportional slice and settlement later
+released the whole claim again. Then an eligibility gate, a replay path, an
+authenticated route, an in-ticket control and admin visibility.
+
+**Date of birth.** A write-once flow, a non-dismissible banner naming what is
+blocked, and gates inside placement and withdrawal. Migration `0028` fixes an
+age-gate timezone mismatch: the trigger used the database's local date and the
+service used UTC, so on a machine west of UTC a person exactly 18 was accepted
+by one and refused by the other, producing a 500.
+
+**A live-version cache**, a **provider-sourced bank list** for withdrawals, and
+the **deletion of the legacy style bridge** with seven files migrated off it.
+
+**A browser suite.** Playwright, desktop 1440×900 and a Pixel 7 profile. Every
+page: status under 400, no console error, no uncaught exception, no failed
+request, no horizontal overflow, and the stylesheet actually reaching the
+browser.
+
+**A generated interaction audit and contact sheet**, from what the run did
+rather than from what anybody remembers.
+
+**An adversarial corpus for Pluto**: 53 attacks across sixteen categories,
+entering by four vectors, run against the real guardrails, registry, dispatcher
+and vetting.
+
+**A load harness** for the read paths, and **an end-to-end journey**: one
+customer, fourteen steps, one run.
+
+**A guarded review server.** `next start` loads `.env`, which here holds
+production credentials, so the old shell recipe was one forgotten export away
+from pointing a browser and the destructive interaction tests at the real
+database — silently, because the app comes up either way.
+
+### 37.2 Defects found, and how each was found
+
+| # | Defect | Found by |
+|---|---|---|
+| 1 | Partial cash-out refused by a constraint on every call | reading the migrations against the service |
+| 2 | Partial cash-out's exposure slice released twice | the same |
+| 3 | Cash-out did not check account status | writing the eligibility tests |
+| 4 | A retried cash-out returned an error for money already paid | an existing test that asserted the wrong thing |
+| 5 | Age gate used the database's local date, the service used UTC | writing the date-of-birth tests |
+| 6 | Every betting fixture was accidentally a legacy account | the new gate refusing them |
+| 7 | The sign-in password field's accessible name included a link | Playwright could not find a field labelled "Password" |
+| 8 | No 404 page — Next served its unbranded built-in | the browser suite |
+| 9 | Mobile header overflowed: 446px in a 412px viewport | the browser suite |
+| 10 | Competition favouriting unreachable with ≤8 leagues | the browser suite |
+| 11 | `.sb-page` deleted with the style bridge; every non-board page full-bleed | **looking at a screenshot** |
+| 12 | The audit file truncated once per project | reading the artefact |
+| 13 | The capture script deleted the audit beside it | the same |
+| 14 | The merged audit table one column short of its header | the same |
+| 15 | The review server inherited production `AUTH_SECRET` and `IDENTITY_PEPPER` | asking what `next start` loads |
+| 16 | `setDepositLimit` changed a protection with no confirmation | the adversarial corpus |
+| 17 | Two registered AI tools had no handler | the adversarial corpus |
+| 18 | `getHeadToHead` returned a raw `PostgresError` for a malformed id | the adversarial corpus |
+| 19 | The unavailable-product page gave a reason that was false for Fantasy | reading the copy against the product |
+| 20 | A refused bet dropped the reason the service had worked out | the end-to-end journey |
+
+**Number 11 is the one worth remembering.** Every gate passed — typecheck,
+lint, build, 913 unit tests and 80 browser tests — because the browser suite
+measures horizontal *overflow*, and a full-bleed page does not overflow. A
+person looking at a picture found it. It now has a test, and that test was
+proved to fail before it was trusted: the rules were removed, the app rebuilt,
+all six checks failed, and they passed again once restored.
+
+### 37.3 What was deliberately not built
+
+**Edit bet**, **personalisation** and **Admin AI** are recorded as
+`BLOCKED_BY_PRODUCT_DECISION`, with the exact undecided questions listed in
+`general.md`. None is blocked on effort or on a key. Each is blocked because
+building it means writing the financial or responsible-gambling rules of a money
+feature, and those are not a developer's to invent. Admin AI is additionally
+`BLOCKED_BY_KEY`.
+
+**Casino callbacks were not load-tested** because there is no callback route to
+load.
+
+**No live provider was activated, nothing was deployed**, the 400 synthetic
+fixtures are still present and the ₦630 residual exposure is still there — both
+still awaiting owner approval on a dry-run fingerprint.
+
+### 37.4 The reporting itself
+
+`general.md` used five status labels outside the agreed vocabulary. The
+damaging one was `VERIFIED_FUNCTIONAL`, defined as "a route that exists" and
+applied to fifty-five customer-facing controls, where it reads as a claim that
+somebody used them. Seven now say `VERIFIED_IN_REAL_BROWSER` because they appear
+in the generated audit; the other fifty say `IMPLEMENTED_NOT_LIVE_TESTED`. Every
+remapping was a downgrade or a rename. Nothing was raised.
