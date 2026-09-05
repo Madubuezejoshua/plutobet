@@ -111,27 +111,31 @@ browser during this pass — not that it looks right in the source.
 
 ### Environment prerequisite on the current development machine
 
-**This is a machine fact, not a repository defect.** It is recorded here because
-it stops every database-backed gate dead and the symptom names the wrong cause.
+**This is a machine fact, not a repository defect.** It is kept here because the
+symptom names the wrong cause and would otherwise cost the next session an hour.
 
-The test suite starts a real PostgreSQL through `embedded-postgres`. On this
-machine the **Microsoft Visual C++ 2015–2022 x64 Redistributable is missing**, so
+**RESOLVED 2026-09-05.** The owner installed the redistributable and it is
+verified: `Microsoft.VCRedist.2015+.x64` **v14.51.36247.0**, registry
+`Installed=1`, and `vcruntime140.dll`, `vcruntime140_1.dll`, `msvcp140.dll` and
+`concrt140.dll` are present in `System32`. Proof that it is the real fix rather
+than the workaround still doing the work: with the scratch directory **removed
+from `PATH`**, `initdb.exe --version` and `postgres.exe --version` both answer
+`(PostgreSQL) 16.14` and exit 0. **The `vcruntime140.dll` workaround is no
+longer needed and should not be recreated.**
+
+What the failure looked like, for whoever meets it again: the suite starts a real
+PostgreSQL through `embedded-postgres`; without the redistributable
 `initdb.exe` and `postgres.exe` cannot load `vcruntime140.dll` and exit
-`3221225781` (`0xC0000135`, STATUS_DLL_NOT_FOUND). Vitest reports this as **"No
-test files found"** alongside a Postgres init error — the glob is fine; the
-database never started. Checked against the binaries' PE import tables, they need
-`vcruntime140.dll` only: `msvcp140.dll` is not imported, the `api-ms-win-crt-*`
-API sets ship with Windows 11, and `ucrtbase.dll` is present.
+`3221225781` (`0xC0000135`, STATUS_DLL_NOT_FOUND), and **vitest reports it as
+"No test files found"** alongside a Postgres init error. The glob is fine; the
+database never started. Checked against the binaries' PE import tables they need
+`vcruntime140.dll` only — `msvcp140.dll` is not imported, the `api-ms-win-crt-*`
+API sets ship with Windows 11, and `ucrtbase.dll` was already present.
 
-| | |
-|---|---|
-| Owner action (needs admin) | Install the VC++ 2015–2022 x64 Redistributable |
-| Workaround used for this pass | A Microsoft-signed `vcruntime140.dll` (14.44.35211.0, signature verified `Valid`) placed in a scratch directory that is prepended to `PATH` for test commands |
-| Why on `PATH` and not in `node_modules` | DLL search reaches `PATH`, so nothing inside `node_modules` is modified and `npm ci` cannot silently undo it |
-
-Also on this machine, `node` and `git` are installed but **absent from `PATH`**;
-commands must prepend `C:\Program Files\nodejs` and `C:\Program Files\Git\cmd`.
-Node is v24.20.0, matching the `node-version: '24'` pinned in CI.
+**Still true on this machine:** `node` and `git` are installed but **absent from
+the system `PATH`**, so commands must prepend `C:\Program Files\nodejs` and
+`C:\Program Files\Git\cmd`. Node is v24.20.0, matching the `node-version: '24'`
+pinned in CI.
 
 ### Stages
 
@@ -2058,7 +2062,8 @@ final fix, and the interaction audit is 38 generated rows. Cash-out is now
 `VERIFIED_IN_REAL_BROWSER` for the **quote**; taking the offer remains
 `VERIFIED_BY_INTEGRATION_TEST`, and the two are recorded as different claims.
 
-**Environment.** This machine is missing the MSVC redistributable, so
+**Environment.** This machine was missing the MSVC redistributable, so
 `embedded-postgres` could not start and vitest reported it as "No test files
-found". Worked around locally; the owner fix is recorded in §0. Git also had no
-configured identity and has no GitHub credential.
+found". Worked around for the gate runs; **the owner installed the
+redistributable on 2026-09-05 and it is verified as the real fix** — see §0. Git
+also had no configured identity and has no GitHub credential.
