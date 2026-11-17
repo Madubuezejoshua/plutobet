@@ -1,0 +1,195 @@
+/*
+ * PlutoBet design tokens — Midnight Stadium Sportsbook Theme.
+ *
+ * Scoped to `.sb` (dark default) and `html:not(.dark) .sb` (light toggle) so
+ * customer-facing pages adopt the deep midnight navy, electric indigo-blue,
+ * and gold accent system while the internal `/admin` console keeps its own
+ * isolated rules in `globals.css`.
+ */
+
+.sb {
+  /* ---------------------------------------------------------------- brand */
+  --sb-brand: #3B82F6;
+  --sb-brand-strong: #4F46E5;
+  --sb-brand-gradient: linear-gradient(90deg, #3178F6 0%, #5649F5 100%);
+  --sb-brand-gradient-hover: linear-gradient(90deg, #3B82F6 0%, #6366F1 100%);
+  --sb-brand-ink: #FFFFFF;
+  --sb-brand-text: #60A5FA;
+  --sb-brand-wash: rgb(59 130 246 / 16%);
+  --sb-brand-ring: rgb(59 130 246 / 45%);
+  --sb-gold: #F5B731;
+  --sb-gold-wash: rgb(245 183 49 / 14%);
+
+  /* ------------------------------------------------------ dark app chrome */
+  --sb-shell: #0B0F1E;
+  --sb-shell-2: #0F1426;
+  --sb-shell-3: #141B31;
+  --sb-shell-line: #1A2138;
+  --sb-shell-ink: #F8FAFC;
+  --sb-shell-muted: #94A3B8;
+
+  /* --------------------------------------------- dark sportsbook surfaces */
+  --sb-canvas: #090D1A;
+  --sb-surface: #0F1426;
+  --sb-surface-2: #13192D;
+  --sb-surface-3: #19223C;
+  --sb-border: #1D253E;
+  --sb-border-strong: #243052;
+
+  /* ----------------------------------------------------------------- text */
+  --sb-ink: #F8FAFC;
+  --sb-ink-2: #E2E8F0;
+  --sb-muted: #94A3B8;
+  --sb-faint: #8492AD;
+
+  /* --------------------------------------------------------------- status */
+  --sb-live: #F43F5E;
+  --sb-live-solid: #E11D48;
+  --sb-live-wash: rgb(225 29 72 / 16%);
+  --sb-warn: #F59E0B;
+  --sb-warn-wash: rgb(245 158 11 / 14%);
+  --sb-danger: #FB7185;
+  --sb-danger-wash: rgb(244 63 94 / 15%);
+  --sb-up: #4ADE80;
+  --sb-down: #FB7185;
+
+  --sb-success-ink: #4ADE80;
+  --sb-warn-ink: #FBBF24;
+
+  /* ------------------------------------------------------------ odds tile */
+  --sb-odds-bg: #141B31;
+  --sb-odds-bg-hover: #1B2440;
+  --sb-odds-ink: #F8FAFC;
+  --sb-odds-selected-bg: linear-gradient(135deg, #2563EB 0%, #4F46E5 100%);
+  --sb-odds-selected-ink: #FFFFFF;
+  --sb-odds-disabled-bg: #0C1120;
+  --sb-odds-disabled-ink: #7D8CA8;
+
+  /* ---------------------------------------------------------------- shape */
+  --sb-r-xs: 4px;
+  --sb-r-sm: 8px;
+  --sb-r-md: 12px;
+  --sb-r-lg: 16px;
+  --sb-r-pill: 999px;
+
+  /* ---------------------------------------------------------------- depth */
+  --sb-shadow-sm: 0 2px 6px rgb(4 9 26 / 28%);
+  --sb-shadow: 0 8px 24px rgb(4 9 26 / 40%);
+  --sb-shadow-lg: 0 16px 40px rgb(4 9 26 / 55%);
+  --sb-shadow-up: 0 -8px 28px rgb(4 9 26 / 55%);
+  --sb-glow-brand: 0 4px 16px rgb(62 102 245 / 35%);
+
+  /* ------------------------------------------- spacing, a 4px/8px rhythm */
+  --sb-1: 4px;
+  --sb-2: 8px;
+  --sb-3: 12px;
+  --sb-4: 16px;
+  --sb-5: 20px;
+  --sb-6: 24px;
+  --sb-8: 32px;
+  --sb-10: 40px;
+
+  /* --------------------------------------------------------------- layout */
+  --sb-max: 1440px;
+  --sb-sidebar: 216px;
+  --sb-rail: 212px;   /* secondary competition filter rail */
+  --sb-slip: 312px;   /* right betslip */
+  --sb-header: 64px;
+  --sb-subnav: 44px;
+  --sb-bottombar: 60px;
+
+  /* ----------------------------------------------------------- typography */
+  --sb-font: var(--font-sans), "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sb-display: var(--font-display), "Outfit", var(--sb-font);
+  --sb-mono: var(--font-mono), "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  --sb-t-xs: 11px;
+  --sb-t-sm: 12px;
+  --sb-t-base: 13px;
+  --sb-t-md: 14px;
+  --sb-t-lg: 16px;
+  --sb-t-xl: 20px;
+  --sb-t-2xl: 26px;
+
+  /* ------------------------------------------------------------- controls */
+  --sb-h-sm: 30px;
+  --sb-h-md: 36px;
+  --sb-h-lg: 42px;
+  --sb-h-touch: 44px;
+
+  /* Focus ring visible on both dark and light surfaces */
+  --sb-focus: 0 0 0 2px #090D1A, 0 0 0 4px #60A5FA;
+  --sb-focus-dark: 0 0 0 2px #090D1A, 0 0 0 4px #60A5FA;
+
+  --sb-ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --sb-fast: 140ms;
+  --sb-slow: 220ms;
+}
+
+/* Light mode override triggered by ThemeToggle (`html:not(.dark)`) */
+html:not(.dark) .sb {
+  --sb-brand: #2563EB;
+  --sb-brand-strong: #4F46E5;
+  --sb-brand-ink: #FFFFFF;
+  --sb-brand-text: #2563EB;
+  --sb-brand-wash: rgb(37 99 235 / 10%);
+  --sb-brand-ring: rgb(37 99 235 / 35%);
+  --sb-gold: #D97706;
+  --sb-gold-wash: rgb(217 119 6 / 12%);
+
+  --sb-shell: #FFFFFF;
+  --sb-shell-2: #F8FAFC;
+  --sb-shell-3: #EEF2F6;
+  --sb-shell-line: #E2E8F0;
+  --sb-shell-ink: #0F172A;
+  --sb-shell-muted: #475569;
+
+  --sb-canvas: #F1F5F9;
+  --sb-surface: #FFFFFF;
+  --sb-surface-2: #F8FAFC;
+  --sb-surface-3: #EEF2F6;
+  --sb-border: #E2E8F0;
+  --sb-border-strong: #CBD5E1;
+
+  --sb-ink: #0F172A;
+  --sb-ink-2: #334155;
+  --sb-muted: #475569;
+  --sb-faint: #526074;
+
+  --sb-live: #E11D48;
+  --sb-live-solid: #E11D48;
+  --sb-live-wash: rgb(225 29 72 / 10%);
+  --sb-warn: #B45309;
+  --sb-warn-wash: rgb(245 158 11 / 14%);
+  --sb-danger: #DC2626;
+  --sb-danger-wash: rgb(220 38 38 / 10%);
+  --sb-up: #15803D;
+  --sb-down: #DC2626;
+
+  --sb-success-ink: #15803D;
+  --sb-warn-ink: #92400E;
+
+  --sb-odds-bg: #EEF2F6;
+  --sb-odds-bg-hover: #E2E8F0;
+  --sb-odds-ink: #0F172A;
+  --sb-odds-selected-bg: linear-gradient(135deg, #2563EB 0%, #4F46E5 100%);
+  --sb-odds-selected-ink: #FFFFFF;
+  --sb-odds-disabled-bg: #F8FAFC;
+  --sb-odds-disabled-ink: #5A677A;
+
+  --sb-shadow-sm: 0 1px 2px rgb(15 23 42 / 5%);
+  --sb-shadow: 0 4px 14px rgb(15 23 42 / 7%);
+  --sb-shadow-lg: 0 12px 28px rgb(15 23 42 / 12%);
+  --sb-shadow-up: 0 -4px 16px rgb(15 23 42 / 10%);
+  --sb-glow-brand: 0 4px 14px rgb(37 99 235 / 26%);
+
+  --sb-focus: 0 0 0 2px #FFFFFF, 0 0 0 4px #2563EB;
+  --sb-focus-dark: 0 0 0 2px #FFFFFF, 0 0 0 4px #2563EB;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb {
+    --sb-fast: 0ms;
+    --sb-slow: 0ms;
+  }
+}

@@ -1,0 +1,209 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1787447393227,
+      "tag": "0000_phase1_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787533793227,
+      "tag": "0001_phase2_odds",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787620193227,
+      "tag": "0002_phase3_betting",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787706593227,
+      "tag": "0003_phase4_settlement",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787792993227,
+      "tag": "0004_phase5_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787879393227,
+      "tag": "0005_phase7_responsible",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787965793227,
+      "tag": "0006_phase6_casino",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788052193227,
+      "tag": "0007_phase8_cashout",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788138593227,
+      "tag": "0008_notifications_otp",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788224993227,
+      "tag": "0009_kyc_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788311393227,
+      "tag": "0010_phase2_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788397793227,
+      "tag": "0011_phase3_rbac",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788484193227,
+      "tag": "0012_phase4_wallet_buckets",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788570593227,
+      "tag": "0013_phase6_sports_taxonomy",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788656993227,
+      "tag": "0014_phase7_booking_codes",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1788743393227,
+      "tag": "0015_phase8_bet_slips",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788829793227,
+      "tag": "0016_phase9_resettlement",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788916193227,
+      "tag": "0017_phase11_casino_catalogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789002593227,
+      "tag": "0018_phase12_virtuals",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789088993227,
+      "tag": "0019_phase13_jackpot",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789175393227,
+      "tag": "0020_phase14_promotions",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789261793227,
+      "tag": "0021_phase15_referrals",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789348193227,
+      "tag": "0022_phase21_support",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789434593227,
+      "tag": "0023_phase22_social",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789520993227,
+      "tag": "0024_job_heartbeats",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789607393227,
+      "tag": "0025_result_poll_fairness",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789693793227,
+      "tag": "0026_settlement_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789780193227,
+      "tag": "0027_cashout_partial_repair",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1789866593227,
+      "tag": "0028_age_gate_utc",
+      "breakpoints": true
+    }
+  ]
+}

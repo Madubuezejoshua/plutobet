@@ -1,0 +1,457 @@
+import { sql, type SQL } from "drizzle-orm";
+import { walletService, WalletService } from "../wallet/wallet.service";
+import type { WalletTransaction } from "../wallet/types";
+import {
+  normalizeCompetitionKey,
+  normalizeSportKey,
+  normalizeTeamKey,
+  parseCompetitionLabel,
+} from "./canonical-name";
+
+/**
+ * Classifying a whole sync in a bounded number of round trips.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * `resolveFixture` + `classifyEvent` are correct and stay correct — but they
+ * were written for ONE fixture, and the fixture sync called them once per
+ * event. Each call opens its own transaction against a hosted database, and
+ * each transaction costs, in round trips:
+ *
+ *   resolveFixture   BEGIN, SET ROLE, SET lock_timeout, find sport,
+ *                    insert competition, select competition,
+ *                    (alias, insert, select) x 2 teams, COMMIT   ~= 14
+ *   classifyEvent    BEGIN, SET ROLE, SET lock_timeout, UPDATE, COMMIT ~= 5
+ *
+ * About nineteen round trips per event. A 775-event sync is therefore roughly
+ * FIFTEEN THOUSAND round trips, almost all of them re-resolving the same
+ * leagues and the same clubs — a feed repeats itself constantly, because a
+ * league week is twenty fixtures over the same forty teams.
+ *
+ * That is not a slow query. It is a shape problem: the work is proportional to
+ * events when it should be proportional to DISTINCT ENTITIES, and the network
+ * is paid per statement rather than per batch.
+ *
+ * WHAT THIS DOES INSTEAD
+ * ----------------------
+ * Per chunk of events, in ONE transaction:
+ *
+ *   1. one SELECT for every sport in the chunk
+ *   2. one INSERT .. ON CONFLICT DO NOTHING for every new competition
+ *   3. one SELECT reading them all back
+ *   4. one SELECT for every team alias
+ *   5. one INSERT .. ON CONFLICT DO NOTHING for every new team
+ *   6. one SELECT reading them all back
+ *   7. one UPDATE .. FROM (VALUES ...) classifying every event
+ *
+ * Seven statements plus BEGIN/SET/SET/COMMIT, whatever the chunk size. The
+ * normalisation, deduplication and matching all happen in memory, where they
+ * cost nothing.
+ *
+ * WHAT IS DELIBERATELY UNCHANGED
+ * ------------------------------
+ * - `INSERT .. ON CONFLICT DO NOTHING` then `SELECT`, so a concurrent sync
+ *   reads the winner's row instead of raising a unique violation. Batching
+ *   makes the window wider, not narrower, so this matters MORE here.
+ * - Aliases still beat computed keys: an alias is a human decision.
+ * - An unknown sport is still never created.
+ * - A fixture that cannot be classified is still ingested and still bettable.
+ *   Refusing a real match over a label change remains the worse outcome.
+ * - Teams are still never merged. Same key, same team; different key, different
+ *   team, duplicates and all.
+ *
+ * CONCURRENCY
+ * -----------
+ * There is none inside a chunk, on purpose. The statements are sequential
+ * within one transaction and chunks run one after another, so this adds no
+ * connection pressure at all — no `Promise.all`, unbounded or otherwise. The
+ * win comes from sending less, not from sending it in parallel.
+ */
+
+export interface FixtureToClassify {
+  /** Our own `events.id`. */
+  eventId: string;
+  sport: string;
+  league: string;
+  home: string;
+  away: string;
+}
+
+export interface ClassificationFailure {
+  eventId: string;
+  reason: string;
+}
+
+export interface BatchClassificationResult {
+  classified: number;
+  /** Events whose sport is not in the seeded taxonomy — ingested, not classified. */
+  unresolvedSport: number;
+  failures: ClassificationFailure[];
+  /** Observability for the benchmark: what this actually cost. */
+  transactions: number;
+  statements: number;
+}
+
+/**
+ * Events per transaction.
+ *
+ * Bounded rather than "the whole sync": a single transaction holding 775
+ * events' worth of inserts is a long-lived write transaction competing with
+ * live traffic, and one failure would discard the entire catalogue. At 100 the
+ * statement count is still seven per chunk while a failure costs one chunk.
+ *
+ * It also keeps the bind-parameter count far below PostgreSQL's 65535 limit:
+ * the widest statement here binds five parameters per event.
+ */
+export const CLASSIFY_CHUNK = 100;
+
+interface PreparedFixture {
+  eventId: string;
+  sportKey: string;
+  competitionKey: string;
+  competitionName: string;
+  country: string | null;
+  homeKey: string;
+  homeName: string;
+  awayKey: string;
+  awayName: string;
+}
+
+/**
+ * `(a, b)` tuple key for maps that are scoped by sport.
+ *
+ * NUL is the separator because it cannot appear in a sport id or a
+ * normalised key, so two different pairs can never collide into one string.
+ * Written as an escape rather than as a literal NUL byte: the byte works
+ * identically, but git and most diff tools then classify this file as binary
+ * and stop showing changes to it.
+ */
+const SCOPE_SEPARATOR = "\u0000";
+
+function scoped(sportId: string, key: string): string {
+  return `${sportId}${SCOPE_SEPARATOR}${key}`;
+}
+
+function joinRows(rows: SQL[]): SQL {
+  return sql.join(rows, sql`, `);
+}
+
+export class BatchClassifier {
+  constructor(private readonly wallet: WalletService = walletService) {}
+
+  /**
+   * Normalises in memory, then resolves and classifies in bounded batches.
+   *
+   * Never throws for a single bad fixture: a name that normalises to nothing,
+   * a fixture that resolves to the same team twice, an unknown sport — each is
+   * recorded and the rest of the chunk proceeds. A DATABASE failure does
+   * propagate, because a chunk that could not be written is not a fact about
+   * one fixture.
+   */
+  async classify(fixtures: FixtureToClassify[]): Promise<BatchClassificationResult> {
+    const result: BatchClassificationResult = {
+      classified: 0,
+      unresolvedSport: 0,
+      failures: [],
+      transactions: 0,
+      statements: 0,
+    };
+    if (fixtures.length === 0) return result;
+
+    const prepared: PreparedFixture[] = [];
+    for (const fixture of fixtures) {
+      const ready = this.prepare(fixture, result.failures);
+      if (ready) prepared.push(ready);
+    }
+
+    for (let start = 0; start < prepared.length; start += CLASSIFY_CHUNK) {
+      const chunk = prepared.slice(start, start + CLASSIFY_CHUNK);
+      const chunkResult = await this.classifyChunk(chunk);
+      result.classified += chunkResult.classified;
+      result.unresolvedSport += chunkResult.unresolvedSport;
+      result.failures.push(...chunkResult.failures);
+      result.transactions += chunkResult.transactions;
+      result.statements += chunkResult.statements;
+    }
+
+    return result;
+  }
+
+  /**
+   * All the string work, done once per fixture with no database involved.
+   *
+   * A fixture with no team name is a failure for THAT fixture only.
+   *
+   * WHY THE BLANK CHECK IS ON THE RAW NAME, NOT THE KEY
+   * `normalizeTeamKey` falls back to a hash when its cleaned key would be
+   * empty, which is right for a real name that happens to be unrepresentable
+   * in ASCII — "ЦСКА" gets a stable key instead of being dropped. It is wrong
+   * for a name that is genuinely absent: `sha256("")` is a constant, so EVERY
+   * nameless fixture from every provider would resolve to one shared team.
+   * That is a silent merge of unrelated clubs, which the taxonomy is designed
+   * never to do, and it arrives disguised as success.
+   *
+   * So an empty or whitespace-only provider string is refused here, before it
+   * can be hashed into a bucket.
+   */
+  private prepare(
+    fixture: FixtureToClassify,
+    failures: ClassificationFailure[],
+  ): PreparedFixture | null {
+    const parsed = parseCompetitionLabel(fixture.league);
+
+    if (!fixture.home.trim() || !fixture.away.trim()) {
+      failures.push({
+        eventId: fixture.eventId,
+        reason: `fixture has no team name (home="${fixture.home}", away="${fixture.away}")`,
+      });
+      return null;
+    }
+
+    const homeKey = normalizeTeamKey(fixture.home);
+    const awayKey = normalizeTeamKey(fixture.away);
+
+    if (!homeKey || !awayKey) {
+      failures.push({
+        eventId: fixture.eventId,
+        reason: `team name normalises to nothing (home="${fixture.home}", away="${fixture.away}")`,
+      });
+      return null;
+    }
+
+    return {
+      eventId: fixture.eventId,
+      sportKey: normalizeSportKey(fixture.sport),
+      competitionKey: normalizeCompetitionKey(parsed.name),
+      competitionName: parsed.name,
+      country: parsed.country,
+      homeKey,
+      homeName: fixture.home,
+      awayKey,
+      awayName: fixture.away,
+    };
+  }
+
+  private async classifyChunk(chunk: PreparedFixture[]): Promise<BatchClassificationResult> {
+    const outcome: BatchClassificationResult = {
+      classified: 0,
+      unresolvedSport: 0,
+      failures: [],
+      transactions: 1,
+      statements: 0,
+    };
+
+    await this.wallet.withMoneyTransaction(async ({ tx }) => {
+      // ---- 1. sports (never created; an unknown sport is a seeding decision)
+      const sportKeys = [...new Set(chunk.map((f) => f.sportKey))];
+      const sportRows = await tx.execute<{ id: string; key: string }>(sql`
+        SELECT id, key FROM sports WHERE key IN (${joinRows(sportKeys.map((k) => sql`${k}`))})
+      `);
+      outcome.statements += 1;
+      const sportByKey = new Map(sportRows.map((row) => [row.key, row.id]));
+
+      const resolvable: (PreparedFixture & { sportId: string })[] = [];
+      for (const fixture of chunk) {
+        const sportId = sportByKey.get(fixture.sportKey);
+        if (!sportId) {
+          outcome.unresolvedSport += 1;
+          continue;
+        }
+        resolvable.push({ ...fixture, sportId });
+      }
+      if (resolvable.length === 0) return;
+
+      // ---- 2/3. competitions
+      const competitionByScope = await this.resolveCompetitions(tx, resolvable, outcome);
+
+      // ---- 4/5/6. teams
+      const teamByScope = await this.resolveTeams(tx, resolvable, outcome);
+
+      // ---- 7. one UPDATE for the chunk
+      const updates: SQL[] = [];
+      for (const fixture of resolvable) {
+        const competitionId =
+          competitionByScope.get(scoped(fixture.sportId, fixture.competitionKey)) ?? null;
+        let homeTeamId = teamByScope.get(scoped(fixture.sportId, fixture.homeKey)) ?? null;
+        let awayTeamId = teamByScope.get(scoped(fixture.sportId, fixture.awayKey)) ?? null;
+
+        /*
+         * `events_teams_distinct` forbids a fixture against itself.
+         *
+         * Two different provider spellings can normalise to one key — that is
+         * the whole point of conservative matching — and when they do, writing
+         * both ids would violate the constraint and take the ENTIRE chunk's
+         * UPDATE down with it. Dropping just the team ids keeps the event, its
+         * sport and its competition, and records why.
+         */
+        if (homeTeamId && awayTeamId && homeTeamId === awayTeamId) {
+          outcome.failures.push({
+            eventId: fixture.eventId,
+            reason: `"${fixture.homeName}" and "${fixture.awayName}" both normalise to "${fixture.homeKey}"`,
+          });
+          homeTeamId = null;
+          awayTeamId = null;
+        }
+
+        updates.push(sql`(
+          ${fixture.eventId}::uuid,
+          ${fixture.sportId}::uuid,
+          ${competitionId}::uuid,
+          ${homeTeamId}::uuid,
+          ${awayTeamId}::uuid
+        )`);
+        outcome.classified += 1;
+      }
+
+      if (updates.length === 0) return;
+
+      /*
+       * COALESCE, matching the single-event path exactly.
+       *
+       * A later sync that fails to resolve a competition must not ERASE a
+       * classification an earlier sync got right. Losing data on a temporary
+       * provider hiccup is worse than a stale label.
+       */
+      await tx.execute(sql`
+        UPDATE events AS e SET
+          sport_id       = v.sport_id,
+          competition_id = COALESCE(v.competition_id, e.competition_id),
+          home_team_id   = COALESCE(v.home_team_id, e.home_team_id),
+          away_team_id   = COALESCE(v.away_team_id, e.away_team_id),
+          updated_at     = now()
+        FROM (VALUES ${joinRows(updates)})
+          AS v(id, sport_id, competition_id, home_team_id, away_team_id)
+        WHERE e.id = v.id
+      `);
+      outcome.statements += 1;
+    });
+
+    return outcome;
+  }
+
+  private async resolveCompetitions(
+    tx: WalletTransaction,
+    fixtures: (PreparedFixture & { sportId: string })[],
+    outcome: BatchClassificationResult,
+  ): Promise<Map<string, string>> {
+    const wanted = new Map<
+      string,
+      { sportId: string; key: string; name: string; country: string | null }
+    >();
+    for (const fixture of fixtures) {
+      const scopeKey = scoped(fixture.sportId, fixture.competitionKey);
+      if (!wanted.has(scopeKey)) {
+        wanted.set(scopeKey, {
+          sportId: fixture.sportId,
+          key: fixture.competitionKey,
+          name: fixture.competitionName,
+          country: fixture.country,
+        });
+      }
+    }
+
+    const rows = [...wanted.values()];
+    if (rows.length === 0) return new Map();
+
+    await tx.execute(sql`
+      INSERT INTO competitions (sport_id, key, name, country)
+      VALUES ${joinRows(
+        rows.map(
+          (row) =>
+            sql`(${row.sportId}::uuid, ${row.key}, ${row.name}, ${row.country}::text)`,
+        ),
+      )}
+      ON CONFLICT (sport_id, key) DO NOTHING
+    `);
+    outcome.statements += 1;
+
+    const found = await tx.execute<{ id: string; sport_id: string; key: string }>(sql`
+      SELECT id, sport_id, key FROM competitions
+      WHERE (sport_id, key) IN (${joinRows(
+        rows.map((row) => sql`(${row.sportId}::uuid, ${row.key})`),
+      )})
+    `);
+    outcome.statements += 1;
+
+    return new Map(found.map((row) => [scoped(row.sport_id, row.key), row.id]));
+  }
+
+  private async resolveTeams(
+    tx: WalletTransaction,
+    fixtures: (PreparedFixture & { sportId: string })[],
+    outcome: BatchClassificationResult,
+  ): Promise<Map<string, string>> {
+    const wanted = new Map<
+      string,
+      { sportId: string; key: string; name: string; country: string | null }
+    >();
+    const remember = (
+      sportId: string,
+      key: string,
+      name: string,
+      country: string | null,
+    ): void => {
+      const scopeKey = scoped(sportId, key);
+      if (!wanted.has(scopeKey)) wanted.set(scopeKey, { sportId, key, name, country });
+    };
+
+    for (const fixture of fixtures) {
+      remember(fixture.sportId, fixture.homeKey, fixture.homeName, fixture.country);
+      remember(fixture.sportId, fixture.awayKey, fixture.awayName, fixture.country);
+    }
+
+    const rows = [...wanted.values()];
+    if (rows.length === 0) return new Map();
+
+    /*
+     * Aliases FIRST, and they win.
+     *
+     * An alias is a decision somebody made — "Spurs" is Tottenham, and no safe
+     * normaliser will ever derive that. A key that is aliased must NOT then be
+     * inserted as a team of its own, or the next sync would resolve the same
+     * spelling two ways depending on which lookup ran first.
+     */
+    const aliased = await tx.execute<{ sport_id: string; alias_key: string; team_id: string }>(sql`
+      SELECT sport_id, alias_key, team_id FROM team_aliases
+      WHERE (sport_id, alias_key) IN (${joinRows(
+        rows.map((row) => sql`(${row.sportId}::uuid, ${row.key})`),
+      )})
+    `);
+    outcome.statements += 1;
+
+    const resolved = new Map<string, string>();
+    for (const row of aliased) {
+      resolved.set(scoped(row.sport_id, row.alias_key), row.team_id);
+    }
+
+    const missing = rows.filter((row) => !resolved.has(scoped(row.sportId, row.key)));
+    if (missing.length === 0) return resolved;
+
+    await tx.execute(sql`
+      INSERT INTO teams (sport_id, key, name, country)
+      VALUES ${joinRows(
+        missing.map(
+          (row) =>
+            sql`(${row.sportId}::uuid, ${row.key}, ${row.name}, ${row.country}::text)`,
+        ),
+      )}
+      ON CONFLICT (sport_id, key) DO NOTHING
+    `);
+    outcome.statements += 1;
+
+    const found = await tx.execute<{ id: string; sport_id: string; key: string }>(sql`
+      SELECT id, sport_id, key FROM teams
+      WHERE (sport_id, key) IN (${joinRows(
+        missing.map((row) => sql`(${row.sportId}::uuid, ${row.key})`),
+      )})
+    `);
+    outcome.statements += 1;
+
+    for (const row of found) {
+      resolved.set(scoped(row.sport_id, row.key), row.id);
+    }
+    return resolved;
+  }
+}
+
+export const batchClassifier = new BatchClassifier();

@@ -1,0 +1,534 @@
+{
+  "capturedAt": "2026-08-30T20:32:18.125Z",
+  "path": "/events?sport=football",
+  "status": 200,
+  "note": "sampled from 5000 events — a few of each status",
+  "body": [
+    {
+      "id": 72278456,
+      "home": "Bravo Ljubljana",
+      "away": "Mura Murska Sobota",
+      "homeId": 362744,
+      "awayId": 2410,
+      "date": "2026-08-29T18:15:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Slovenia - PrvaLiga",
+        "slug": "slovenia-prvaliga"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 2,
+        "away": 0,
+        "periods": {
+          "ft": {
+            "home": 2,
+            "away": 0
+          },
+          "p1": {
+            "home": 1,
+            "away": 0
+          }
+        }
+      }
+    },
+    {
+      "id": 72398640,
+      "home": "Zawisza Bydgoszcz",
+      "away": "Legia Warszawa II",
+      "homeId": 35329,
+      "awayId": 77055,
+      "date": "2026-08-29T18:15:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Poland - II Liga",
+        "slug": "poland-ii-liga"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 4,
+        "away": 1,
+        "periods": {
+          "ft": {
+            "home": 4,
+            "away": 1
+          },
+          "p1": {
+            "home": 1,
+            "away": 0
+          }
+        }
+      }
+    },
+    {
+      "id": 72043122,
+      "home": "Zaglebie Lubin",
+      "away": "Pogon Szczecin",
+      "homeId": 3113,
+      "awayId": 3117,
+      "date": "2026-08-29T18:15:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Poland - Ekstraklasa",
+        "slug": "poland-ekstraklasa"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 0,
+        "away": 0,
+        "periods": {
+          "ft": {
+            "home": 0,
+            "away": 0
+          },
+          "p1": {
+            "home": 0,
+            "away": 0
+          }
+        }
+      }
+    },
+    {
+      "id": 72723160,
+      "home": "Gaziantep FK",
+      "away": "Caykur Rizespor",
+      "homeId": 5138,
+      "awayId": 3064,
+      "date": "2026-08-29T18:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Turkiye - Super Lig",
+        "slug": "turkiye-super-lig"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 1,
+        "away": 2,
+        "periods": {
+          "ft": {
+            "home": 1,
+            "away": 2
+          },
+          "p1": {
+            "home": 0,
+            "away": 2
+          }
+        }
+      }
+    },
+    {
+      "id": 72723172,
+      "home": "Galatasaray Istanbul",
+      "away": "Goztepe Izmir",
+      "homeId": 3061,
+      "awayId": 3054,
+      "date": "2026-08-29T18:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Turkiye - Super Lig",
+        "slug": "turkiye-super-lig"
+      },
+      "status": "settled",
+      "scores": {
+        "home": 3,
+        "away": 2,
+        "periods": {
+          "ft": {
+            "home": 3,
+            "away": 2
+          },
+          "p1": {
+            "home": 1,
+            "away": 1
+          }
+        }
+      }
+    },
+    {
+      "id": 74036944,
+      "home": "UD Torre Del Mar",
+      "away": "Marbella FC",
+      "homeId": 824474,
+      "awayId": 24348,
+      "date": "2026-08-29T18:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "International Clubs - Club Friendly Games",
+        "slug": "international-clubs-club-friendly-games"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73247940,
+      "home": "Delaware State Hornets",
+      "away": "Lincoln (PA) Lions",
+      "homeId": 452357,
+      "awayId": 1046407,
+      "date": "2026-08-29T22:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "USA - NCAA, Women",
+        "slug": "usa-ncaa-women"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 68046714,
+      "home": "Gimhae",
+      "away": "Yongin City",
+      "homeId": 41260,
+      "awayId": 41266,
+      "date": "2026-08-30T10:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Republic of Korea - K-League 2",
+        "slug": "republic-of-korea-k-league-2"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 68309694,
+      "home": "Orebro SK U19",
+      "away": "Helsingborgs IF U19",
+      "homeId": 227870,
+      "awayId": 427853,
+      "date": "2026-08-30T11:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Sweden Amateur - U19 Allsvenskan",
+        "slug": "sweden-amateur-u19-allsvenskan"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73436452,
+      "home": "Amed Sportif Faaliyetler U19",
+      "away": "Trabzonspor U19",
+      "homeId": 312216,
+      "awayId": 305396,
+      "date": "2026-08-30T12:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Turkiye Amateur - U19 PAF Ligi",
+        "slug": "turkiye-amateur-u19-paf-ligi"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73873632,
+      "home": "Yuksekova SK",
+      "away": "Sile Bilgidoga",
+      "homeId": 1288265,
+      "awayId": 1185953,
+      "date": "2026-08-30T13:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Turkiye - Super Lig, Women",
+        "slug": "turkiye-super-lig-women"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73111294,
+      "home": "Stade Poitevin FC U19",
+      "away": "SC Beaucouze U19",
+      "homeId": 1274610,
+      "awayId": 1167697,
+      "date": "2026-08-30T13:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "France - U19 National, Group C",
+        "slug": "france-u19-national-group-c"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73111320,
+      "home": "Balma SC U19",
+      "away": "US Colomiers U19",
+      "homeId": 1274618,
+      "awayId": 399451,
+      "date": "2026-08-30T13:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "France - U19 National , Group D",
+        "slug": "france-u19-national-group-d"
+      },
+      "status": "pending",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 73111356,
+      "home": "GFC Ajaccio U19",
+      "away": "AS Monaco U19",
+      "homeId": 495686,
+      "awayId": 174568,
+      "date": "2026-08-30T13:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "France - U19 National , Group D",
+        "slug": "france-u19-national-group-d"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 74072102,
+      "home": "Forsempronese 1949 SD ARL",
+      "away": "Tropical Coriano",
+      "homeId": 1044789,
+      "awayId": 1273936,
+      "date": "2026-08-30T14:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Italy - Coppa Italia Serie D",
+        "slug": "italy-coppa-italia-serie-d"
+      },
+      "status": "cancelled",
+      "scores": {
+        "home": 0,
+        "away": 0
+      }
+    },
+    {
+      "id": 72409660,
+      "home": "FC Zorya Luhansk",
+      "away": "FC Kharkiv",
+      "homeId": 5987,
+      "awayId": 373230,
+      "date": "2026-08-30T15:00:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Ukraine - Premier League",
+        "slug": "ukraine-premier-league"
+      },
+      "status": "live",
+      "scores": {
+        "home": 0,
+        "away": 1,
+        "periods": {
+          "ft": {
+            "home": 0,
+            "away": 1
+          },
+          "p1": {
+            "home": 0,
+            "away": 1
+          }
+        }
+      },
+      "clock": {
+        "minute": 55,
+        "playedSeconds": 3354,
+        "running": false,
+        "statusDetail": "Interrupted"
+      }
+    },
+    {
+      "id": 67117908,
+      "home": "Deportivo Moron",
+      "away": "CA San Miguel",
+      "homeId": 93109,
+      "awayId": 373076,
+      "date": "2026-08-30T18:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Argentina - Primera B Nacional",
+        "slug": "argentina-primera-b-nacional"
+      },
+      "status": "live",
+      "scores": {
+        "home": 2,
+        "away": 1,
+        "periods": {
+          "p1": {
+            "home": 0,
+            "away": 0
+          }
+        }
+      },
+      "clock": {
+        "minute": 93,
+        "playedSeconds": 5619,
+        "period": 2,
+        "running": true,
+        "statusDetail": "2nd half",
+        "injuryTime": 5
+      }
+    },
+    {
+      "id": 67118632,
+      "home": "CA Patronato Parana",
+      "away": "Club Almagro",
+      "homeId": 43741,
+      "awayId": 4938,
+      "date": "2026-08-30T18:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Argentina - Primera B Nacional",
+        "slug": "argentina-primera-b-nacional"
+      },
+      "status": "live",
+      "scores": {
+        "home": 0,
+        "away": 1,
+        "periods": {
+          "p1": {
+            "home": 0,
+            "away": 0
+          }
+        }
+      }
+    },
+    {
+      "id": 72985908,
+      "home": "Planaltina EC DF",
+      "away": "Gremio Desportivo Valparaiso DF",
+      "homeId": 838024,
+      "awayId": 1055085,
+      "date": "2026-08-30T18:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Brazil - Candango, Serie B",
+        "slug": "brazil-candango-serie-b"
+      },
+      "status": "live",
+      "scores": {
+        "home": 1,
+        "away": 1,
+        "periods": {
+          "p1": {
+            "home": 1,
+            "away": 1
+          }
+        }
+      },
+      "clock": {
+        "minute": 95,
+        "playedSeconds": 5707,
+        "period": 2,
+        "running": true,
+        "statusDetail": "2nd half",
+        "injuryTime": 7
+      }
+    },
+    {
+      "id": 74023212,
+      "home": "ACF Fiorentina",
+      "away": "Ternana",
+      "homeId": 373090,
+      "awayId": 943869,
+      "date": "2026-08-30T18:30:00Z",
+      "sport": {
+        "name": "Football",
+        "slug": "football"
+      },
+      "league": {
+        "name": "Italy - Serie A Cup, Women, Group C",
+        "slug": "italy-serie-a-cup-women-group-c"
+      },
+      "status": "live",
+      "scores": {
+        "home": 3,
+        "away": 1,
+        "periods": {
+          "p1": {
+            "home": 2,
+            "away": 0
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bet
+      POSTGRES_PASSWORD: bet_dev_password
+      POSTGRES_DB: bet
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-role.sql:/docker-entrypoint-initdb.d/001-role.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bet -d bet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

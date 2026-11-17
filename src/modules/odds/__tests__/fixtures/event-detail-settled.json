@@ -1,0 +1,36 @@
+{
+  "capturedAt": "2026-08-30T20:32:24.197Z",
+  "path": "/events/72278456",
+  "status": 200,
+  "body": {
+    "id": 72278456,
+    "home": "Bravo Ljubljana",
+    "away": "Mura Murska Sobota",
+    "homeId": 362744,
+    "awayId": 2410,
+    "date": "2026-08-29T18:15:00Z",
+    "sport": {
+      "name": "Football",
+      "slug": "football"
+    },
+    "league": {
+      "name": "Slovenia - PrvaLiga",
+      "slug": "slovenia-prvaliga"
+    },
+    "status": "settled",
+    "scores": {
+      "home": 2,
+      "away": 0,
+      "periods": {
+        "ft": {
+          "home": 2,
+          "away": 0
+        },
+        "p1": {
+          "home": 1,
+          "away": 0
+        }
+      }
+    }
+  }
+}
