@@ -24,7 +24,9 @@ export const SYNC_SPORTS = [
   "esports",
 ] as const;
 
-const BOOKMAKERS = ["Bet365", "1xbet"];
+const BOOKMAKERS = process.env.ODDS_BOOKMAKERS
+  ? process.env.ODDS_BOOKMAKERS.split(",").map((b) => b.trim()).filter(Boolean)
+  : ["1xbet"];
 
 function syncService(sport = "football"): OddsSyncService {
   const apiKey = process.env.ODDS_API_KEY;
