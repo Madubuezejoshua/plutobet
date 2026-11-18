@@ -979,7 +979,7 @@ html:not(.dark) .sb-brand__grad {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle at 82% 45%, rgba(139, 44, 198, 0.42) 0%, rgba(56, 18, 102, 0.14) 48%, transparent 72%);
+  background: radial-gradient(circle at 82% 45%, rgba(139, 44, 198, 0.18) 0%, transparent 65%);
 }
 
 .sb-hero__player {
@@ -1019,10 +1019,9 @@ html:not(.dark) .sb-brand__grad {
 
 .sb-hero__crestbg {
   object-fit: contain;
-  opacity: 0.22;
-  filter: drop-shadow(0 6px 20px rgba(4, 9, 26, 0.45));
-  max-width: 140px;
-  max-height: 140px;
+  opacity: 0.55;
+  max-width: 150px;
+  max-height: 150px;
   width: 100%;
   height: auto;
 }
