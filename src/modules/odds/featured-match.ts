@@ -636,8 +636,9 @@ interface SportsDbPlayer {
   strTeam?: string | null;
   strSport?: string | null;
   strPosition?: string | null;
-  strRender?: string | null;
+  strThumb?: string | null;
   strCutout?: string | null;
+  strRender?: string | null;
 }
 
 function positionWeight(position: string | null | undefined): number {
@@ -664,7 +665,7 @@ export function pickMatchingStarPlayer(
     if (!isTeamNameMatch(player.strTeam, teamName)) {
       continue;
     }
-    const url = player.strRender?.trim() || player.strCutout?.trim() || null;
+    const url = player.strThumb?.trim() || player.strCutout?.trim() || player.strRender?.trim() || null;
     if (url) {
       return { url, name: player.strPlayer?.trim() || null };
     }
@@ -681,11 +682,11 @@ function pickBestPlayer(
       const starLower = star.toLowerCase();
       const hit = players.find((p) => {
         const name = (p.strPlayer ?? "").toLowerCase();
-        const url = p.strRender?.trim() || p.strCutout?.trim();
+        const url = p.strThumb?.trim() || p.strCutout?.trim() || p.strRender?.trim();
         return Boolean(url) && (name === starLower || name.includes(starLower));
       });
       if (hit) {
-        const url = hit.strRender?.trim() || hit.strCutout?.trim() || null;
+        const url = hit.strThumb?.trim() || hit.strCutout?.trim() || hit.strRender?.trim() || null;
         if (url) return { url, name: hit.strPlayer?.trim() || null };
       }
     }
@@ -697,12 +698,13 @@ function pickBestPlayer(
     const posScore = positionWeight(player.strPosition);
     if (posScore < 0) continue;
 
-    const render = player.strRender?.trim() || null;
+    const thumb = player.strThumb?.trim() || null;
     const cutout = player.strCutout?.trim() || null;
-    const url = render ?? cutout;
+    const render = player.strRender?.trim() || null;
+    const url = thumb ?? cutout ?? render;
     if (!url) continue;
 
-    const imageScore = render ? 100 : 40;
+    const imageScore = thumb ? 120 : cutout ? 80 : 40;
     const total = imageScore + posScore;
 
     if (!best || total > best.score) {
@@ -770,12 +772,12 @@ export async function resolveTeamVisual(teamName: string, sport: string): Promis
     const squadStar = squadPlayers.find((p) => {
       const n = (p.strPlayer ?? "").toLowerCase();
       return (
-        Boolean(p.strRender?.trim() || p.strCutout?.trim()) &&
+        Boolean(p.strThumb?.trim() || p.strCutout?.trim() || p.strRender?.trim()) &&
         starNames.some((s) => n === s.toLowerCase() || n.includes(s.toLowerCase()))
       );
     });
     if (squadStar) {
-      const url = squadStar.strRender?.trim() || squadStar.strCutout?.trim() || null;
+      const url = squadStar.strThumb?.trim() || squadStar.strCutout?.trim() || squadStar.strRender?.trim() || null;
       if (url) player = { url, name: squadStar.strPlayer?.trim() || null };
     }
   }
