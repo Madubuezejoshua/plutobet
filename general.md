@@ -141,6 +141,25 @@ repository state:
      touch targets at `375x812`, drawer open/close, `.sb-mobileleagues`
      responsive visibility (`<= 1420px`), mobile betslip drawer quick-stake +
      `.sb-slip__close`, and light/dark theme toggle.
+7. Restored minimized player cutout visuals inside `HeroMatchBanner` across
+   mobile and narrow tablet viewports (`src/styles/sportsbook.css`,
+   `src/components/sportsbook/hero-match-banner.tsx`):
+   - Removed `display: none` from `@container (max-width: 520px)` and
+     `@media (max-width: 720px)` on `.sb-hero__player` so left/right player
+     cutouts remain visible on phones instead of blank side space.
+   - Added compact upper-stage mobile sizing (`112px × 144px` at `<= 600px`,
+     `96px × 128px` at `<= 380px`, `136px` width at `<= 720px`), stronger
+     inward fade masks, text-shadow legibility on `.sb-hero__league`/`.sb-hero__team`,
+     and responsive `<Image sizes="(max-width: 600px) 116px, 220px" />`.
+   - `VERIFIED_IN_REAL_BROWSER` (2026-11-18, headless Chromium against local
+     disposable Postgres + Redis): verified both `.sb-hero__player--left` and
+     `.sb-hero__player--right` render with `display: block`, `imgComplete: true`,
+     `imgNaturalWidth > 0`, and `0` horizontal overflow across `320x568`
+     (`96×128`), `375x812` (`96×128`), `390x844` (`112×144`), `430x932`
+     (`112×144`), `768x1024` (`224×242`), and `1280x800` (`224×252`). Also
+     verified with `tsc --noEmit`, `eslint .`, Next.js production build,
+     `npm run ci:secrets` (506 files, clean), and `npm run ci:docs` (13 docs,
+     15 rules).
 
 The developer-completion and sportsbook verification pass described later in
 this file is prior work, not the current assignment. Its evidence is retained

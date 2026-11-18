@@ -1034,8 +1034,8 @@ html:not(.dark) .sb-brand__grad {
 
 @container (max-width: 660px) {
   .sb-hero__player {
-    width: 152px;
-    opacity: 0.55;
+    width: 144px;
+    opacity: 0.74;
   }
   .sb-hero__center {
     padding-top: 44px;
@@ -1044,7 +1044,8 @@ html:not(.dark) .sb-brand__grad {
 
 @container (max-width: 520px) {
   .sb-hero__player {
-    display: none;
+    width: 112px;
+    opacity: 0.82;
   }
   .sb-hero {
     min-height: 206px;
@@ -1210,13 +1211,14 @@ html:not(.dark) .sb-brand__grad {
 
 @media (max-width: 720px) {
   .sb-hero__player {
-    display: none;
+    width: 136px;
+    opacity: 0.8;
   }
   .sb-hero {
-    min-height: 206px;
+    min-height: 214px;
   }
   .sb-hero__center {
-    padding-top: 44px;
+    padding-top: 42px;
   }
 }
 
@@ -1224,13 +1226,47 @@ html:not(.dark) .sb-brand__grad {
   .sb-hero {
     min-height: 0;
   }
+  .sb-hero__player {
+    top: 26px;
+    bottom: auto;
+    height: 144px;
+    width: 112px;
+    opacity: 0.86;
+  }
+  .sb-hero__player--left {
+    left: -6px;
+  }
+  .sb-hero__player--right {
+    right: -6px;
+    width: 112px;
+  }
+  .sb-hero__playerimg {
+    padding-top: 0;
+    object-position: bottom center;
+  }
+  .sb-hero__player--left .sb-hero__playerimg {
+    mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.96) 58%, rgba(0, 0, 0, 0) 100%);
+    -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0.96) 58%, rgba(0, 0, 0, 0) 100%);
+  }
+  .sb-hero__player--right .sb-hero__playerimg {
+    mask-image: linear-gradient(to left, rgba(0, 0, 0, 0.96) 58%, rgba(0, 0, 0, 0) 100%);
+    -webkit-mask-image: linear-gradient(to left, rgba(0, 0, 0, 0.96) 58%, rgba(0, 0, 0, 0) 100%);
+  }
+  .sb-hero__playerfade {
+    height: 36px;
+    background: linear-gradient(to top, rgba(7, 14, 42, 0.95), transparent);
+  }
   .sb-hero__badge {
     top: 10px;
     left: 12px;
   }
   .sb-hero__center {
-    padding: 42px 12px 14px;
+    padding: 40px 12px 14px;
     max-width: none;
+  }
+  .sb-hero__league,
+  .sb-hero__team {
+    text-shadow: 0 2px 10px rgba(4, 9, 26, 0.92), 0 1px 3px rgba(4, 9, 26, 0.95);
   }
   .sb-hero__team {
     font-size: clamp(18px, 5vw, 22px);
@@ -1252,6 +1288,22 @@ html:not(.dark) .sb-brand__grad {
     justify-content: center;
     width: 100%;
     height: var(--sb-h-touch);
+  }
+}
+
+@media (max-width: 380px) {
+  .sb-hero__player {
+    top: 28px;
+    height: 128px;
+    width: 96px;
+    opacity: 0.78;
+  }
+  .sb-hero__player--left {
+    left: -8px;
+  }
+  .sb-hero__player--right {
+    right: -8px;
+    width: 96px;
   }
 }
 

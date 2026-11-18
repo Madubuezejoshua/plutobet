@@ -44,7 +44,7 @@ function HeroWingVisual({
           src={playerUrl}
           alt=""
           fill
-          sizes="220px"
+          sizes="(max-width: 600px) 116px, 220px"
           priority
           referrerPolicy="no-referrer"
           className="sb-hero__playerimg"
