@@ -15,8 +15,27 @@ for (const name of ["NEXTAUTH_URL", "NEXTAUTH_URL_INTERNAL"] as const) {
   }
 }
 
+const devOriginHosts = new Set<string>([
+  "**.run.app",
+  "127.0.0.1",
+  "localhost",
+  "**.localhost",
+]);
+
+for (const name of ["NEXTAUTH_URL", "NEXTAUTH_URL_INTERNAL"] as const) {
+  const raw = process.env[name];
+  if (!raw) continue;
+  try {
+    const hostname = new URL(raw).hostname.toLowerCase();
+    if (hostname) devOriginHosts.add(hostname);
+  } catch {
+    // Ignore invalid URL env values; auth validation handles them at runtime.
+  }
+}
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  allowedDevOrigins: [...devOriginHosts],
   images: {
     remotePatterns: [
       {

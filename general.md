@@ -160,6 +160,21 @@ repository state:
      verified with `tsc --noEmit`, `eslint .`, Next.js production build,
      `npm run ci:secrets` (506 files, clean), and `npm run ci:docs` (13 docs,
      15 rules).
+8. Added `allowedDevOrigins` in `next.config.ts` (`**.run.app`, `127.0.0.1`,
+   `localhost`, `**.localhost`, plus parsed `NEXTAUTH_URL` /
+   `NEXTAUTH_URL_INTERNAL` hostnames when configured) so Next.js dev server
+   does not block `/_next/static/*` chunk requests coming from the AI Studio
+   Cloud Run preview origins (`ais-dev-*.europe-west3.run.app`,
+   `ais-pre-*.europe-west3.run.app`) or `127.0.0.1`.
+   - `VERIFIED_END_TO_END` (2026-11-18, live dev server on port 3000):
+     confirmed `/_next/static/chunks/...js` returns HTTP `200` with
+     `Origin: https://ais-dev-5m6yv22v3xftxqsqgmf7hk-587644012021.europe-west3.run.app`,
+     with `sec-fetch-mode: no-cors` + `sec-fetch-site: cross-site` + Cloud Run
+     `Referer`, and with `Origin: http://127.0.0.1:3000`.
+   - Note on the reported `TypeError: Cannot set property fetch of #<Window> which has only a getter`:
+     verified via repository search that `src/` never assigns `window.fetch`;
+     that stack trace originates inside a user-installed Chrome extension
+     (`chrome-extension://pphgdbgldlmicfdkhondlafkiomnelnk/libs/requests.js`).
 
 The developer-completion and sportsbook verification pass described later in
 this file is prior work, not the current assignment. Its evidence is retained
