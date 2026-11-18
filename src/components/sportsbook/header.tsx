@@ -95,22 +95,23 @@ export function SportsbookHeader({
   const showSports = sports.length > 0 && !WITHOUT_SPORTS.includes(pathname);
 
   return (
-    <header className="sb-header">
-      <div className="sb-header__bar">
-        <button
-          type="button"
-          className="sb-header__menu"
-          onClick={onOpenMobileMenu}
-          aria-label="Open navigation menu"
-        >
-          <Menu size={18} aria-hidden="true" />
-        </button>
+    <>
+      <header className="sb-header">
+        <div className="sb-header__bar">
+          <button
+            type="button"
+            className="sb-header__menu"
+            onClick={onOpenMobileMenu}
+            aria-label="Open navigation menu"
+          >
+            <Menu size={18} aria-hidden="true" />
+          </button>
 
-        <Link href="/" className="sb-header__brand-mobile" aria-label="PlutoBet home">
-          <span className="sb-brand__word" style={{ fontSize: 19 }}>
-            Pluto<span className="sb-brand__grad">Bet</span>
-          </span>
-        </Link>
+          <Link href="/" className="sb-header__brand-mobile" aria-label="PlutoBet home">
+            <span className="sb-brand__word">
+              Pluto<span className="sb-brand__grad">Bet</span>
+            </span>
+          </Link>
 
         <nav className="sb-header__nav" aria-label="Main">
           {PRIMARY.map((item) => (
@@ -217,7 +218,6 @@ export function SportsbookHeader({
               <Link
                 href="/deposit"
                 className="sb-btn sb-btn--primary sb-header__deposit"
-                style={{ height: 36 }}
                 aria-label="Deposit"
               >
                 <CircleDollarSign size={15} aria-hidden="true" />
@@ -237,33 +237,34 @@ export function SportsbookHeader({
             </>
           ) : (
             <>
-              <Link href="/signin" className="sb-btn sb-btn--dark" style={{ height: 36 }}>
-                <LogIn size={15} aria-hidden="true" /> Sign in
+              <Link href="/signin" className="sb-btn sb-btn--dark sb-header__signin">
+                <LogIn size={15} aria-hidden="true" className="sb-header__authicon" /> Sign in
               </Link>
-              <Link href="/register" className="sb-btn sb-btn--primary" style={{ height: 36 }}>
+              <Link href="/register" className="sb-btn sb-btn--primary sb-header__register">
                 Register
               </Link>
             </>
           )}
         </div>
       </div>
-
-      {showSports ? (
-        <div className="sb-subnav">
-          <nav className="sb-subnav__inner" aria-label="Sports">
-            {sports.map((sport) => (
-              <Link
-                key={sport.key}
-                href={sport.href}
-                className="sb-sporttab"
-                aria-current={activeSport === sport.key ? "page" : undefined}
-              >
-                {sport.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      ) : null}
     </header>
+
+    {showSports ? (
+      <div className="sb-subnav">
+        <nav className="sb-subnav__inner" aria-label="Sports">
+          {sports.map((sport) => (
+            <Link
+              key={sport.key}
+              href={sport.href}
+              className="sb-sporttab"
+              aria-current={activeSport === sport.key ? "page" : undefined}
+            >
+              {sport.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
+    ) : null}
+  </>
   );
 }

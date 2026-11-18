@@ -80,26 +80,28 @@ export default async function RewardsPage() {
 
       <section className="sb-panel" style={{ marginBottom: "var(--sb-3)" }}>
         <div className="sb-panel__head"><h2 className="sb-panel__title">Tiers</h2></div>
-        <table className="sb-table">
-          <tbody>
-            {TIERS.map((tier) => (
-              <tr key={tier.key}>
-                <td>
-                  {tier.name}
-                  {tier.key === standing.tier.key ? (
-                    <>
-                      {" "}
-                      <span className="sb-pill sb-pill--won">You</span>
-                    </>
-                  ) : null}
-                </td>
-                <td className="sb-table__num sb-muted sb-small">
-                  {tier.threshold.toString()} lifetime points
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="sb-tablewrap">
+          <table className="sb-table">
+            <tbody>
+              {TIERS.map((tier) => (
+                <tr key={tier.key}>
+                  <td>
+                    {tier.name}
+                    {tier.key === standing.tier.key ? (
+                      <>
+                        {" "}
+                        <span className="sb-pill sb-pill--won">You</span>
+                      </>
+                    ) : null}
+                  </td>
+                  <td className="sb-table__num sb-muted sb-small">
+                    {tier.threshold.toString()} lifetime points
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <p className="sb-xs sb-muted" style={{ padding: "var(--sb-3)", margin: 0 }}>
           One point per ₦1 staked. Points earned are never taken away by redeeming a reward, so
           spending them cannot drop you a tier.

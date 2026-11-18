@@ -72,10 +72,12 @@ export function BetslipPanel({
   signedIn,
   balanceMinor,
   compact = false,
+  onClose,
 }: {
   signedIn: boolean;
   balanceMinor?: string | null;
   compact?: boolean;
+  onClose?: () => void;
 }) {
   const slip = useBetslip();
   const [tab, setTab] = useState<"slip" | "mine">("slip");
@@ -232,6 +234,16 @@ export function BetslipPanel({
         >
           My Bets
         </button>
+        {onClose ? (
+          <button
+            type="button"
+            className="sb-slip__close"
+            onClick={onClose}
+            aria-label="Close betslip"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
 
       {tab === "mine" ? (

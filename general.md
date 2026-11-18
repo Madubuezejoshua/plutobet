@@ -5,7 +5,7 @@ Every other document in the repository is either a runbook, an owner checklist,
 or historical evidence of one pass. Where any of them disagrees with this file,
 this file is right.
 
-**Last updated:** 2026-11-17
+**Last updated:** 2026-11-18
 **Branch described:** `main`, which now carries the completed gap-closure pass
 **Merged to `main`:** **yes**, in two steps and with no history rewritten. The
 owner merged PR #1 on `plutobet-ai/plutobet_ai`, and the three commits made
@@ -97,6 +97,50 @@ repository state:
      `960x800`, mobile `390x844` (bottom betslip sheet + scrim close), an
      embedded `<iframe>`, and simulated `SecurityError` storage blocking with
      zero uncaught `pageerror` exceptions.
+6. Completed mobile-first responsive overhaul across the `(site)` sportsbook
+   surface while keeping desktop Midnight Stadium layouts and `/admin` rules in
+   `src/app/globals.css` isolated:
+   - `src/styles/tokens.css`, `src/components/sportsbook/header.tsx`, and
+     `src/styles/sportsbook.css`: decoupled `.sb-subnav` outside sticky
+     `<header className="sb-header">` so `.sb-subnav` stays sticky only at
+     `@media (min-width: 901px)` (reducing mobile sticky chrome to `107px`,
+     `11.5%–13.2%` across `375x812`, `390x844`, `430x932`, and `768x1024`),
+     and compressed the mobile topbar (`<= 480px`, `<= 420px`, `<= 380px`) with
+     hidden auth button icons on narrow viewports and capped `.sb-walletchip`
+     truncation so `320px` fits both signed-out and signed-in without overflow.
+   - `src/components/sportsbook/board-page.tsx`, `src/styles/sportsbook.css`:
+     added `.sb-mobileleagues` horizontal competition filter strip below
+     `DateStrip` (shown when `.sb-railcol` hides at `<= 1420px`), converted
+     `.sb-board` and `.sb-board--3` match rows below `640px` to a 2-tier
+     stacked grid (tier 1: full-width fixture/teams/time/star; tier 2: `44px`
+     `1`, `X`, `2`, and `+N` tiles), stacked mobile hero controls/CTA at `44px`,
+     moved `@media` overrides below base hero/board/auth declarations so CSS
+     cascade applies cleanly, hid `.sb-auth__aside` below `860px` so auth
+     forms appear immediately above the fold, enlarged mobile touch targets
+     (drawer close, chip links, quick stakes, betslip remove/tab controls),
+     and added a close button (`onClose` / `.sb-slip__close`) in
+     `src/components/sportsbook/betslip-panel.tsx` and
+     `src/components/sportsbook/mobile-bar.tsx`.
+   - `src/components/sportsbook/footer.tsx`, `src/styles/surfaces.css`,
+     `src/app/(site)/account/page.tsx`, `src/app/(site)/livescore/livescore-board.tsx`,
+     and `src/app/(site)/rewards/page.tsx`: replaced inline footer styles with
+     responsive `.sb-footer*` grid rules, wrapped remaining `.sb-table`
+     elements in `.sb-tablewrap`, added `.sb-table__val` wrapping, and bounded
+     card/stat/tile grid minimum track widths via `min(..., 100%)`.
+   - `VERIFIED_IN_REAL_BROWSER` (2026-11-18, headless Chromium against local
+     disposable Postgres + Redis): verified `0` horizontal overflows (`scrollWidth <= innerWidth`)
+     and `0` uncaught `pageerror` exceptions across all `7` viewports
+     (`320x568`, `375x812`, `390x844`, `430x932`, `768x1024`, `1280x800`,
+     `1440x900`) for signed-out routes (`/`, `/sports`, `/live`, `/livescore`,
+     `/results`, `/jackpot`, `/promotions`, `/pluto`, `/signin`, `/register`,
+     `/forgot-password`) and signed-in routes (`/`, `/sports`, `/wallet`,
+     `/bets`, `/account`, `/account/security`, `/account/preferences`,
+     `/deposit`, `/withdraw`, `/kyc`, `/rewards`, `/referrals`, `/responsible`,
+     `/sports/event/[id]`); confirmed `formTop: 67px` (`asideDisplay: none`)
+     on `/signin`, `teamsLinkWidth: 247px` and `44px` hero/board odds & CTA
+     touch targets at `375x812`, drawer open/close, `.sb-mobileleagues`
+     responsive visibility (`<= 1420px`), mobile betslip drawer quick-stake +
+     `.sb-slip__close`, and light/dark theme toggle.
 
 The developer-completion and sportsbook verification pass described later in
 this file is prior work, not the current assignment. Its evidence is retained

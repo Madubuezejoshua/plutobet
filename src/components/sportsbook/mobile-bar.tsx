@@ -111,8 +111,13 @@ export function MobileBar({
             }}
           >
             <div className="sb-sheet__grab" aria-hidden="true" />
-            <div style={{ overflowY: "auto" }}>
-              <BetslipPanel signedIn={signedIn} balanceMinor={balanceMinor} compact />
+            <div style={{ overflowY: "auto", flex: "1 1 auto" }}>
+              <BetslipPanel
+                signedIn={signedIn}
+                balanceMinor={balanceMinor}
+                compact
+                onClose={() => slip.setOpen(false)}
+              />
             </div>
           </div>
         </>

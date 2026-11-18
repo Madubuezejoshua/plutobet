@@ -45,40 +45,15 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
 
 export function SportsbookFooter() {
   return (
-    <footer
-      style={{
-        background: "var(--sb-shell)",
-        color: "var(--sb-shell-muted)",
-        borderTop: "1px solid var(--sb-shell-line)",
-        marginTop: "var(--sb-6)",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "var(--sb-max)", margin: "0 auto",
-          padding: "var(--sb-6) var(--sb-3)",
-          display: "grid", gap: "var(--sb-6)",
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-        }}
-      >
+    <footer className="sb-footer">
+      <div className="sb-footer__grid">
         {COLUMNS.map((column) => (
           <div key={column.title}>
-            <h2
-              style={{
-                fontSize: "var(--sb-t-xs)", fontWeight: 700, letterSpacing: "0.06em",
-                textTransform: "uppercase", color: "var(--sb-shell-ink)",
-                margin: "0 0 var(--sb-2)",
-              }}
-            >
-              {column.title}
-            </h2>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+            <h2 className="sb-footer__heading">{column.title}</h2>
+            <ul className="sb-footer__list">
               {column.links.map((link) => (
                 <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    style={{ color: "inherit", textDecoration: "none", fontSize: "var(--sb-t-base)" }}
-                  >
+                  <Link href={link.href} className="sb-footer__link">
                     {link.label}
                   </Link>
                 </li>
@@ -88,37 +63,16 @@ export function SportsbookFooter() {
         ))}
       </div>
 
-      <div
-        style={{
-          borderTop: "1px solid var(--sb-shell-line)",
-          padding: "var(--sb-4) var(--sb-3)",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "var(--sb-max)", margin: "0 auto",
-            display: "flex", flexWrap: "wrap", alignItems: "center", gap: "var(--sb-3)",
-            fontSize: "var(--sb-t-sm)",
-          }}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 30, height: 30, borderRadius: "50%",
-              border: "2px solid var(--sb-shell-muted)", fontWeight: 800, fontSize: 11,
-              color: "var(--sb-shell-ink)", flex: "none",
-            }}
-          >
-            18+
-          </span>
-          <p style={{ margin: 0, maxWidth: 620 }}>
+      <div className="sb-footer__bar">
+        <div className="sb-footer__barinner">
+          <span aria-hidden="true" className="sb-footer__age">18+</span>
+          <p className="sb-footer__note">
             You must be 18 or older to open an account or place a bet. Betting can be addictive.
-            Set a limit before you play — <Link href="/responsible" style={{ color: "var(--sb-brand-text)" }}>
+            Set a limit before you play — <Link href="/responsible" className="sb-footer__cta">
               take control of your betting
             </Link>.
           </p>
-          <span style={{ marginLeft: "auto", fontSize: "var(--sb-t-xs)" }}>
+          <span className="sb-footer__copy">
             © {new Date().getFullYear()} PlutoBet
           </span>
         </div>

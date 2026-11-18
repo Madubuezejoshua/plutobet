@@ -126,6 +126,42 @@ export async function SportsbookBoardPage({
 
       <DateStrip active={when === "today" ? "today" : "all"} sport={sport} league={league} query={q} />
 
+      {railLeagues.length > 0 ? (
+        <div className="sb-panel sb-mobileleagues" style={{ marginBottom: "var(--sb-3)" }}>
+          <nav className="sb-chips" aria-label="Filter by competition">
+            <Link
+              href={
+                sport && sport !== "football"
+                  ? `/sports?sport=${encodeURIComponent(sport)}`
+                  : "/sports"
+              }
+              className="sb-chip"
+              aria-current={!league ? "true" : undefined}
+            >
+              All leagues
+              <span className="sb-railitem__count">{fixtures.length}</span>
+            </Link>
+            {railLeagues.map((entry) => {
+              const params = new URLSearchParams();
+              if (sport && sport !== "football") params.set("sport", sport);
+              params.set("league", entry.league);
+              if (when === "today") params.set("when", "today");
+              return (
+                <Link
+                  key={entry.league}
+                  href={`/sports?${params.toString()}`}
+                  className="sb-chip"
+                  aria-current={league === entry.league ? "true" : undefined}
+                >
+                  <span>{entry.name}</span>
+                  <span className="sb-railitem__count">{entry.count}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      ) : null}
+
       <section className="sb-panel">
         <div className="sb-panel__head">
           <h1 className="sb-panel__title">{title}</h1>

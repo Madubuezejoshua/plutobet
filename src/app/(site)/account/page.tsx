@@ -71,77 +71,79 @@ export default async function AccountPage() {
 
       <section className="sb-panel" style={{ marginBottom: "var(--sb-3)" }}>
         <div className="sb-panel__head"><h2 className="sb-panel__title">Details</h2></div>
-        <table className="sb-table">
-          <tbody>
-            <tr>
-              <td className="sb-muted">Email</td>
-              <td className="sb-table__num">
-                {profile.email}{" "}
-                <span className={profile.emailVerified ? "sb-pill sb-pill--won" : "sb-pill sb-pill--void"}>
-                  {profile.emailVerified ? "Verified" : "Unverified"}
-                </span>
-                <VerifyEmail verified={profile.emailVerified} />
-              </td>
-            </tr>
-            <tr>
-              <td className="sb-muted">Phone</td>
-              <td className="sb-table__num">
-                {profile.phoneNumber ? maskPhone(profile.phoneNumber) : "Not added"}{" "}
-                {profile.phoneNumber ? (
-                  <span className={profile.phoneVerified ? "sb-pill sb-pill--won" : "sb-pill sb-pill--void"}>
-                    {profile.phoneVerified ? "Verified" : "Unverified"}
-                  </span>
-                ) : null}
-              </td>
-            </tr>
-            {profile.username ? (
+        <div className="sb-tablewrap">
+          <table className="sb-table">
+            <tbody>
               <tr>
-                <td className="sb-muted">Username</td>
-                <td className="sb-table__num">{profile.username}</td>
+                <td className="sb-muted">Email</td>
+                <td className="sb-table__num sb-table__val">
+                  {profile.email}{" "}
+                  <span className={profile.emailVerified ? "sb-pill sb-pill--won" : "sb-pill sb-pill--void"}>
+                    {profile.emailVerified ? "Verified" : "Unverified"}
+                  </span>
+                  <VerifyEmail verified={profile.emailVerified} />
+                </td>
               </tr>
-            ) : null}
-            <tr>
-              <td className="sb-muted">Date of birth</td>
-              <td className="sb-table__num">
-                {profile.dateOfBirth ? (
-                  new Date(profile.dateOfBirth).toLocaleDateString("en-NG", {
+              <tr>
+                <td className="sb-muted">Phone</td>
+                <td className="sb-table__num sb-table__val">
+                  {profile.phoneNumber ? maskPhone(profile.phoneNumber) : "Not added"}{" "}
+                  {profile.phoneNumber ? (
+                    <span className={profile.phoneVerified ? "sb-pill sb-pill--won" : "sb-pill sb-pill--void"}>
+                      {profile.phoneVerified ? "Verified" : "Unverified"}
+                    </span>
+                  ) : null}
+                </td>
+              </tr>
+              {profile.username ? (
+                <tr>
+                  <td className="sb-muted">Username</td>
+                  <td className="sb-table__num sb-table__val">{profile.username}</td>
+                </tr>
+              ) : null}
+              <tr>
+                <td className="sb-muted">Date of birth</td>
+                <td className="sb-table__num sb-table__val">
+                  {profile.dateOfBirth ? (
+                    new Date(profile.dateOfBirth).toLocaleDateString("en-NG", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })
+                  ) : (
+                    <span className="sb-pill sb-pill--void">Not on file</span>
+                  )}
+                </td>
+              </tr>
+              <tr>
+                <td className="sb-muted">Verification</td>
+                <td className="sb-table__num sb-table__val">
+                  <span className={profile.kycLevel >= 1 ? "sb-pill sb-pill--won" : "sb-pill sb-pill--void"}>
+                    {TIER_LABEL[profile.kycLevel] ?? `Tier ${profile.kycLevel}`}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td className="sb-muted">Status</td>
+                <td className="sb-table__num sb-table__val">
+                  <span className={profile.status === "ACTIVE" ? "sb-pill sb-pill--won" : "sb-pill sb-pill--lost"}>
+                    {profile.status.replace(/_/g, " ")}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td className="sb-muted">Member since</td>
+                <td className="sb-table__num sb-table__val">
+                  {profile.createdAt.toLocaleDateString("en-NG", {
                     day: "numeric",
                     month: "long",
                     year: "numeric",
-                  })
-                ) : (
-                  <span className="sb-pill sb-pill--void">Not on file</span>
-                )}
-              </td>
-            </tr>
-            <tr>
-              <td className="sb-muted">Verification</td>
-              <td className="sb-table__num">
-                <span className={profile.kycLevel >= 1 ? "sb-pill sb-pill--won" : "sb-pill sb-pill--void"}>
-                  {TIER_LABEL[profile.kycLevel] ?? `Tier ${profile.kycLevel}`}
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td className="sb-muted">Status</td>
-              <td className="sb-table__num">
-                <span className={profile.status === "ACTIVE" ? "sb-pill sb-pill--won" : "sb-pill sb-pill--lost"}>
-                  {profile.status.replace(/_/g, " ")}
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td className="sb-muted">Member since</td>
-              <td className="sb-table__num">
-                {profile.createdAt.toLocaleDateString("en-NG", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                  })}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {!profile.dateOfBirth ? (

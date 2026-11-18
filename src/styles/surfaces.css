@@ -73,7 +73,7 @@
 .sb-stats {
   display: grid;
   gap: var(--sb-2);
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(144px, 100%), 1fr));
   margin-bottom: var(--sb-3);
 }
 
@@ -149,6 +149,19 @@
   white-space: nowrap;
 }
 
+.sb-table__val {
+  white-space: normal;
+  word-break: break-word;
+}
+
+@media (max-width: 600px) {
+  .sb-table th,
+  .sb-table td {
+    padding: 9px var(--sb-2);
+    font-size: var(--sb-t-base);
+  }
+}
+
 /* ==========================================================================
    TICKETS
    ========================================================================== */
@@ -180,8 +193,15 @@
   display: flex;
   gap: var(--sb-2);
   align-items: baseline;
+  flex-wrap: wrap;
   padding: 7px 0;
   border-top: 1px dashed var(--sb-border);
+}
+
+@media (max-width: 600px) {
+  .sb-ticket {
+    padding: var(--sb-3);
+  }
 }
 
 .sb-ticket__leg:first-of-type {
@@ -258,7 +278,7 @@
 .sb-tiles {
   display: grid;
   gap: var(--sb-2);
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 
 .sb-tile {
@@ -340,7 +360,7 @@
 .sb-cards {
   display: grid;
   gap: var(--sb-2);
-  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(156px, 100%), 1fr));
 }
 
 .sb-card {
@@ -624,8 +644,9 @@
 }
 
 @media (max-width: 600px) {
-  .sb-page { padding: var(--sb-4) var(--sb-3) var(--sb-6); }
+  .sb-page { padding: var(--sb-3) var(--sb-2) var(--sb-6); }
   .sb-pagehead h1 { font-size: 20px; }
+  .sb-pagehead__aside { margin-left: 0; width: 100%; }
 }
 
 /* ==========================================================================
@@ -723,7 +744,8 @@
 .sb-bets-filter__reset {
   border: 0;
   background: none;
-  padding: 2px 4px;
+  min-height: 40px;
+  padding: 4px 8px;
   font: inherit;
   font-size: var(--sb-t-sm);
   font-weight: 700;

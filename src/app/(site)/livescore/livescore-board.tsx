@@ -63,54 +63,58 @@ export function LiveScoreBoard({ snapshot: initial }: { snapshot: LiveSnapshot }
       {live.length > 0 ? (
         <section className="sb-panel" style={{ marginBottom: "var(--sb-3)" }}>
           <div className="sb-panel__head"><h2 className="sb-panel__title">In play</h2></div>
-          <table className="sb-table">
-            <tbody>
-              {live.map((event) => (
-                <tr key={event.id}>
-                  <td>
-                    <span className="sb-live">
-                      <span className="sb-live__dot" aria-hidden="true" />
-                      Live
-                    </span>{" "}
-                    {event.fixture}
-                  </td>
-                  <td className="sb-table__num">
-                    {event.homeScore === null || event.awayScore === null ? (
-                      <span className="sb-muted">—</span>
-                    ) : (
-                      <strong>
-                        {event.homeScore} - {event.awayScore}
-                      </strong>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="sb-tablewrap">
+            <table className="sb-table">
+              <tbody>
+                {live.map((event) => (
+                  <tr key={event.id}>
+                    <td>
+                      <span className="sb-live">
+                        <span className="sb-live__dot" aria-hidden="true" />
+                        Live
+                      </span>{" "}
+                      {event.fixture}
+                    </td>
+                    <td className="sb-table__num">
+                      {event.homeScore === null || event.awayScore === null ? (
+                        <span className="sb-muted">—</span>
+                      ) : (
+                        <strong>
+                          {event.homeScore} - {event.awayScore}
+                        </strong>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
 
       {upcoming.length > 0 ? (
         <section className="sb-panel">
           <div className="sb-panel__head"><h2 className="sb-panel__title">Upcoming</h2></div>
-          <table className="sb-table">
-            <tbody>
-              {upcoming.map((event) => (
-                <tr key={event.id}>
-                  <td>{event.fixture}</td>
-                  <td className="sb-table__num sb-muted sb-small">
-                    {new Date(event.startsAt).toLocaleString("en-NG", {
-                      timeZone: "Africa/Lagos",
-                      day: "2-digit",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="sb-tablewrap">
+            <table className="sb-table">
+              <tbody>
+                {upcoming.map((event) => (
+                  <tr key={event.id}>
+                    <td>{event.fixture}</td>
+                    <td className="sb-table__num sb-muted sb-small">
+                      {new Date(event.startsAt).toLocaleString("en-NG", {
+                        timeZone: "Africa/Lagos",
+                        day: "2-digit",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
     </>

@@ -193,3 +193,17 @@ html:not(.dark) .sb {
     --sb-slow: 0ms;
   }
 }
+
+@media (max-width: 900px) {
+  .sb {
+    --sb-header: 52px;
+    --sb-subnav: 38px;
+    --sb-bottombar: 56px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sb {
+    --sb-header: 50px;
+  }
+}
