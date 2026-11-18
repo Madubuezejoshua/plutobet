@@ -1014,36 +1014,17 @@ html:not(.dark) .sb-brand__grad {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
 }
 
 .sb-hero__crestbg {
   object-fit: contain;
-  opacity: 0.34;
-  filter: drop-shadow(0 8px 20px rgba(4, 9, 26, 0.55));
-}
-
-.sb-hero__player--left .sb-hero__playerimg,
-.sb-hero__player--left .sb-hero__crestfallback {
-  mask-image:
-    linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.92) 12%, rgba(0, 0, 0, 1) 52%, transparent 98%),
-    linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 12%, rgba(0, 0, 0, 0.96) 62%, transparent 98%);
-  mask-composite: intersect;
-  -webkit-mask-image:
-    linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.92) 12%, rgba(0, 0, 0, 1) 52%, transparent 98%),
-    linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 12%, rgba(0, 0, 0, 0.96) 62%, transparent 98%);
-  -webkit-mask-composite: source-in;
-}
-
-.sb-hero__player--right .sb-hero__playerimg,
-.sb-hero__player--right .sb-hero__crestfallback {
-  mask-image:
-    linear-gradient(to left, transparent 0%, rgba(0, 0, 0, 0.92) 12%, rgba(0, 0, 0, 1) 52%, transparent 98%),
-    linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 12%, rgba(0, 0, 0, 0.96) 62%, transparent 98%);
-  mask-composite: intersect;
-  -webkit-mask-image:
-    linear-gradient(to left, transparent 0%, rgba(0, 0, 0, 0.92) 12%, rgba(0, 0, 0, 1) 52%, transparent 98%),
-    linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 12%, rgba(0, 0, 0, 0.96) 62%, transparent 98%);
-  -webkit-mask-composite: source-in;
+  opacity: 0.22;
+  filter: drop-shadow(0 6px 20px rgba(4, 9, 26, 0.45));
+  max-width: 140px;
+  max-height: 140px;
+  width: 100%;
+  height: auto;
 }
 
 @container (max-width: 660px) {

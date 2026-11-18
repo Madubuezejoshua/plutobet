@@ -37,40 +37,24 @@ function HeroWingVisual({
   side: "left" | "right";
   visual?: TeamVisual;
 }) {
-  const [playerError, setPlayerError] = useState(false);
   const [badgeError, setBadgeError] = useState(false);
-
-  const playerUrl = !playerError ? visual?.playerImageUrl : null;
   const badgeUrl = !badgeError ? visual?.badgeUrl : null;
 
-  if (!playerUrl && !badgeUrl) return null;
+  if (!badgeUrl) return null;
 
   return (
     <div className={`sb-hero__player sb-hero__player--${side}`} aria-hidden="true">
-      {playerUrl ? (
+      <div className="sb-hero__crestfallback">
         <Image
-          src={playerUrl}
+          src={badgeUrl}
           alt=""
-          fill
-          sizes="(max-width: 600px) 116px, 220px"
-          priority
+          width={150}
+          height={150}
           referrerPolicy="no-referrer"
-          className="sb-hero__playerimg"
-          onError={() => setPlayerError(true)}
+          className="sb-hero__crestbg"
+          onError={() => setBadgeError(true)}
         />
-      ) : badgeUrl ? (
-        <div className="sb-hero__crestfallback">
-          <Image
-            src={badgeUrl}
-            alt=""
-            width={116}
-            height={116}
-            referrerPolicy="no-referrer"
-            className="sb-hero__crestbg"
-            onError={() => setBadgeError(true)}
-          />
-        </div>
-      ) : null}
+      </div>
     </div>
   );
 }
