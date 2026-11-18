@@ -347,33 +347,37 @@ export function scoreHotMatch(event: EventView, nowMs = Date.now()): number {
   return score;
 }
 
+export function pickHotMatches(
+  events: EventView[],
+  count = 5,
+  nowMs = Date.now(),
+): EventView[] {
+  if (events.length === 0 || count <= 0) return [];
+
+  return events
+    .map((event) => ({
+      event,
+      score: scoreHotMatch(event, nowMs),
+      startsMs: Date.parse(event.startsAt),
+    }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const aOk = Number.isFinite(a.startsMs);
+      const bOk = Number.isFinite(b.startsMs);
+      if (aOk && bOk && a.startsMs !== b.startsMs) return a.startsMs - b.startsMs;
+      return 0;
+    })
+    .slice(0, count)
+    .map((entry) => entry.event);
+}
+
 /**
  * Picks the hottest fixture on the board:
  * LIVE matches always take priority, followed by marquee club rivalries,
  * competition tier, competitive odds, market depth, and near-term kickoff.
  */
 export function pickHottestMatch(events: EventView[], nowMs = Date.now()): EventView | null {
-  if (events.length === 0) return null;
-
-  let best = events[0]!;
-  let bestScore = scoreHotMatch(best, nowMs);
-
-  for (let i = 1; i < events.length; i += 1) {
-    const candidate = events[i]!;
-    const candidateScore = scoreHotMatch(candidate, nowMs);
-    if (candidateScore > bestScore) {
-      best = candidate;
-      bestScore = candidateScore;
-    } else if (candidateScore === bestScore) {
-      const a = Date.parse(candidate.startsAt);
-      const b = Date.parse(best.startsAt);
-      if (Number.isFinite(a) && Number.isFinite(b) && a < b) {
-        best = candidate;
-      }
-    }
-  }
-
-  return best;
+  return pickHotMatches(events, 1, nowMs)[0] ?? null;
 }
 
 async function fetchJsonWithTimeout<T>(url: string, timeoutMs = 2800): Promise<T | null> {
@@ -615,6 +619,8 @@ function sportMatchFor(sport: string): string {
   if (s === "football" || s === "soccer") return "Soccer";
   if (s === "basketball") return "Basketball";
   if (s === "tennis") return "Tennis";
+  if (s === "table-tennis") return "Table Tennis";
+  if (s === "esports") return "ESports";
   return "";
 }
 

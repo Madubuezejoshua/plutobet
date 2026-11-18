@@ -6,6 +6,7 @@ import {
   isTeamNameMatch,
   lookupEspnBadgeFromMap,
   normalizeTeamName,
+  pickHotMatches,
   pickHottestMatch,
   pickMatchingStarPlayer,
   scoreHotMatch,
@@ -100,6 +101,16 @@ test("picks Liverpool v Manchester United over Man City v Fulham", () => {
 
 test("returns null for empty fixture list", () => {
   assert.equal(pickHottestMatch([], NOW), null);
+  assert.deepEqual(pickHotMatches([], 5, NOW), []);
+});
+
+test("pickHotMatches returns top N fixtures ordered by hotness score", () => {
+  const f1 = makeEvent({ id: "low", home: "Team A", away: "Team B", startsAt: "2026-11-28T12:00:00.000Z" });
+  const f2 = makeEvent({ id: "mid", home: "Arsenal", away: "Chelsea", startsAt: "2026-11-22T15:00:00.000Z" });
+  const f3 = makeEvent({ id: "live", home: "Real Madrid", away: "Barcelona", status: "LIVE", startsAt: "2026-11-20T12:00:00.000Z" });
+
+  const picked = pickHotMatches([f1, f2, f3], 2, NOW);
+  assert.deepEqual(picked.map((e) => e.id), ["live", "mid"]);
 });
 
 test("normalizes FC/AFC/SC prefixes and accented characters consistently", () => {

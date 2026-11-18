@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { listUpcoming, type EventView } from "@/modules/odds/odds.service";
 import {
-  pickHottestMatch,
+  pickHotMatches,
   resolveBoardBadges,
   resolveMatchVisuals,
 } from "@/modules/odds/featured-match";
@@ -15,6 +15,14 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/modules/auth/auth-options";
 import { walletForUser } from "@/modules/wallet/lookup";
 import { walletService } from "@/modules/wallet/wallet.service";
+
+const SPORT_TITLES: Record<string, string> = {
+  football: "Football",
+  basketball: "Basketball",
+  tennis: "Tennis",
+  "table-tennis": "Table Tennis",
+  esports: "Esports",
+};
 
 interface Props {
   sport?: string;
@@ -98,17 +106,23 @@ export async function SportsbookBoardPage({
     );
   }
 
-  const featured =
+  const hotMatches =
     showHero && !league && !needle && shown.length > 0
-      ? pickHottestMatch(shown)
-      : null;
+      ? pickHotMatches(shown, 5)
+      : [];
 
-  const [featuredVisuals, teamBadges] = await Promise.all([
-    featured ? resolveMatchVisuals(featured) : Promise.resolve(undefined),
+  const [hotVisualsList, teamBadges] = await Promise.all([
+    Promise.all(hotMatches.map((match) => resolveMatchVisuals(match))),
     resolveBoardBadges(shown),
   ]);
 
-  const title = heading ?? (needle ? `Results for “${q}”` : league ? splitLeague(league).name : "Football");
+  const hotSlides = hotMatches.map((event, idx) => ({
+    event,
+    visuals: hotVisualsList[idx],
+  }));
+
+  const defaultSportTitle = SPORT_TITLES[sport] ?? sport;
+  const title = heading ?? (needle ? `Results for “${q}”` : league ? splitLeague(league).name : defaultSportTitle);
 
   return (
     <Layout
@@ -122,7 +136,7 @@ export async function SportsbookBoardPage({
       }
       slip={<BetslipPanel signedIn={signedIn} balanceMinor={balanceMinor} />}
     >
-      {featured ? <HeroMatchBanner event={featured} visuals={featuredVisuals} /> : null}
+      {hotSlides.length > 0 ? <HeroMatchBanner slides={hotSlides} /> : null}
 
       <DateStrip active={when === "today" ? "today" : "all"} sport={sport} league={league} query={q} />
 

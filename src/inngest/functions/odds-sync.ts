@@ -16,30 +16,27 @@ import { inngest } from "../client";
  * overlapping runs only race each other into the rate limiter.
  */
 
-const config: SyncConfig = {
-  sport: "football",
-  /*
-   * Names are CASE-SENSITIVE and validated by the provider.
-   *
-   * This read `"bet365"`, which the API rejects outright with "bet365 is not a
-   * valid bookmaker". The real name is `"Bet365"`. Since order decides the
-   * canonical price, the invalid name sat in the position every price is
-   * resolved from — so once the delta call started sending a bookmaker at all,
-   * it would have failed on this instead.
-   *
-   * Bet365 is first for a substantive reason: it publishes `ML`, the 3-way
-   * match-result market that maps to `1x2`, which is the market most bets are
-   * placed on. 1xbet does NOT return it — verified against both live — so a
-   * 1xbet-first ordering yields a sportsbook with no match-result odds.
-   *
-   * The plan permits exactly two. Verify against /v3/bookmakers before editing.
-   */
-  bookmakers: ["Bet365", "1xbet"],
-};
+export const SYNC_SPORTS = [
+  "football",
+  "basketball",
+  "tennis",
+  "table-tennis",
+  "esports",
+] as const;
 
-function syncService(): OddsSyncService {
+const BOOKMAKERS = ["Bet365", "1xbet"];
+
+function syncService(sport = "football"): OddsSyncService {
   const apiKey = process.env.ODDS_API_KEY;
   if (!apiKey) throw new Error("ODDS_API_KEY is required for odds sync");
+  const config: SyncConfig = {
+    sport,
+    /*
+     * Names are CASE-SENSITIVE and validated by the provider.
+     * Bet365 publishes `ML` (1x2), which is first in canonical order.
+     */
+    bookmakers: BOOKMAKERS,
+  };
   return new OddsSyncService(new OddsApiIoProvider(apiKey), config);
 }
 
@@ -64,7 +61,20 @@ export const syncFixtures = inngest.createFunction(
     concurrency: { limit: 1 },
   },
   async ({ step }) =>
-    runIfDue("fixtures", () => step.run("fetch-and-upsert", () => syncService().syncFixtures())),
+    runIfDue("fixtures", () =>
+      step.run("fetch-and-upsert", async () => {
+        const results: Record<string, unknown> = {};
+        for (const sport of SYNC_SPORTS) {
+          try {
+            results[sport] = await syncService(sport).syncFixtures();
+          } catch (error) {
+            console.error(`[odds-sync] fixtures failed for ${sport}`, error);
+            results[sport] = { error: error instanceof Error ? error.message : String(error) };
+          }
+        }
+        return results;
+      }),
+    ),
 );
 
 export const syncOddsDelta = inngest.createFunction(
@@ -76,7 +86,18 @@ export const syncOddsDelta = inngest.createFunction(
   },
   async ({ step }) =>
     runIfDue("odds-delta", () =>
-      step.run("fetch-and-persist", () => syncService().syncOddsDelta()),
+      step.run("fetch-and-persist", async () => {
+        const results: Record<string, unknown> = {};
+        for (const sport of SYNC_SPORTS) {
+          try {
+            results[sport] = await syncService(sport).syncOddsDelta();
+          } catch (error) {
+            console.error(`[odds-sync] delta failed for ${sport}`, error);
+            results[sport] = { error: error instanceof Error ? error.message : String(error) };
+          }
+        }
+        return results;
+      }),
     ),
 );
 
@@ -89,6 +110,6 @@ export const syncLiveOdds = inngest.createFunction(
   },
   async ({ step }) =>
     runIfDue("live-tick", () =>
-      step.run("fetch-and-persist", () => syncService().syncLiveOdds()),
+      step.run("fetch-and-persist", () => syncService("football").syncLiveOdds()),
     ),
 );

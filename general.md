@@ -175,6 +175,48 @@ repository state:
      verified via repository search that `src/` never assigns `window.fetch`;
      that stack trace originates inside a user-installed Chrome extension
      (`chrome-extension://pphgdbgldlmicfdkhondlafkiomnelnk/libs/requests.js`).
+9. Refined hero match presentation, match-result market scope, mobile floating
+   betslip badge, and multi-sport sync/navigation:
+   - `src/components/sportsbook/hero-match-banner.tsx`,
+     `src/components/sportsbook/board-page.tsx`,
+     `src/modules/odds/featured-match.ts`, and `src/styles/sportsbook.css`:
+     removed `.sb-hero__playerfade` and replaced it with intersected
+     horizontal and vertical alpha dissolve masks directly on
+     `.sb-hero__playerimg` and `.sb-hero__crestfallback` across desktop and
+     mobile breakpoints; added `pickHotMatches(shown, 5)` and upgraded
+     `HeroMatchBanner` to an auto-swapping (`5,000ms`) animated carousel
+     (`motion/react` + touch swipe + `.sb-hero__dots` tabs).
+   - `src/app/(site)/sports/event/[id]/event-markets.tsx`,
+     `src/app/(site)/sports/event/[id]/page.tsx`, and
+     `src/components/sportsbook/match-board.tsx`: filtered the match detail
+     view strictly to canonical `1x2` (`home`, `draw`, `away`) selections so
+     Handicap, Double Chance, Over/Under, and secondary markets are not shown,
+     and replaced `+N` board market counters with `Match Odds` chevron links.
+   - `src/components/sportsbook/mobile-bar.tsx` and `src/styles/sportsbook.css`:
+     added a floating bottom-right circular betslip button (`.sb-slipfab`) on
+     `<= 900px` viewports displaying the live pick badge count (`.sb-slipfab__count`)
+     when ≥1 pick is selected and opening the `.sb-sheet` betslip dialog on click.
+   - `src/inngest/functions/odds-sync.ts`, `src/modules/odds/sync.service.ts`,
+     `src/modules/odds/odds-api-io.ts`, `src/modules/odds/canonical.ts`, and
+     `src/components/sportsbook/header.tsx`: extended Inngest fixture and delta
+     odds sync loops across `SYNC_SPORTS` (`football`, `basketball`, `tennis`,
+     `table-tennis`, `esports`) with `events.sport` filtering in
+     `fullRefreshWatchlist()`, `"winner"` / `"matchodds"` `1x2` aliases, and
+     Suspense-wrapped URL `?sport=` highlighting and board titles. Live
+     upstream ingestion for non-football sports remains `IMPLEMENTED_NOT_LIVE_TESTED`
+     until triggered with an active `ODDS_API_KEY` and Inngest scheduler.
+   - `VERIFIED_IN_REAL_BROWSER` (2026-11-18, headless Chromium against local
+     disposable Postgres + Redis across `375x812`, `390x844`, and `1280x800`):
+     confirmed `0` `.sb-hero__playerfade` boxes, active player dissolve masks,
+     `5` carousel dots auto-advancing slide `0` -> `1` after `5s`, floating
+     `.sb-slipfab` circle updating `1` -> `2` and opening `.sb-sheet` with both
+     selections, `/sports/event/[id]` showing strictly `Match result (Home / Draw / Away)`,
+     `/sports?sport=...` returning HTTP `200` with matching tab highlight and
+     headings across `basketball`, `tennis`, `table-tennis`, and `esports`,
+     `0` horizontal overflow, and `0` `pageerror` exceptions. Verified unit tests
+     in `src/modules/odds/__tests__/featured-match.test.ts` (7/7 passed via
+     `tsx --test`), `tsc --noEmit`, `eslint .`, Next.js build, `npm run ci:secrets`,
+     and `npm run ci:docs`.
 
 The developer-completion and sportsbook verification pass described later in
 this file is prior work, not the current assignment. Its evidence is retained

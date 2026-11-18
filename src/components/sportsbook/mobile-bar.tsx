@@ -91,6 +91,20 @@ export function MobileBar({
         </Link>
       </nav>
 
+      {slip.picks.length > 0 && !slip.open ? (
+        <button
+          type="button"
+          className="sb-slipfab"
+          aria-label={`Open betslip (${slip.picks.length} ${slip.picks.length === 1 ? "selection" : "selections"})`}
+          aria-expanded={slip.open}
+          aria-haspopup="dialog"
+          onClick={() => slip.setOpen(true)}
+        >
+          <Ticket size={22} aria-hidden="true" />
+          <span className="sb-slipfab__count">{slip.picks.length}</span>
+        </button>
+      ) : null}
+
       {slip.open ? (
         <>
           <button

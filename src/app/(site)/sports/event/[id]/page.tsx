@@ -96,8 +96,8 @@ export default async function EventPage({ params }: Params) {
           <EventMarkets event={event} />
 
           <p className="sb-xs sb-muted" style={{ marginTop: "var(--sb-4)" }}>
-            Only markets that are currently open are listed. A price can change or be withdrawn at
-            any time; your bet is settled at the price confirmed when it is accepted.
+            Showing Home, Draw, and Away match result prices. A price can change or be
+            withdrawn at any time; your bet is settled at the price confirmed when it is accepted.
           </p>
         </div>
 

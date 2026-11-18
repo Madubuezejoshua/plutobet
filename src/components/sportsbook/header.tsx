@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   CircleDollarSign,
@@ -43,6 +43,37 @@ const MORE = NAV_ITEMS.filter(
     item.group !== "ACCOUNT" &&
     !["home", "sports", "live", "jackpot", "promotions", "pluto-ai"].includes(item.key),
 );
+
+function SportsSubnav({
+  sports,
+  fallbackActive,
+}: {
+  sports: { key: string; label: string; href: string }[];
+  fallbackActive?: string;
+}) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeKey = pathname.startsWith("/sports")
+    ? searchParams.get("sport") ?? fallbackActive ?? "football"
+    : fallbackActive ?? "football";
+
+  return (
+    <div className="sb-subnav">
+      <nav className="sb-subnav__inner" aria-label="Sports">
+        {sports.map((sport) => (
+          <Link
+            key={sport.key}
+            href={sport.href}
+            className="sb-sporttab"
+            aria-current={activeKey === sport.key ? "page" : undefined}
+          >
+            {sport.label}
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
+}
 
 export function SportsbookHeader({
   signedIn,
@@ -250,20 +281,9 @@ export function SportsbookHeader({
     </header>
 
     {showSports ? (
-      <div className="sb-subnav">
-        <nav className="sb-subnav__inner" aria-label="Sports">
-          {sports.map((sport) => (
-            <Link
-              key={sport.key}
-              href={sport.href}
-              className="sb-sporttab"
-              aria-current={activeSport === sport.key ? "page" : undefined}
-            >
-              {sport.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
+      <Suspense fallback={null}>
+        <SportsSubnav sports={sports} fallbackActive={activeSport} />
+      </Suspense>
     ) : null}
   </>
   );

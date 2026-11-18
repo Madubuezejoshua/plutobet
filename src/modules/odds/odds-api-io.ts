@@ -43,6 +43,8 @@ const SPORT_DISPLAY_NAMES: Record<string, string> = {
   football: "Football",
   basketball: "Basketball",
   tennis: "Tennis",
+  "table-tennis": "Table Tennis",
+  esports: "Esports",
 };
 
 function providerSportName(slug: string): string {

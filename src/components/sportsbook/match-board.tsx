@@ -261,7 +261,6 @@ function EventRow({
   const over = overUnder?.selections.find((s) => s.key === "over_2.5" || (s.key.startsWith("over") && s.line === 2.5));
   const under = overUnder?.selections.find((s) => s.key === "under_2.5" || (s.key.startsWith("under") && s.line === 2.5));
 
-  const extraMarkets = Math.max(0, event.markets.length - 2);
   const fixture = `${event.home} v ${event.away}`;
 
   const pickFor = (market: MarketView | undefined, selection: SelectionView | undefined) =>
@@ -319,7 +318,7 @@ function EventRow({
         <Link
           href={`/sports/event/${event.providerEventId}`}
           className="sb-pick__x sb-fixture__stats"
-          aria-label={`Statistics and all markets for ${fixture}`}
+          aria-label={`Match result odds for ${fixture}`}
         >
           <BarChart3 size={14} aria-hidden="true" />
         </Link>
@@ -331,21 +330,12 @@ function EventRow({
       <OddsButton className="sb-row__ou" label="O 2.5" price={over?.price ?? null} state={stateOf(overUnder, over)} pick={pickFor(overUnder, over)} />
       <OddsButton className="sb-row__ou" label="U 2.5" price={under?.price ?? null} state={stateOf(overUnder, under)} pick={pickFor(overUnder, under)} />
 
-      {/*
-        The link is always offered — the event page carries the full market
-        list and the kick-off detail — but it only claims a COUNT when there is
-        one. "+0" reads as a broken counter rather than as "no other markets".
-      */}
       <Link
         href={`/sports/event/${event.providerEventId}`}
         className="sb-odd__more"
-        aria-label={
-          extraMarkets > 0
-            ? `${extraMarkets} more markets for ${fixture}`
-            : `All markets for ${fixture}`
-        }
+        aria-label={`Match odds for ${fixture}`}
       >
-        {extraMarkets > 0 ? `+${extraMarkets}` : <ChevronRight size={14} aria-hidden="true" />}
+        <ChevronRight size={14} aria-hidden="true" />
       </Link>
     </div>
   );

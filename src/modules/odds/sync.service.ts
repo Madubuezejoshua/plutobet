@@ -336,6 +336,7 @@ export class OddsSyncService {
       .where(
         and(
           eq(events.provider, this.provider.name),
+          eq(events.sport, this.config.sport),
           inArray(events.status, ["PENDING", "LIVE"]),
           gte(events.startsAt, new Date()),
           lte(events.startsAt, new Date(Date.now() + 48 * 60 * 60_000)),

@@ -78,7 +78,7 @@ function toOutcome(token: string): Outcome | null {
 
 export function mapMarketKey(raw: string): MarketKey | null {
   const v = squash(raw);
-  if (["1x2", "moneyline", "ml", "matchwinner", "matchresult", "h2h", "fulltimeresult"].includes(v)) {
+  if (["1x2", "moneyline", "ml", "matchwinner", "matchresult", "h2h", "fulltimeresult", "winner", "matchodds"].includes(v)) {
     return "1x2";
   }
   if (["doublechance", "dc"].includes(v)) return "double_chance";
