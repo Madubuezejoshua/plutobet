@@ -1019,7 +1019,7 @@ html:not(.dark) .sb-brand__grad {
 
 .sb-hero__crestbg {
   object-fit: contain;
-  opacity: 0.55;
+  opacity: 0.72;
   max-width: 150px;
   max-height: 150px;
   width: 100%;
