@@ -5,7 +5,7 @@ Every other document in the repository is either a runbook, an owner checklist,
 or historical evidence of one pass. Where any of them disagrees with this file,
 this file is right.
 
-**Last updated:** 2026-11-18
+**Last updated:** 2026-11-19
 **Branch described:** `main`, which now carries the completed gap-closure pass
 **Merged to `main`:** **yes**, in two steps and with no history rewritten. The
 owner merged PR #1 on `plutobet-ai/plutobet_ai`, and the three commits made
@@ -217,6 +217,46 @@ repository state:
      in `src/modules/odds/__tests__/featured-match.test.ts` (7/7 passed via
      `tsx --test`), `tsc --noEmit`, `eslint .`, Next.js build, `npm run ci:secrets`,
      and `npm run ci:docs`.
+10. Added Public Trust Pack, re-enabled full fixture markets with category tabs,
+    and added installable Progressive Web App (PWA) support:
+    - Public Trust Pack (`src/app/(site)/responsible/page.tsx`,
+      `src/app/(site)/payments/page.tsx`, `src/app/(site)/about/page.tsx`,
+      `src/app/(site)/terms/page.tsx`, `src/app/(site)/privacy/page.tsx`,
+      `src/app/(site)/support/page.tsx`, `src/components/sportsbook/footer.tsx`,
+      `src/components/sportsbook/sidebar.tsx`, `src/lib/navigation.ts`):
+      removed the guest login redirect on `/responsible` so safer-gambling
+      policy, self-exclusion, reality checks, and help resources are publicly
+      readable while signed-in users keep live database-backed limit controls;
+      published public `/payments` (pulling real Naira limits directly from
+      `DEFAULT_WITHDRAWAL_LIMITS` and `DEFAULT_PLACEMENT_CONFIG`), `/about`
+      (explicitly omitting any unissued gambling licence claim), `/terms`,
+      `/privacy`, and `/support`; expanded footer to 4 columns with Company &
+      Legal links and registered all routes in `UTILITY_ROUTES`.
+    - Full fixture markets (`src/app/(site)/sports/event/[id]/event-markets.tsx`,
+      `src/app/(site)/sports/event/[id]/page.tsx`,
+      `src/components/sportsbook/match-board.tsx`): restored all open canonical
+      markets (`1x2`, `double_chance`, `btts`, `over_under`, `handicap`,
+      `ht_ft`, `correct_score`) behind category tabs (`All Markets`,
+      `Main (1X2 & DC)`, `Goals & BTTS`, `Handicaps`, `Specials`) with `1x2`
+      pinned first, line-paired Over/Under rows, and `+{N}` extra-market counts
+      on match board rows.
+    - Installable PWA (`src/app/manifest.ts`, `src/app/layout.tsx`,
+      `public/sw.js`, `src/app/offline/page.tsx`,
+      `src/components/pwa/use-pwa-install.ts`,
+      `src/components/pwa/pwa-install-button.tsx`,
+      `src/components/pwa/pwa-runtime.tsx`, `public/icon.svg`,
+      `public/pwa-192x192.png`, `public/pwa-512x512.png`,
+      `public/pwa-maskable-512x512.png`, `public/apple-touch-icon.png`):
+      configured Next.js App Router Web App Manifest (`display: "standalone"`,
+      separate `any` and padded `maskable` PNG icons, `apple-touch-icon.png`),
+      network-first service worker with `/offline` fallback and strict bypass on
+      `/api/*`, `/admin`, and money/account routes, offline connectivity banner,
+      and in-app `PWAInstallButton` (Chromium `beforeinstallprompt` + iOS Safari
+      home-screen guide) mounted in header, sidebar, and `/about`.
+    - Evidence status: `IMPLEMENTED_NOT_LIVE_TESTED` for mobile device
+      home-screen install prompts; local compilation, ESLint, secret scan, docs
+      check, and live HTTP 200 verification on the local dev server recorded on
+      2026-11-19.
 
 The developer-completion and sportsbook verification pass described later in
 this file is prior work, not the current assignment. Its evidence is retained

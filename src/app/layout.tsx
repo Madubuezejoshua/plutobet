@@ -30,6 +30,19 @@ export const metadata: Metadata = {
     template: "%s · PlutoBet",
   },
   description: "Sports betting, live match center, casino and instant markets — with Pluto AI.",
+  applicationName: "PlutoBet",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "PlutoBet",
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/pwa-192x192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {

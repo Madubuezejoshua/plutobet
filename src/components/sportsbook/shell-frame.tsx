@@ -5,6 +5,7 @@ import { SportsbookSidebar } from "./sidebar";
 import { SportsbookHeader } from "./header";
 import { SportsbookFooter } from "./footer";
 import { MobileBar } from "./mobile-bar";
+import { PWARuntime } from "@/components/pwa/pwa-runtime";
 
 interface ShellFrameProps {
   signedIn: boolean;
@@ -93,6 +94,7 @@ export function SportsbookShellFrame({
         <div className="sb-main">{children}</div>
         <SportsbookFooter />
         <MobileBar signedIn={signedIn} balanceMinor={balanceMinor} />
+        <PWARuntime />
       </div>
     </div>
   );

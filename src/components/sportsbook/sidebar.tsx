@@ -9,18 +9,22 @@ import {
   ArrowRight,
   Award,
   CheckSquare,
+  CreditCard,
   Flame,
   Gamepad2,
   Gift,
+  HelpCircle,
   Home,
   Radio,
   ReceiptText,
+  ShieldCheck,
   Sparkles,
   Trophy,
   User,
   Wallet,
   X,
 } from "lucide-react";
+import { PWAInstallButton } from "@/components/pwa/pwa-install-button";
 
 interface SidebarProps {
   signedIn: boolean;
@@ -97,6 +101,12 @@ export function SportsbookSidebar({
     { href: signedIn ? "/account" : "/signin", label: signedIn ? "Account" : "Sign in", icon: User },
   ];
 
+  const helpLinks: SideLink[] = [
+    { href: "/payments", label: "Payments & Limits", icon: CreditCard },
+    { href: "/responsible", label: "Safer Gambling", icon: ShieldCheck },
+    { href: "/support", label: "Help & Support", icon: HelpCircle },
+  ];
+
   const renderGroup = (label: string, items: SideLink[]) => (
     <div className="sb-sidebar__group">
       <p className="sb-sidebar__group-label">{label}</p>
@@ -162,6 +172,10 @@ export function SportsbookSidebar({
           {renderGroup("Board", mainLinks)}
           {renderGroup("Products", productLinks)}
           {renderGroup("Account", accountLinks)}
+          {renderGroup("Help & Trust", helpLinks)}
+          <div className="sb-sidebar__group">
+            <PWAInstallButton variant="sidebar" onAction={onCloseMobile} />
+          </div>
         </nav>
       </div>
 

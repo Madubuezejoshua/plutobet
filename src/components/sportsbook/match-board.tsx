@@ -333,8 +333,13 @@ function EventRow({
       <Link
         href={`/sports/event/${event.providerEventId}`}
         className="sb-odd__more"
-        aria-label={`Match odds for ${fixture}`}
+        aria-label={
+          event.markets.length > 1
+            ? `${event.markets.length} markets for ${fixture}`
+            : `All markets for ${fixture}`
+        }
       >
+        {event.markets.length > 1 ? `+${event.markets.length - 1}` : null}
         <ChevronRight size={14} aria-hidden="true" />
       </Link>
     </div>

@@ -216,8 +216,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
 export const UTILITY_ROUTES = {
   deposit: "/deposit",
   withdraw: "/withdraw",
+  payments: "/payments",
   verify: "/kyc",
   responsible: "/responsible",
+  about: "/about",
+  terms: "/terms",
+  privacy: "/privacy",
+  support: "/support",
   register: "/register",
   signIn: "/signin",
   signOut: "/api/auth/signout",

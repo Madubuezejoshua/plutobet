@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { naira } from "@/lib/money";
 import { NAV_ITEMS } from "@/lib/navigation";
+import { PWAInstallButton } from "@/components/pwa/pwa-install-button";
 
 interface Props {
   signedIn: boolean;
@@ -229,6 +230,8 @@ export function SportsbookHeader({
               <Search size={16} aria-hidden="true" />
             </button>
           )}
+
+          <PWAInstallButton variant="header" />
 
           <button
             type="button"

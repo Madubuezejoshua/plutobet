@@ -24,12 +24,12 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
     ],
   },
   {
-    title: "Account",
+    title: "Account & Payments",
     links: [
+      { href: "/payments", label: "Payments & limits" },
       { href: "/wallet", label: "Wallet" },
       { href: "/deposit", label: "Deposit" },
       { href: "/withdraw", label: "Withdraw" },
-      { href: "/account", label: "Account details" },
       { href: "/kyc", label: "Identity verification" },
     ],
   },
@@ -39,6 +39,16 @@ const COLUMNS: { title: string; links: { href: string; label: string }[] }[] = [
       { href: "/responsible", label: "Deposit and loss limits" },
       { href: "/responsible#self-exclusion", label: "Self-exclusion" },
       { href: "/responsible#reality-check", label: "Reality checks" },
+      { href: "/support", label: "Help & support" },
+    ],
+  },
+  {
+    title: "Company & Legal",
+    links: [
+      { href: "/about", label: "About PlutoBet" },
+      { href: "/terms", label: "Terms of service" },
+      { href: "/privacy", label: "Privacy policy" },
+      { href: "/support", label: "Contact & disputes" },
     ],
   },
 ];
