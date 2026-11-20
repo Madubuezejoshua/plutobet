@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
 import { events, markets, oddsSnapshots, selections } from "./schema";
 import type { OddsSnapshot } from "./provider";
+import { SPORTS_CATALOG, leaguePriority } from "./sports-catalog";
 
 /**
  * The read path. Everything user-facing goes through here.
@@ -259,4 +260,216 @@ export async function getEventView(providerEventId: string): Promise<EventView |
     status: event.status,
     markets: [...byMarket.values()],
   };
+}
+
+export interface HotShowcaseEvent extends EventView {
+  homeScore: number | null;
+  awayScore: number | null;
+}
+
+export interface SportHotCategory {
+  sport: string;
+  label: string;
+  shortLabel: string;
+  twoWayDefault: boolean;
+  liveCount: number;
+  upcomingCount: number;
+  events: HotShowcaseEvent[];
+}
+
+type RankedShowcaseRow = {
+  id: string;
+  provider_event_id: string;
+  sport: string;
+  league: string;
+  home: string;
+  away: string;
+  starts_at: Date;
+  status: string;
+  home_score: number | null;
+  away_score: number | null;
+};
+
+/**
+ * Multi-sport Live & Hot Games showcase query.
+ *
+ * Uses a single partitioned SQL read (no N+1 per sport, zero upstream provider
+ * calls) to fetch up to `perSport` top fixtures for every active sport in
+ * `SPORTS_CATALOG`, ranking LIVE matches first, then priced upcoming fixtures
+ * and marquee leagues.
+ */
+export async function listHotShowcaseBySport(opts?: {
+  perSport?: number;
+  liveOnly?: boolean;
+}): Promise<SportHotCategory[]> {
+  const perSport = Math.max(2, Math.min(opts?.perSport ?? 8, 12));
+  const liveOnly = opts?.liveOnly ?? false;
+
+  const [counts, ranked] = await Promise.all([
+    getSportCounts().catch(() => ({} as Record<string, SportCountSummary>)),
+    db.execute<RankedShowcaseRow>(sql`
+      WITH candidates AS (
+        SELECT
+          e.id,
+          e.provider_event_id,
+          e.sport,
+          e.league,
+          e.home,
+          e.away,
+          e.starts_at,
+          e.status::text AS status,
+          (r.periods -> 'ft' ->> 'home')::int AS home_score,
+          (r.periods -> 'ft' ->> 'away')::int AS away_score,
+          EXISTS (
+            SELECT 1 FROM markets m
+            WHERE m.event_id = e.id AND m.status = 'OPEN'
+          ) AS has_price
+        FROM events e
+        LEFT JOIN LATERAL (
+          SELECT er.periods FROM event_results er
+          WHERE er.event_id = e.id ORDER BY er.ingested_at DESC LIMIT 1
+        ) r ON true
+        WHERE ${
+          liveOnly
+            ? sql`e.status = 'LIVE' AND e.starts_at >= now() - INTERVAL '4 hours'`
+            : sql`(e.status = 'LIVE' AND e.starts_at >= now() - INTERVAL '4 hours')
+                  OR (e.status = 'PENDING' AND e.starts_at >= now())`
+        }
+      ),
+      ranked AS (
+        SELECT
+          *,
+          ROW_NUMBER() OVER (
+            PARTITION BY sport
+            ORDER BY
+              CASE WHEN status = 'LIVE' THEN 0 ELSE 1 END,
+              CASE WHEN has_price THEN 0 ELSE 1 END,
+              starts_at ASC
+          ) AS rn
+        FROM candidates
+      )
+      SELECT
+        id::text AS id,
+        provider_event_id,
+        sport,
+        league,
+        home,
+        away,
+        starts_at,
+        status,
+        home_score,
+        away_score
+      FROM ranked
+      WHERE rn <= ${perSport}
+      ORDER BY sport, rn
+    `),
+  ]);
+
+  if (ranked.length === 0) return [];
+
+  const eventIds = ranked.map((r) => r.id);
+  const marketRows = await db
+    .select({
+      eventId: markets.eventId,
+      marketId: markets.id,
+      marketKey: markets.key,
+      selectionId: selections.id,
+      selectionKey: selections.key,
+      label: selections.label,
+      line: selections.line,
+      price: selections.currentPriceDecimal,
+    })
+    .from(markets)
+    .innerJoin(selections, eq(selections.marketId, markets.id))
+    .where(
+      and(
+        inArray(markets.eventId, eventIds),
+        eq(markets.status, "OPEN"),
+        eq(selections.status, "OPEN"),
+      ),
+    );
+
+  const byEvent = new Map<string, Map<string, MarketView>>();
+  for (const row of marketRows) {
+    let eventMarkets = byEvent.get(row.eventId);
+    if (!eventMarkets) {
+      eventMarkets = new Map();
+      byEvent.set(row.eventId, eventMarkets);
+    }
+    let market = eventMarkets.get(row.marketId);
+    if (!market) {
+      market = { id: row.marketId, key: row.marketKey, selections: [] };
+      eventMarkets.set(row.marketId, market);
+    }
+    market.selections.push({
+      id: row.selectionId,
+      key: row.selectionKey,
+      label: row.label,
+      line: row.line === null ? null : Number(row.line),
+      price: Number(row.price),
+    });
+  }
+
+  const grouped = new Map<string, HotShowcaseEvent[]>();
+  for (const row of ranked) {
+    const list = grouped.get(row.sport) ?? [];
+    list.push({
+      id: row.id,
+      providerEventId: row.provider_event_id,
+      sport: row.sport,
+      league: row.league,
+      home: row.home,
+      away: row.away,
+      startsAt: new Date(row.starts_at).toISOString(),
+      status: row.status,
+      homeScore: row.home_score === null ? null : Number(row.home_score),
+      awayScore: row.away_score === null ? null : Number(row.away_score),
+      markets: [...(byEvent.get(row.id)?.values() ?? [])],
+    });
+    grouped.set(row.sport, list);
+  }
+
+  const categories: SportHotCategory[] = [];
+  for (const def of SPORTS_CATALOG) {
+    const rawEvents = grouped.get(def.key);
+    if (!rawEvents || rawEvents.length === 0) continue;
+
+    // Prioritize LIVE, then priced, then marquee league, then soonest kickoff.
+    const sorted = [...rawEvents].sort((a, b) => {
+      const aLive = a.status === "LIVE" ? 0 : 1;
+      const bLive = b.status === "LIVE" ? 0 : 1;
+      if (aLive !== bLive) return aLive - bLive;
+
+      const aPriced = a.markets.length > 0 ? 0 : 1;
+      const bPriced = b.markets.length > 0 ? 0 : 1;
+      if (aPriced !== bPriced) return aPriced - bPriced;
+
+      const aPri = leaguePriority(def.key, a.league);
+      const bPri = leaguePriority(def.key, b.league);
+      if (aPri !== bPri) return aPri - bPri;
+
+      return Date.parse(a.startsAt) - Date.parse(b.startsAt);
+    });
+
+    const summary = counts[def.key];
+    categories.push({
+      sport: def.key,
+      label: def.label,
+      shortLabel: def.shortLabel,
+      twoWayDefault: def.twoWayDefault,
+      liveCount: summary?.live ?? sorted.filter((e) => e.status === "LIVE").length,
+      upcomingCount: summary?.upcoming ?? sorted.length,
+      events: sorted,
+    });
+  }
+
+  // Float sports with active LIVE matches to the front while preserving catalog order.
+  categories.sort((a, b) => {
+    const aHasLive = a.liveCount > 0 ? 0 : 1;
+    const bHasLive = b.liveCount > 0 ? 0 : 1;
+    if (aHasLive !== bHasLive) return aHasLive - bHasLive;
+    return 0;
+  });
+
+  return categories;
 }

@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
-import { listUpcoming, type EventView } from "@/modules/odds/odds.service";
+import {
+  listHotShowcaseBySport,
+  listUpcoming,
+  type EventView,
+  type SportHotCategory,
+} from "@/modules/odds/odds.service";
 import { leaguePriority, resolveSportKey, sportLabel } from "@/modules/odds/sports-catalog";
 import {
   pickHotMatches,
@@ -11,7 +16,8 @@ import { MatchBoard } from "./match-board";
 import { LeagueRail, type RailLeague } from "./league-rail";
 import { BetslipPanel } from "./betslip-panel";
 import { DateStrip, type QuickLeagueItem } from "./date-strip";
-import { HeroMatchBanner } from "./hero-match-banner";
+import { HeroMatchBanner, type HeroSportPool } from "./hero-match-banner";
+import { LiveHotShowcase } from "./live-hot-showcase";
 import { QuickCodeBar } from "./quick-code-bar";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/modules/auth/auth-options";
@@ -60,12 +66,20 @@ export async function SportsbookBoardPage({
   showHero = false,
 }: Props) {
   const sport = resolveSportKey(rawSport);
-  const [session, fixtures] = await Promise.all([
+  const wantMultiSportShowcase = showHero && !league && !q;
+
+  const [session, fixtures, hotCategories] = await Promise.all([
     getServerSession(authOptions),
     listUpcoming({ sport, limit: 180 }).catch((error: unknown) => {
       console.error("[board] fixtures unavailable", error);
       return null;
     }),
+    wantMultiSportShowcase
+      ? listHotShowcaseBySport({ perSport: 8 }).catch((error: unknown) => {
+          console.error("[board] multi-sport showcase unavailable", error);
+          return [] as SportHotCategory[];
+        })
+      : Promise.resolve([] as SportHotCategory[]),
   ]);
 
   const signedIn = Boolean(session?.user);
@@ -124,18 +138,43 @@ export async function SportsbookBoardPage({
   });
 
   const hotMatches =
-    showHero && !league && !needle && shown.length > 0
+    showHero && !league && !needle && shown.length > 0 && hotCategories.length === 0
       ? pickHotMatches(shown, 5)
       : [];
 
-  const [hotVisualsList, teamBadges] = await Promise.all([
-    Promise.all(hotMatches.map((match) => resolveMatchVisuals(match))),
+  // Resolve visuals for the top 2 hero-visible matches of the leading categories
+  // so homepage render stays fast while major football/NBA crests appear crisply.
+  const heroVisualTargetEvents =
+    hotCategories.length > 0
+      ? hotCategories
+          .slice(0, 6)
+          .flatMap((cat) => cat.events.slice(0, 2))
+      : hotMatches;
+
+  const [resolvedVisualsList, teamBadges] = await Promise.all([
+    Promise.all(heroVisualTargetEvents.map((match) => resolveMatchVisuals(match))),
     resolveBoardBadges(shown),
   ]);
 
-  const hotSlides = hotMatches.map((event, idx) => ({
+  const visualsByEventId = new Map(
+    heroVisualTargetEvents.map((ev, idx) => [ev.id, resolvedVisualsList[idx]]),
+  );
+
+  const heroCategoryPools: HeroSportPool[] =
+    showHero && !league && !needle && hotCategories.length > 0
+      ? hotCategories.slice(0, 8).map((cat) => ({
+          sport: cat.sport,
+          label: cat.label,
+          slides: cat.events.slice(0, 6).map((event) => ({
+            event,
+            visuals: visualsByEventId.get(event.id),
+          })),
+        }))
+      : [];
+
+  const hotSlides = hotMatches.map((event) => ({
     event,
-    visuals: hotVisualsList[idx],
+    visuals: visualsByEventId.get(event.id),
   }));
 
   const defaultSportTitle = sportLabel(sport);
@@ -169,9 +208,17 @@ export async function SportsbookBoardPage({
       }
       slip={<BetslipPanel signedIn={signedIn} balanceMinor={balanceMinor} />}
     >
-      {hotSlides.length > 0 ? <HeroMatchBanner slides={hotSlides} /> : null}
+      {heroCategoryPools.length > 0 ? (
+        <HeroMatchBanner categoryPools={heroCategoryPools} />
+      ) : hotSlides.length > 0 ? (
+        <HeroMatchBanner slides={hotSlides} />
+      ) : null}
 
       <QuickCodeBar />
+
+      {wantMultiSportShowcase && activeWhen === "all" && hotCategories.length > 0 ? (
+        <LiveHotShowcase categories={hotCategories} mode="home" defaultFilter="all" />
+      ) : null}
 
       <DateStrip
         active={activeWhen}

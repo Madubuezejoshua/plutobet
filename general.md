@@ -395,6 +395,57 @@ repository state:
         matches), `when=3h`, `when=live`, `when=today`, `/check-ticket`, and
         `/live`, plus `/api/tickets?ref=00000000` -> `404` JSON and invalid/short
         refs -> `400` JSON.
+15. Added Multi-Sport Live & Hot Games Showcase (top 2 per sport with 5-spin
+    batch rotation for categories with `> 2` hot games) across both `/` and
+    `/live`, plus 2-way LiveBoard alignment:
+    - **Single-query multi-sport fetcher & pure 5-spin rotation engine**
+      (`src/modules/odds/odds.service.ts`, `src/components/sportsbook/hot-rotation.ts`):
+      added `listHotShowcaseBySport()` using a single PostgreSQL `ROW_NUMBER()`
+      partitioned query across all 13 sports (LIVE first, then priced upcoming
+      and marquee leagues, zero upstream provider calls) and pure rotation math
+      showing 2 matches per category while automatically switching to remaining
+      matches after 5 spins strictly when a category has `> 2` hot matches
+      (categories with `<= 2` stay pinned).
+    - **Multi-Sport Showcase & Upgraded Hero**
+      (`src/components/sportsbook/live-hot-showcase.tsx`,
+      `src/components/sportsbook/hero-match-banner.tsx`,
+      `src/components/sportsbook/board-page.tsx`, `src/app/(site)/live/page.tsx`,
+      `src/styles/sportsbook.css`): mounted `<LiveHotShowcase />` on `/` and as
+      the default **"All Sports"** view on `/live` (with `All Hot` / `Live Only`
+      filter, 5-spin step indicator, hover-pause, manual Prev/Next set controls,
+      `prefers-reduced-motion` compliance, clickable pre-match `OddsButton`s,
+      and honest read-only in-play indicative odds), and upgraded
+      `HeroMatchBanner` to interleave top 2 matches across active sports with
+      5-spin category rotation, 2-way odds hiding `X` automatically, and
+      prev/next arrows.
+    - **LiveBoard 2-way & match-link upgrade**
+      (`src/modules/odds/live-feed.ts`, `src/app/(site)/live/live-board.tsx`):
+      added `providerEventId` and `league` to `LiveEvent`, turned live fixture
+      titles into links to `/sports/event/[providerEventId]`, and rendered
+      `.sb-board--live2` (omitting `X`) on 2-way sports like Basketball, Tennis,
+      Volleyball, and Esports.
+    - Evidence status (2026-11-19):
+      - `VERIFIED_BY_UNIT_TEST_ONLY`: 8/8 `node:test` unit tests passed via
+        `npx tsx --test` (`hot-rotation.test.ts` + `acca-boost-and-catalog.test.ts`
+        + `browser-store.test.ts`), verifying `<= 2` pinning, 5-spin batch
+        switching on 5-match pools (`1–2 -> 3–4 -> 5 -> 1–2`), manual stepping,
+        and multi-sport hero interleaving.
+      - `VERIFIED_END_TO_END`: Next.js production build, `eslint .`,
+        `npm run ci:docs`, and live HTTP `200` on `/`, `/live`, `/live?sport=all`,
+        `/live?sport=football`, `basketball` (`sb-board--live2`), `tennis`,
+        `ice-hockey`, `volleyball`, `esports`, and `/api/health`, with `/live`
+        rendering all 13 active sport categories (`data-sport="..."`) and `/`
+        rendering `Live & Hot Across Sports` plus upgraded Hero controls.
+      - `VERIFIED_IN_REAL_BROWSER` (2026-11-19, headless Chromium in `en-US` /
+        `America/Los_Angeles` locale/timezone): unified `HeroMatchBanner`
+        carousel state into a single pure updater (removing nested
+        `setRotationBySport` inside `setIndex`), switched `AnimatePresence` from
+        `popLayout` to `wait`, replaced `toLocaleString` / `toLocaleTimeString`
+        with deterministic `Intl.DateTimeFormat.formatToParts` across
+        `HeroMatchBanner`, `LiveHotShowcase`, and `LiveBoard`, and added
+        `loading="eager"` to `trophy_bg.png` in `sidebar.tsx` — verified `0`
+        console errors, `0` console warnings, and `0` `pageerror` exceptions
+        across `/`, `/live`, and `/live?sport=basketball`.
 
 The developer-completion and sportsbook verification pass described later in
 this file is prior work, not the current assignment. Its evidence is retained

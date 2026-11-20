@@ -1,13 +1,29 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Lock, Radio, TrendingDown, TrendingUp, WifiOff } from "lucide-react";
 import type { LiveSnapshot } from "@/modules/odds/live-feed";
 import { formatOdds } from "@/modules/odds/format";
+import { SPORT_BY_KEY } from "@/modules/odds/sports-catalog";
 import type { OddsFormat } from "@/modules/users/schema";
 
 const POLL_INTERVAL_MS = 5_000;
 const FLASH_DURATION_MS = 4_000;
+
+const LIVE_CLOCK_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Lagos",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+function formatLagosClock(iso: string): string {
+  const parts = LIVE_CLOCK_FMT.formatToParts(new Date(iso));
+  const hour = parts.find((p) => p.type === "hour")?.value ?? "00";
+  const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
+  return `${hour}:${minute}`;
+}
 
 type OddsDirection = "up" | "down";
 
@@ -26,8 +42,8 @@ function extractPriceMap(snapshot: LiveSnapshot): Record<string, number> {
 }
 
 /**
- * The live board with automatic conditional polling and live green/red
- * odds-movement indicators.
+ * The live board with automatic conditional polling, 2-way / 3-way column
+ * alignment per sport, and live green/red odds-movement indicators.
  */
 export function LiveBoard({
   sport,
@@ -44,6 +60,14 @@ export function LiveBoard({
   const [stale, setStale] = useState(false);
   const [flashes, setFlashes] = useState<Record<string, OddsDirection>>({});
   const prevPricesRef = useRef<Record<string, number>>(extractPriceMap(initial));
+
+  const isTwoWay =
+    Boolean(SPORT_BY_KEY[sport]?.twoWayDefault) &&
+    !snapshot.events.some((ev) =>
+      ev.markets.some(
+        (m) => m.key === "1x2" && m.selections.some((s) => s.key === "draw"),
+      ),
+    );
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +144,17 @@ export function LiveBoard({
     );
   }
 
+  const columns = isTwoWay
+    ? [
+        { label: "1", key: "home" },
+        { label: "2", key: "away" },
+      ]
+    : [
+        { label: "1", key: "home" },
+        { label: "X", key: "draw" },
+        { label: "2", key: "away" },
+      ];
+
   return (
     <>
       {stale ? (
@@ -129,12 +164,14 @@ export function LiveBoard({
         </p>
       ) : null}
 
-      <section className="sb-panel sb-board sb-board--3">
+      <section className={`sb-panel sb-board ${isTwoWay ? "sb-board--live2" : "sb-board--3"}`}>
         <div className="sb-cols" aria-hidden="true">
           <span>Match</span>
-          <span className="sb-cols__odds">1</span>
-          <span className="sb-cols__odds">X</span>
-          <span className="sb-cols__odds">2</span>
+          {columns.map((col) => (
+            <span key={col.label} className="sb-cols__odds">
+              {col.label}
+            </span>
+          ))}
         </div>
 
         {snapshot.events.map((event) => {
@@ -142,23 +179,25 @@ export function LiveBoard({
           return (
             <div className="sb-row" key={event.id}>
               <div className="sb-fixture">
-                <span className="sb-fixture__time">
+                <span className="sb-fixture__time sb-num">
                   {event.status === "LIVE" ? (
                     <span className="sb-live">
                       <span className="sb-live__dot" aria-hidden="true" />
                       Live
                     </span>
                   ) : (
-                    new Date(event.startsAt).toLocaleTimeString("en-NG", {
-                      timeZone: "Africa/Lagos",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
+                    formatLagosClock(event.startsAt)
                   )}
                 </span>
-                <span className="sb-fixture__teams">
+                <Link
+                  href={`/sports/event/${event.providerEventId}`}
+                  className="sb-fixture__teams sb-fixture__teamslink"
+                >
                   <span className="sb-fixture__team">{event.fixture}</span>
-                </span>
+                  {event.league ? (
+                    <span className="sb-xs sb-muted">{event.league}</span>
+                  ) : null}
+                </Link>
                 {event.homeScore !== null && event.awayScore !== null ? (
                   <span className="sb-score">
                     {event.homeScore}&nbsp;-&nbsp;{event.awayScore}
@@ -166,8 +205,8 @@ export function LiveBoard({
                 ) : null}
               </div>
 
-              {["1", "X", "2"].map((label, index) => {
-                const selection = market?.selections[index];
+              {columns.map(({ label, key }) => {
+                const selection = market?.selections.find((s) => s.key === key);
                 const suspended = selection?.suspended ?? true;
                 const direction = selection ? flashes[selection.id] : undefined;
                 return (

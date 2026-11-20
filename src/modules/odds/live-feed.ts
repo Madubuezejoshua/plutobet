@@ -56,6 +56,8 @@ export interface LiveMarket {
 
 export interface LiveEvent {
   id: string;
+  providerEventId: string;
+  league: string;
   fixture: string;
   startsAt: string;
   status: string;
@@ -128,6 +130,8 @@ async function computeLiveVersion(sportKey: string): Promise<string> {
 export async function liveSnapshot(sportKey: string, limit = 50): Promise<LiveSnapshot> {
   const rows = await db.execute<{
     event_id: string;
+    provider_event_id: string;
+    league: string;
     home: string;
     away: string;
     starts_at: Date;
@@ -143,7 +147,7 @@ export async function liveSnapshot(sportKey: string, limit = 50): Promise<LiveSn
     price: string;
     selection_status: string;
   }>(sql`
-    SELECT e.id AS event_id, e.home, e.away, e.starts_at,
+    SELECT e.id AS event_id, e.provider_event_id, e.league, e.home, e.away, e.starts_at,
            e.status::text AS event_status,
            (r.periods -> 'ft' ->> 'home')::int AS home_score,
            (r.periods -> 'ft' ->> 'away')::int AS away_score,
@@ -174,6 +178,8 @@ export async function liveSnapshot(sportKey: string, limit = 50): Promise<LiveSn
       if (byEvent.size >= limit) continue;
       event = {
         id: row.event_id,
+        providerEventId: row.provider_event_id,
+        league: row.league,
         fixture: `${row.home} v ${row.away}`,
         startsAt: new Date(row.starts_at).toISOString(),
         status: row.event_status,

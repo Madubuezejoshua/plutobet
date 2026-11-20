@@ -236,6 +236,7 @@ export function SportsbookSidebar({
               src="/assets/crops/trophy_bg.png"
               alt="World Cup 2026 Trophy"
               fill
+              loading="eager"
               sizes="200px"
               referrerPolicy="no-referrer"
               className="sb-promo-card__img"
