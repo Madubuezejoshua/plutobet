@@ -20,10 +20,18 @@ import { naira } from "@/lib/money";
 import { NAV_ITEMS } from "@/lib/navigation";
 import { PWAInstallButton } from "@/components/pwa/pwa-install-button";
 
+interface SportTabItem {
+  key: string;
+  label: string;
+  href: string;
+  upcoming?: number;
+  live?: number;
+}
+
 interface Props {
   signedIn: boolean;
   balanceMinor?: string | null;
-  sports?: { key: string; label: string; href: string }[];
+  sports?: SportTabItem[];
   activeSport?: string;
   isDark: boolean;
   onToggleTheme: () => void;
@@ -59,7 +67,7 @@ function SportsSubnav({
   sports,
   fallbackActive,
 }: {
-  sports: { key: string; label: string; href: string }[];
+  sports: SportTabItem[];
   fallbackActive?: string;
 }) {
   const pathname = usePathname();
@@ -78,7 +86,13 @@ function SportsSubnav({
             className="sb-sporttab"
             aria-current={activeKey === sport.key ? "page" : undefined}
           >
-            {sport.label}
+            {sport.live && sport.live > 0 ? (
+              <span className="sb-sporttab__livedot" aria-hidden="true" />
+            ) : null}
+            <span>{sport.label}</span>
+            {sport.upcoming && sport.upcoming > 0 ? (
+              <span className="sb-sporttab__count">{sport.upcoming}</span>
+            ) : null}
           </Link>
         ))}
       </nav>
@@ -179,6 +193,14 @@ export function SportsbookHeader({
             </button>
             {moreOpen ? (
               <div role="menu" className="sb-header__moremenu">
+                <Link
+                  href="/check-ticket"
+                  role="menuitem"
+                  className="sb-header__moreitem"
+                  onClick={() => setMoreOpen(false)}
+                >
+                  <span>Check Ticket / Load Code</span>
+                </Link>
                 {MORE.map((item) => (
                   <Link
                     key={item.href}

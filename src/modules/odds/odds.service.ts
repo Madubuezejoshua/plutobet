@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
 import { events, markets, oddsSnapshots, selections } from "./schema";
 import type { OddsSnapshot } from "./provider";
@@ -42,6 +42,40 @@ export interface EventView {
   startsAt: string;
   status: string;
   markets: MarketView[];
+}
+
+export interface SportCountSummary {
+  upcoming: number;
+  live: number;
+}
+
+/**
+ * Single grouped read returning active upcoming + in-play counts per sport.
+ * Used by the shell navigation, A–Z sports sidebar, and live tabs without
+ * issuing N separate queries per sport.
+ */
+export async function getSportCounts(): Promise<Record<string, SportCountSummary>> {
+  const rows = await db.execute<{ sport: string; upcoming: number; live: number }>(sql`
+    SELECT
+      sport,
+      count(*) FILTER (
+        WHERE (status = 'PENDING' AND starts_at >= now())
+           OR (status = 'LIVE' AND starts_at >= now() - INTERVAL '4 hours')
+      )::int AS upcoming,
+      count(*) FILTER (
+        WHERE status = 'LIVE' AND starts_at >= now() - INTERVAL '4 hours'
+      )::int AS live
+    FROM events
+    WHERE (status = 'PENDING' AND starts_at >= now())
+       OR (status = 'LIVE' AND starts_at >= now() - INTERVAL '4 hours')
+    GROUP BY sport
+  `);
+
+  const out: Record<string, SportCountSummary> = {};
+  for (const row of rows) {
+    out[row.sport] = { upcoming: Number(row.upcoming ?? 0), live: Number(row.live ?? 0) };
+  }
+  return out;
 }
 
 /** Newest stored snapshot for one event. Never calls upstream. */

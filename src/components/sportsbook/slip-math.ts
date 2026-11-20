@@ -135,3 +135,73 @@ export function systemSlipMath(
     };
   }
 }
+
+export const ACCA_BOOST_MIN_LEG_ODDS = 1.25;
+
+export const ACCA_BOOST_TIERS: readonly { legs: number; percent: number }[] = [
+  { legs: 3, percent: 3 },
+  { legs: 4, percent: 5 },
+  { legs: 5, percent: 10 },
+  { legs: 6, percent: 15 },
+  { legs: 7, percent: 20 },
+  { legs: 8, percent: 25 },
+  { legs: 9, percent: 35 },
+  { legs: 10, percent: 50 },
+] as const;
+
+export interface AccaBoostPreview {
+  qualifyingLegs: number;
+  currentPercent: number;
+  nextTierLegs: number | null;
+  nextTierPercent: number | null;
+  legsNeededForNext: number;
+  /** Progress percentage (0..100) across the tier ladder for the UI meter. */
+  progressPercent: number;
+  /** Estimated promo bonus on net profit if all qualifying legs win. */
+  estimatedBonusMinor: bigint;
+}
+
+/**
+ * Progressive Accumulator Multi-Boost estimator.
+ *
+ * Qualifying legs require decimal odds >= 1.25. Bonus is computed strictly on
+ * NET PROFIT (returnMinor - stakeMinor) and kept separate from the
+ * authoritative settled `returnMinor` returned by `priceBet()`.
+ */
+export function accaBoostPreview(
+  picks: readonly SlipLeg[],
+  stakeMinor: bigint,
+  returnMinor: bigint,
+): AccaBoostPreview {
+  const qualifyingLegs = picks.filter((p) => p.odds >= ACCA_BOOST_MIN_LEG_ODDS).length;
+
+  let currentPercent = 0;
+  let nextTier: { legs: number; percent: number } | null = null;
+
+  for (const tier of ACCA_BOOST_TIERS) {
+    if (qualifyingLegs >= tier.legs) {
+      currentPercent = tier.percent;
+    } else if (!nextTier) {
+      nextTier = tier;
+    }
+  }
+
+  const maxLegs = ACCA_BOOST_TIERS[ACCA_BOOST_TIERS.length - 1]!.legs;
+  const progressPercent = Math.min(100, Math.round((qualifyingLegs / maxLegs) * 100));
+  const profitMinor = returnMinor > stakeMinor ? returnMinor - stakeMinor : 0n;
+  const estimatedBonusMinor =
+    currentPercent > 0 && profitMinor > 0n
+      ? (profitMinor * BigInt(currentPercent)) / 100n
+      : 0n;
+
+  return {
+    qualifyingLegs,
+    currentPercent,
+    nextTierLegs: nextTier?.legs ?? null,
+    nextTierPercent: nextTier?.percent ?? null,
+    legsNeededForNext: nextTier ? Math.max(0, nextTier.legs - qualifyingLegs) : 0,
+    progressPercent,
+    estimatedBonusMinor,
+  };
+}
+

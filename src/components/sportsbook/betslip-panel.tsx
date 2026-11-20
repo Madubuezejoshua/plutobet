@@ -16,11 +16,18 @@ import {
   TrendingDown,
   TrendingUp,
   X,
+  Zap,
 } from "lucide-react";
 import { naira } from "@/lib/money";
 import { namedSystems } from "@/modules/betting/system-bet";
 import { useBetslip, type Pick } from "./betslip-store";
-import { slipMath, systemSlipMath, toKobo } from "./slip-math";
+import {
+  ACCA_BOOST_MIN_LEG_ODDS,
+  accaBoostPreview,
+  slipMath,
+  systemSlipMath,
+  toKobo,
+} from "./slip-math";
 
 /**
  * The betslip: Singles, Accumulators, Cut-1 / Flexi System bets, and Booking Codes.
@@ -158,6 +165,13 @@ export function BetslipPanel({
   const accaPreview = useMemo(
     () => slipMath(slip.picks, unitStakeMinor ?? 0n),
     [slip.picks, unitStakeMinor],
+  );
+  const accaBoost = useMemo(
+    () =>
+      !isSystemSlip && pickCount >= 2
+        ? accaBoostPreview(slip.picks, unitStakeMinor ?? 0n, accaPreview.returnMinor)
+        : null,
+    [isSystemSlip, pickCount, slip.picks, unitStakeMinor, accaPreview.returnMinor],
   );
 
   const systemPreview = useMemo(
@@ -750,6 +764,33 @@ export function BetslipPanel({
                   </p>
                 ) : null}
 
+                {accaBoost ? (
+                  <div className="sb-boost" role="status" aria-label="Accumulator Multi-Boost tier">
+                    <div className="sb-boost__head">
+                      <span className="sb-boost__title">
+                        <Zap size={13} aria-hidden="true" />
+                        <span>Acca Multi-Boost</span>
+                      </span>
+                      <span className="sb-boost__pill">
+                        {accaBoost.currentPercent > 0
+                          ? `+${accaBoost.currentPercent}% active tier`
+                          : "Up to +50%"}
+                      </span>
+                    </div>
+                    <div className="sb-boost__track" aria-hidden="true">
+                      <div
+                        className="sb-boost__fill"
+                        style={{ width: `${Math.max(8, accaBoost.progressPercent)}%` }}
+                      />
+                    </div>
+                    <p className="sb-xs sb-muted" style={{ margin: 0 }}>
+                      {accaBoost.nextTierPercent !== null
+                        ? `Add ${accaBoost.legsNeededForNext} more leg${accaBoost.legsNeededForNext === 1 ? "" : "s"} at ${ACCA_BOOST_MIN_LEG_ODDS.toFixed(2)}+ odds to reach +${accaBoost.nextTierPercent}% (${accaBoost.qualifyingLegs} qualifying).`
+                        : `Max +${accaBoost.currentPercent}% Multi-Boost tier reached (${accaBoost.qualifyingLegs} qualifying legs at ${ACCA_BOOST_MIN_LEG_ODDS.toFixed(2)}+).`}
+                    </p>
+                  </div>
+                ) : null}
+
                 {isSystemSlip && systemPreview?.valid ? (
                   <dl style={{ margin: 0 }}>
                     <div className="sb-total">
@@ -781,6 +822,12 @@ export function BetslipPanel({
                       <dt>Possible profit</dt>
                       <dd>{naira(accaPreview.profitMinor)}</dd>
                     </div>
+                    {accaBoost && accaBoost.estimatedBonusMinor > 0n ? (
+                      <div className="sb-total sb-total--boost">
+                        <dt>Est. promo boost (+{accaBoost.currentPercent}%)</dt>
+                        <dd>+{naira(accaBoost.estimatedBonusMinor)}</dd>
+                      </div>
+                    ) : null}
                     <div className="sb-total sb-total--major">
                       <dt>Potential return</dt>
                       <dd>{naira(accaPreview.returnMinor)}</dd>
@@ -789,7 +836,8 @@ export function BetslipPanel({
                 )}
 
                 <p className="sb-xs sb-muted" style={{ margin: 0 }}>
-                  Potential return includes your stake. Final prices are confirmed by the server.
+                  Potential return includes your stake at confirmed odds. Acca Multi-Boost shows
+                  qualifying promo tier estimates separately from base settlement.
                 </p>
 
                 {slip.status === "error" && slip.message ? (

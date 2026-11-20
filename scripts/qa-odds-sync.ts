@@ -11,6 +11,7 @@ import "dotenv/config";
 import { sql } from "drizzle-orm";
 import { db } from "@/db/pooled";
 import { OddsApiIoProvider } from "@/modules/odds/odds-api-io";
+import { ALL_SPORT_KEYS } from "@/modules/odds/sports-catalog";
 import { OddsSyncService } from "@/modules/odds/sync.service";
 
 const BOOKMAKERS = (process.env.QA_BOOKMAKERS ?? "1xbet,Betway")
@@ -18,10 +19,9 @@ const BOOKMAKERS = (process.env.QA_BOOKMAKERS ?? "1xbet,Betway")
   .map((b) => b.trim())
   .filter(Boolean);
 
-const SPORTS = (process.env.QA_SPORTS ?? "football,basketball,tennis,table-tennis,esports")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+const SPORTS = process.env.QA_SPORTS
+  ? process.env.QA_SPORTS.split(",").map((s) => s.trim()).filter(Boolean)
+  : [...ALL_SPORT_KEYS];
 
 async function main() {
   const apiKey = process.env.ODDS_API_KEY;

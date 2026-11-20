@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { listUpcoming, type EventView } from "@/modules/odds/odds.service";
+import { leaguePriority, resolveSportKey, sportLabel } from "@/modules/odds/sports-catalog";
 import {
   pickHotMatches,
   resolveBoardBadges,
@@ -9,20 +10,13 @@ import {
 import { MatchBoard } from "./match-board";
 import { LeagueRail, type RailLeague } from "./league-rail";
 import { BetslipPanel } from "./betslip-panel";
-import { DateStrip } from "./date-strip";
+import { DateStrip, type QuickLeagueItem } from "./date-strip";
 import { HeroMatchBanner } from "./hero-match-banner";
+import { QuickCodeBar } from "./quick-code-bar";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/modules/auth/auth-options";
 import { walletForUser } from "@/modules/wallet/lookup";
 import { walletService } from "@/modules/wallet/wallet.service";
-
-const SPORT_TITLES: Record<string, string> = {
-  football: "Football",
-  basketball: "Basketball",
-  tennis: "Tennis",
-  "table-tennis": "Table Tennis",
-  esports: "Esports",
-};
 
 interface Props {
   sport?: string;
@@ -51,17 +45,24 @@ function isToday(iso: string): boolean {
   return lagosDayFormatter.format(new Date(iso)) === lagosDayFormatter.format(new Date());
 }
 
+function isNext3Hours(iso: string): boolean {
+  const nowMs = new Date().getTime();
+  const start = Date.parse(iso);
+  return start >= nowMs - 15 * 60_000 && start <= nowMs + 3 * 60 * 60_000;
+}
+
 export async function SportsbookBoardPage({
-  sport = "football",
+  sport: rawSport = "football",
   league,
   when,
   q,
   heading,
   showHero = false,
 }: Props) {
+  const sport = resolveSportKey(rawSport);
   const [session, fixtures] = await Promise.all([
     getServerSession(authOptions),
-    listUpcoming({ sport, limit: 120 }).catch((error: unknown) => {
+    listUpcoming({ sport, limit: 180 }).catch((error: unknown) => {
       console.error("[board] fixtures unavailable", error);
       return null;
     }),
@@ -76,6 +77,7 @@ export async function SportsbookBoardPage({
         rail={<LeagueRail leagues={[]} todayCount={0} upcomingCount={0} />}
         slip={<BetslipPanel signedIn={signedIn} balanceMinor={balanceMinor} />}
       >
+        <QuickCodeBar />
         <section className="sb-panel">
           <div className="sb-empty">
             <AlertTriangle className="sb-empty__icon" size={28} aria-hidden="true" />
@@ -89,12 +91,19 @@ export async function SportsbookBoardPage({
     );
   }
 
-  const railLeagues = buildRail(fixtures);
+  const railLeagues = buildRail(fixtures, sport);
+  const liveCount = fixtures.filter((f) => f.status === "LIVE").length;
+  const next3hCount = fixtures.filter((f) => isNext3Hours(f.startsAt)).length;
   const todayCount = fixtures.filter((f) => isToday(f.startsAt)).length;
+
+  const activeWhen: "live" | "3h" | "today" | "all" =
+    when === "live" || when === "3h" || when === "today" ? when : "all";
 
   let shown = fixtures;
   if (league) shown = shown.filter((f) => f.league === league);
-  if (when === "today") shown = shown.filter((f) => isToday(f.startsAt));
+  if (activeWhen === "live") shown = shown.filter((f) => f.status === "LIVE");
+  else if (activeWhen === "3h") shown = shown.filter((f) => isNext3Hours(f.startsAt));
+  else if (activeWhen === "today") shown = shown.filter((f) => isToday(f.startsAt));
 
   const needle = q?.trim().toLowerCase() ?? "";
   if (needle) {
@@ -129,8 +138,24 @@ export async function SportsbookBoardPage({
     visuals: hotVisualsList[idx],
   }));
 
-  const defaultSportTitle = SPORT_TITLES[sport] ?? sport;
-  const title = heading ?? (needle ? `Results for “${q}”` : league ? splitLeague(league).name : defaultSportTitle);
+  const defaultSportTitle = sportLabel(sport);
+  const title =
+    heading ??
+    (needle
+      ? `Results for “${q}”`
+      : league
+        ? splitLeague(league).name
+        : activeWhen === "live"
+          ? `${defaultSportTitle} — Live Now`
+          : activeWhen === "3h"
+            ? `${defaultSportTitle} — Next 3 Hours`
+            : defaultSportTitle);
+
+  const topLeagues: QuickLeagueItem[] = railLeagues.slice(0, 8).map((entry) => ({
+    league: entry.league,
+    name: entry.name,
+    count: entry.count,
+  }));
 
   return (
     <Layout
@@ -146,7 +171,21 @@ export async function SportsbookBoardPage({
     >
       {hotSlides.length > 0 ? <HeroMatchBanner slides={hotSlides} /> : null}
 
-      <DateStrip active={when === "today" ? "today" : "all"} sport={sport} league={league} query={q} />
+      <QuickCodeBar />
+
+      <DateStrip
+        active={activeWhen}
+        sport={sport}
+        league={league}
+        query={q}
+        counts={{
+          all: fixtures.length,
+          live: liveCount,
+          next3h: next3hCount,
+          today: todayCount,
+        }}
+        topLeagues={topLeagues}
+      />
 
       {railLeagues.length > 0 ? (
         <div className="sb-panel sb-mobileleagues" style={{ marginBottom: "var(--sb-3)" }}>
@@ -167,7 +206,7 @@ export async function SportsbookBoardPage({
               const params = new URLSearchParams();
               if (sport && sport !== "football") params.set("sport", sport);
               params.set("league", entry.league);
-              if (when === "today") params.set("when", "today");
+              if (activeWhen !== "all") params.set("when", activeWhen);
               return (
                 <Link
                   key={entry.league}
@@ -199,9 +238,13 @@ export async function SportsbookBoardPage({
           emptyMessage={
             needle
               ? `Nothing on the board matches “${q}”. Try a team or competition name.`
-              : league
-                ? "No matches with prices in this competition right now."
-                : "No matches with prices right now. Check back shortly."
+              : activeWhen === "live"
+                ? `No ${defaultSportTitle.toLowerCase()} matches are live right now.`
+                : activeWhen === "3h"
+                  ? `No ${defaultSportTitle.toLowerCase()} matches kick off in the next 3 hours.`
+                  : league
+                    ? "No matches with prices in this competition right now."
+                    : "No matches with prices right now. Check back shortly."
           }
         />
       </section>
@@ -233,7 +276,7 @@ function Layout({
   );
 }
 
-function buildRail(events: EventView[]): RailLeague[] {
+function buildRail(events: EventView[], sport: string): RailLeague[] {
   const map = new Map<string, number>();
   for (const event of events) map.set(event.league, (map.get(event.league) ?? 0) + 1);
   return [...map.entries()]
@@ -241,7 +284,12 @@ function buildRail(events: EventView[]): RailLeague[] {
       const { country, name } = splitLeague(label);
       return { league: label, country, name, count };
     })
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      const pa = leaguePriority(sport, a.league);
+      const pb = leaguePriority(sport, b.league);
+      if (pa !== pb) return pa - pb;
+      return b.count - a.count || a.name.localeCompare(b.name);
+    });
 }
 
 async function balanceFor(userId: string): Promise<string | null> {

@@ -5,6 +5,7 @@ import {
   ProviderUnknownEventsError,
   parseUnknownEventIds,
 } from "./errors";
+import { SPORT_DISPLAY_NAMES } from "./sports-catalog";
 import type {
   BookmakerOdds,
   EventResult,
@@ -30,22 +31,6 @@ const MULTI_CHUNK = 10;
  * a request that spends a second in flight must not tip over it.
  */
 const DELTA_WINDOW_MS = 60_000;
-
-/**
- * The sport name `/odds/updated` expects, from the slug everything else uses.
- *
- * Two vocabularies for one concept in one API: `/events` takes the slug
- * ("football"), `/odds/updated` takes the display name ("Football"). Only the
- * sports this platform actually trades are mapped — a guess would fail
- * silently, and "MMA" is not what title-casing "mixed-martial-arts" produces.
- */
-const SPORT_DISPLAY_NAMES: Record<string, string> = {
-  football: "Football",
-  basketball: "Basketball",
-  tennis: "Tennis",
-  "table-tennis": "Table Tennis",
-  esports: "Esports",
-};
 
 function providerSportName(slug: string): string {
   const known = SPORT_DISPLAY_NAMES[slug.toLowerCase()];

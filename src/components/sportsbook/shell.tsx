@@ -1,28 +1,22 @@
 import type { ReactNode } from "react";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/modules/auth/auth-options";
-import { liveSnapshot } from "@/modules/odds/live-feed";
+import { getSportCounts } from "@/modules/odds/odds.service";
+import { SPORTS_CATALOG } from "@/modules/odds/sports-catalog";
 import { walletForUser } from "@/modules/wallet/lookup";
 import { walletService } from "@/modules/wallet/wallet.service";
 import { dateOfBirthService } from "@/modules/users/date-of-birth.service";
 import { DateOfBirthBanner } from "./date-of-birth-banner";
 import { BetslipProvider } from "./betslip-store";
-import { SportsbookShellFrame } from "./shell-frame";
+import { SportsbookShellFrame, type ShellSportItem } from "./shell-frame";
 
 /**
  * The sportsbook frame.
  *
- * Session, balance, and live fixture counts are resolved on the SERVER and
- * handed down cleanly. The browser never decides a balance.
+ * Session, balance, and live/upcoming sport counts are resolved on the SERVER
+ * in one grouped query and handed down cleanly. The browser never decides a
+ * balance.
  */
-
-const SPORTS = [
-  { key: "football", label: "Football", href: "/sports?sport=football" },
-  { key: "basketball", label: "Basketball", href: "/sports?sport=basketball" },
-  { key: "tennis", label: "Tennis", href: "/sports?sport=tennis" },
-  { key: "table-tennis", label: "Table Tennis", href: "/sports?sport=table-tennis" },
-  { key: "esports", label: "Esports", href: "/sports?sport=esports" },
-];
 
 export async function SportsbookShell({
   children,
@@ -36,7 +30,7 @@ export async function SportsbookShell({
   const session = await getServerSession(authOptions);
   const signedIn = Boolean(session?.user);
 
-  const [balanceMinor, needsDateOfBirth, liveCount] = await Promise.all([
+  const [balanceMinor, needsDateOfBirth, sportCounts] = await Promise.all([
     signedIn ? headerBalanceMinor(session!.user.id) : Promise.resolve(null),
     signedIn
       ? dateOfBirthService.isMissing(session!.user.id).catch((error: unknown) => {
@@ -44,14 +38,21 @@ export async function SportsbookShell({
           return false;
         })
       : Promise.resolve(false),
-    Promise.all(
-      SPORTS.map((s) =>
-        liveSnapshot(s.key)
-          .then((snap) => snap.events.filter((e) => e.status === "LIVE").length)
-          .catch(() => 0),
-      ),
-    ).then((counts) => counts.reduce((sum, n) => sum + n, 0)),
+    getSportCounts().catch(() => ({} as Record<string, { upcoming: number; live: number }>)),
   ]);
+
+  const sports: ShellSportItem[] = SPORTS_CATALOG.map((sport) => {
+    const counts = sportCounts[sport.key];
+    return {
+      key: sport.key,
+      label: sport.label,
+      href: `/sports?sport=${sport.key}`,
+      upcoming: counts?.upcoming ?? 0,
+      live: counts?.live ?? 0,
+    };
+  });
+
+  const liveCount = Object.values(sportCounts).reduce((sum, entry) => sum + entry.live, 0);
 
   return (
     <BetslipProvider>
@@ -59,7 +60,8 @@ export async function SportsbookShell({
         signedIn={signedIn}
         balanceMinor={balanceMinor}
         liveCount={liveCount}
-        sports={showSports ? SPORTS : []}
+        sports={showSports ? sports : []}
+        allSports={sports}
         activeSport={activeSport}
         banner={needsDateOfBirth ? <DateOfBirthBanner /> : undefined}
       >

@@ -3710,4 +3710,341 @@ footer p a {
   }
 }
 
+/* 13-sport subnav counts & live dot */
+.sb-sporttab__livedot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sb-live);
+  flex-shrink: 0;
+}
+
+.sb-sporttab__count {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--sb-surface-2);
+  color: var(--sb-faint);
+  margin-left: 4px;
+}
+
+.sb-sporttab[aria-current="page"] .sb-sporttab__count {
+  background: color-mix(in srgb, var(--sb-brand) 22%, transparent);
+  color: var(--sb-brand-text);
+}
+
+/* Sidebar A–Z Sports collapsible section */
+.sb-sidebar__group-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  border: 0;
+  border-radius: var(--sb-r-sm);
+  background: transparent;
+  color: var(--sb-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.sb-sidebar__group-toggle:hover {
+  color: var(--sb-text);
+  background: var(--sb-surface-2);
+}
+
+.sb-sideitem--compact {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 12.5px;
+}
+
+.sb-sideitem__count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sb-faint);
+  margin-left: auto;
+}
+
+/* Top Leagues quick bar inside DateStrip */
+.sb-topleagues {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-2);
+  padding: 8px var(--sb-3);
+  border-top: 1px solid var(--sb-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sb-topleagues::-webkit-scrollbar {
+  display: none;
+}
+
+.sb-topleagues__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sb-gold);
+}
+
+.sb-topleagues__list {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sb-topleague {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--sb-border);
+  background: var(--sb-surface-2);
+  color: var(--sb-text);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.sb-topleague:hover,
+.sb-topleague[aria-current="true"] {
+  border-color: var(--sb-brand);
+  background: color-mix(in srgb, var(--sb-brand) 14%, var(--sb-surface-2));
+  color: var(--sb-brand-text);
+}
+
+.sb-topleague__count {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sb-faint);
+}
+
+/* Quick Load Booking Code & Check Ticket bar */
+.sb-quickbar {
+  margin-bottom: var(--sb-3);
+  padding: 10px var(--sb-3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sb-quickbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sb-quickbar__tabs {
+  display: inline-flex;
+  align-items: center;
+  background: var(--sb-surface-2);
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-sm);
+  padding: 2px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.sb-quickbar__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sb-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sb-quickbar__tab[aria-selected="true"] {
+  background: var(--sb-surface);
+  color: var(--sb-text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+}
+
+.sb-quickbar__form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.sb-quickbar__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--sb-r-sm);
+  border: 1px solid var(--sb-border);
+  background: var(--sb-surface-2);
+  color: var(--sb-text);
+  font-size: 13px;
+  font-family: var(--sb-mono, monospace);
+  letter-spacing: 0.03em;
+}
+
+.sb-quickbar__input:focus {
+  outline: 2px solid var(--sb-brand);
+  outline-offset: -1px;
+}
+
+.sb-quickbar__btn {
+  height: 36px;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.sb-quickbar__feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+
+.sb-quickbar__dismiss {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sb-ticketcheck {
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-r-sm);
+  background: var(--sb-surface-2);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sb-ticketcheck__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sb-ticketcheck__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.sb-ticketcheck__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--sb-muted);
+}
+
+.sb-ticketcheck__legs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--sb-border);
+  padding-top: 8px;
+}
+
+.sb-ticketcheck__leg {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sb-ticketcheck__fixture {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sb-text);
+}
+
+/* Acca Multi-Boost progress bar inside Betslip */
+.sb-boost {
+  border: 1px solid color-mix(in srgb, var(--sb-gold) 35%, var(--sb-border));
+  background: color-mix(in srgb, var(--sb-gold) 8%, var(--sb-surface-2));
+  border-radius: var(--sb-r-sm);
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sb-boost__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.sb-boost__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sb-gold);
+}
+
+.sb-boost__pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sb-text);
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.sb-boost__track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--sb-border);
+  overflow: hidden;
+}
+
+.sb-boost__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--sb-brand), var(--sb-gold));
+  transition: width 220ms ease;
+}
+
+.sb-total--boost dt,
+.sb-total--boost dd {
+  color: var(--sb-gold);
+  font-weight: 600;
+}
+
+
 

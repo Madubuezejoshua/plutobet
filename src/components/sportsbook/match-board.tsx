@@ -7,6 +7,7 @@ import { BarChart3, ChevronDown, ChevronRight, Star, CalendarX } from "lucide-re
 import { OddsButton, type OddsState } from "./odds-button";
 import { createIdSetStore, useBrowserStore } from "./browser-store";
 import type { EventView, MarketView, SelectionView } from "@/modules/odds/odds.service";
+import { SPORT_BY_KEY } from "@/modules/odds/sports-catalog";
 
 /**
  * The odds board: league-grouped fixtures with their main markets.
@@ -127,7 +128,8 @@ export function MatchBoard({ events, sport, teamBadges, loading = false, emptyMe
       ),
     [events],
   );
-  const isTwoWay = Boolean(sport && sport !== "football" && !hasAnyDraw);
+  const twoWayDefault = sport ? (SPORT_BY_KEY[sport]?.twoWayDefault ?? false) : false;
+  const isTwoWay = Boolean((twoWayDefault || (sport && sport !== "football")) && !hasAnyDraw);
 
   const starred = useMemo(
     () => events.filter((event) => favourites.includes(event.id)),

@@ -217,6 +217,7 @@ export const UTILITY_ROUTES = {
   deposit: "/deposit",
   withdraw: "/withdraw",
   payments: "/payments",
+  checkTicket: "/check-ticket",
   verify: "/kyc",
   responsible: "/responsible",
   about: "/about",

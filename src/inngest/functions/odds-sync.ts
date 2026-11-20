@@ -1,5 +1,6 @@
 import { oddsCadence, type OddsJob } from "@/modules/odds/cadence";
 import { OddsApiIoProvider } from "@/modules/odds/odds-api-io";
+import { ALL_SPORT_KEYS } from "@/modules/odds/sports-catalog";
 import { OddsSyncService, type SyncConfig } from "@/modules/odds/sync.service";
 import { inngest } from "../client";
 
@@ -16,13 +17,7 @@ import { inngest } from "../client";
  * overlapping runs only race each other into the rate limiter.
  */
 
-export const SYNC_SPORTS = [
-  "football",
-  "basketball",
-  "tennis",
-  "table-tennis",
-  "esports",
-] as const;
+export const SYNC_SPORTS = ALL_SPORT_KEYS;
 
 const BOOKMAKERS = process.env.ODDS_BOOKMAKERS
   ? process.env.ODDS_BOOKMAKERS.split(",").map((b) => b.trim()).filter(Boolean)

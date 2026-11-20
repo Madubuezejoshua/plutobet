@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { slipMath, toKobo } from "../slip-math";
+import {
+  ACCA_BOOST_MIN_LEG_ODDS,
+  ACCA_BOOST_TIERS,
+  accaBoostPreview,
+  slipMath,
+  toKobo,
+} from "../slip-math";
+import {
+  ALL_SPORT_KEYS,
+  PRIMARY_SPORT_KEYS,
+  SPORTS_CATALOG,
+  leaguePriority,
+  resolveSportKey,
+} from "@/modules/odds/sports-catalog";
 
 /**
  * The betslip's arithmetic.
@@ -99,3 +112,86 @@ describe("slipMath", () => {
     expect(slipMath([{ odds: 1.005 }], 333n).returnMinor).toBe(335n);
   });
 });
+
+describe("accaBoostPreview", () => {
+  it("excludes legs below minimum qualifying odds (1.25)", () => {
+    const picks = [
+      { odds: 1.1 },
+      { odds: 1.24 },
+      { odds: ACCA_BOOST_MIN_LEG_ODDS },
+      { odds: 1.8 },
+    ];
+    const stake = 10_000n;
+    const { returnMinor } = slipMath(picks, stake);
+    const boost = accaBoostPreview(picks, stake, returnMinor);
+
+    expect(boost.qualifyingLegs).toBe(2);
+    expect(boost.currentPercent).toBe(0);
+    expect(boost.nextTierLegs).toBe(3);
+    expect(boost.nextTierPercent).toBe(3);
+    expect(boost.legsNeededForNext).toBe(1);
+    expect(boost.estimatedBonusMinor).toBe(0n);
+  });
+
+  it("computes net-profit bonus accurately at 3, 5, and 10+ qualifying legs", () => {
+    const stake = 10_000n;
+
+    // 3 qualifying legs -> +3% on net profit
+    const legs3 = [{ odds: 2 }, { odds: 2 }, { odds: 1.5 }]; // totalOdds = 6, return = 60_000n, profit = 50_000n
+    const b3 = accaBoostPreview(legs3, stake, slipMath(legs3, stake).returnMinor);
+    expect(b3.currentPercent).toBe(3);
+    expect(b3.estimatedBonusMinor).toBe(1_500n); // 3% of 50_000n
+    expect(b3.nextTierLegs).toBe(4);
+    expect(b3.nextTierPercent).toBe(5);
+
+    // 5 qualifying legs -> +10% on net profit
+    const legs5 = Array.from({ length: 5 }, () => ({ odds: 2 })); // return = 320_000n, profit = 310_000n
+    const b5 = accaBoostPreview(legs5, stake, slipMath(legs5, stake).returnMinor);
+    expect(b5.currentPercent).toBe(10);
+    expect(b5.estimatedBonusMinor).toBe(31_000n);
+    expect(b5.progressPercent).toBe(50);
+
+    // 12 qualifying legs -> capped at top tier (+50%)
+    const legs12 = Array.from({ length: 12 }, () => ({ odds: 1.3 }));
+    const { returnMinor: ret12 } = slipMath(legs12, stake);
+    const b12 = accaBoostPreview(legs12, stake, ret12);
+    expect(b12.currentPercent).toBe(ACCA_BOOST_TIERS[ACCA_BOOST_TIERS.length - 1]!.percent);
+    expect(b12.nextTierLegs).toBeNull();
+    expect(b12.legsNeededForNext).toBe(0);
+    expect(b12.progressPercent).toBe(100);
+    expect(b12.estimatedBonusMinor).toBe(((ret12 - stake) * 50n) / 100n);
+  });
+});
+
+describe("SPORTS_CATALOG", () => {
+  it("exposes all 13 sports with 5 primary sports synced first", () => {
+    expect(SPORTS_CATALOG).toHaveLength(13);
+    expect(ALL_SPORT_KEYS).toHaveLength(13);
+    expect(PRIMARY_SPORT_KEYS).toEqual([
+      "football",
+      "basketball",
+      "tennis",
+      "table-tennis",
+      "esports",
+    ]);
+    expect(new Set(ALL_SPORT_KEYS).size).toBe(13);
+  });
+
+  it("resolves valid sport keys and falls back to football", () => {
+    expect(resolveSportKey("ice-hockey")).toBe("ice-hockey");
+    expect(resolveSportKey("mma")).toBe("mma");
+    expect(resolveSportKey("  MIXED-MARTIAL-ARTS ")).toBe("mma");
+    expect(resolveSportKey("unknown-sport")).toBe("football");
+    expect(resolveSportKey(undefined)).toBe("football");
+  });
+
+  it("ranks marquee competitions ahead of lower-tier leagues", () => {
+    expect(leaguePriority("football", "England - Premier League")).toBeLessThan(
+      leaguePriority("football", "Regional Amateur Cup"),
+    );
+    expect(leaguePriority("basketball", "USA - NBA")).toBeLessThan(
+      leaguePriority("basketball", "Club Friendly"),
+    );
+  });
+});
+

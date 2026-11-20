@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/modules/auth/auth-options";
 import { liveSnapshot, type LiveSnapshot } from "@/modules/odds/live-feed";
+import { getSportCounts } from "@/modules/odds/odds.service";
+import { resolveSportKey, SPORTS_CATALOG, sportLabel } from "@/modules/odds/sports-catalog";
 import { profileService } from "@/modules/users/profile.service";
 import { LiveBoard } from "./live-board";
 import { PageShell } from "@/components/sportsbook/page-shell";
@@ -9,33 +11,18 @@ import { PageShell } from "@/components/sportsbook/page-shell";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Live" };
 
-const LIVE_SPORTS = [
-  { key: "football", label: "Football" },
-  { key: "basketball", label: "Basketball" },
-  { key: "tennis", label: "Tennis" },
-  { key: "table-tennis", label: "Table Tennis" },
-  { key: "esports", label: "Esports" },
-] as const;
-
-type LiveSportKey = (typeof LIVE_SPORTS)[number]["key"];
-
-function resolveSport(raw?: string): LiveSportKey {
-  const match = LIVE_SPORTS.find((s) => s.key === raw);
-  return match ? match.key : "football";
-}
-
 export default async function LivePage({
   searchParams,
 }: {
   searchParams: Promise<{ sport?: string }>;
 }) {
   const params = await searchParams;
-  const activeSport = resolveSport(params.sport);
-  const activeLabel = LIVE_SPORTS.find((s) => s.key === activeSport)?.label ?? "Football";
+  const activeSport = resolveSportKey(params.sport);
+  const activeLabel = sportLabel(activeSport);
 
   const session = await getServerSession(authOptions);
 
-  const [snapshot, preferences] = await Promise.all([
+  const [snapshot, preferences, sportCounts] = await Promise.all([
     liveSnapshot(activeSport).catch((error: unknown) => {
       console.error("[live] snapshot unavailable", error);
       return { version: "0-0", events: [] } as LiveSnapshot;
@@ -43,6 +30,7 @@ export default async function LivePage({
     session?.user
       ? profileService.preferences(session.user.id).catch(() => null)
       : Promise.resolve(null),
+    getSportCounts().catch(() => ({} as Record<string, { upcoming: number; live: number }>)),
   ]);
 
   const inPlay = snapshot.events.filter((event) => event.status === "LIVE").length;
@@ -61,16 +49,21 @@ export default async function LivePage({
         aria-label="Filter live matches by sport"
         style={{ marginBottom: "var(--sb-3)" }}
       >
-        {LIVE_SPORTS.map((sport) => (
-          <Link
-            key={sport.key}
-            href={sport.key === "football" ? "/live" : `/live?sport=${sport.key}`}
-            className="sb-chip"
-            aria-current={activeSport === sport.key ? "true" : undefined}
-          >
-            {sport.label}
-          </Link>
-        ))}
+        {SPORTS_CATALOG.map((sport) => {
+          const liveNum = sportCounts[sport.key]?.live ?? 0;
+          return (
+            <Link
+              key={sport.key}
+              href={sport.key === "football" ? "/live" : `/live?sport=${sport.key}`}
+              className="sb-chip"
+              aria-current={activeSport === sport.key ? "true" : undefined}
+            >
+              {liveNum > 0 ? <span className="sb-live__dot" aria-hidden="true" /> : null}
+              <span>{sport.label}</span>
+              {liveNum > 0 ? <span className="sb-chip__count">{liveNum}</span> : null}
+            </Link>
+          );
+        })}
       </nav>
 
       <LiveBoard

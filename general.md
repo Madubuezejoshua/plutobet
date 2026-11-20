@@ -339,6 +339,62 @@ repository state:
       watchlist slice / 10 live), `205` markets, `1,406` priced selections,
       zero `[object Object]` rows. Verified Next.js build, ESLint, and live
       HTTP `200` on all 5 `/sports?sport=...` and `/live?sport=...` routes.
+14. Shipped competitive-parity sportsbook upgrades (#1–#4) while preserving
+    Midnight Stadium dark/light theme tokens and strict money honesty:
+    - **13-sport catalog + A–Z Sports Menu with Live/Upcoming Counts**
+      (`src/modules/odds/sports-catalog.ts`, `src/modules/odds/odds.service.ts`,
+      `src/modules/odds/odds-api-io.ts`, `src/inngest/functions/odds-sync.ts`,
+      `src/components/sportsbook/shell.tsx`, `src/components/sportsbook/shell-frame.tsx`,
+      `src/components/sportsbook/header.tsx`, `src/components/sportsbook/sidebar.tsx`,
+      `src/components/sportsbook/match-board.tsx`, `src/app/(site)/live/page.tsx`,
+      `scripts/qa-odds-sync.ts`): added canonical 13-sport registry (`football`,
+      `basketball`, `tennis`, `table-tennis`, `esports`, `ice-hockey`,
+      `volleyball`, `handball`, `mma`, `boxing`, `american-football`, `baseball`,
+      `cricket`) with 5 primary sports prioritized first in sync, grouped SQL
+      `getSportCounts()` badges (live red indicator + upcoming counts) across the
+      header sport tabs, collapsible **A–Z Sports (13)** sidebar menu, and `/live`
+      sport chips, plus automatic 2-way vs 3-way board layout per sport.
+    - **Top Leagues Quick Bar & Kickoff Time Filters**
+      (`src/components/sportsbook/date-strip.tsx`,
+      `src/components/sportsbook/board-page.tsx`): added URL-driven
+      `All upcoming`, `Live now`, `Next 3h`, and `Today` kickoff filters with
+      per-window counts and marquee competition quick-chips ranked via
+      `leaguePriority(sport, league)`.
+    - **Quick "Load Booking Code" & "Check Ticket" Bar + `/check-ticket`**
+      (`src/components/sportsbook/quick-code-bar.tsx`,
+      `src/app/(site)/check-ticket/page.tsx`, `src/app/api/tickets/route.ts`,
+      `src/lib/navigation.ts`): mounted an inline 2-tab bar above the sportsbook
+      board (`Load Code` -> `GET /api/bookings` -> `slip.replacePicks`; `Check
+      Ticket` -> `GET /api/tickets?ref=...`) plus a dedicated `/check-ticket`
+      page linked from sidebar and header `More`. `GET /api/tickets` is
+      rate-limited via `publicRoute`, accepts full UUID or 8+ hex prefix, and
+      returns strictly non-PII ticket summary and leg statuses.
+    - **Accumulator Multi-Boost Calculator in Betslip**
+      (`src/components/sportsbook/slip-math.ts`,
+      `src/components/sportsbook/betslip-panel.tsx`, `src/styles/sportsbook.css`):
+      added `accaBoostPreview()` (qualifying legs `>= 1.25`, 3 legs `+3%` up to
+      10+ legs `+50%` on net profit) with a live progress meter in `BetslipPanel`,
+      while keeping `Potential return` strictly equal to authoritative base
+      `priceBet()` settlement (never overstating settled ledger payout).
+    - Evidence status (2026-11-19):
+      - `VERIFIED_AGAINST_REAL_PROVIDER_DATA`: local disposable Postgres holds
+        `4,144` live `odds-api.io` fixtures (plus 5 demo football fixtures) across
+        all 13 sports (`football`: 473, `ice-hockey`: 496, `volleyball`: 488,
+        `handball`: 486, `basketball`: 476, `table-tennis`: 390, `tennis`: 290,
+        `american-football`: 268, `baseball`: 254, `cricket`: 200, `esports`: 181,
+        `mma`: 103, `boxing`: 39) with priced markets across 10 sports (`mma`,
+        `boxing`, and `table-tennis` awaiting the next hourly free-tier odds
+        refresh window after hitting the 100 req/hr cap).
+      - `VERIFIED_BY_UNIT_TEST_ONLY`: 4/4 `node:test` unit tests passed via
+        `npx tsx --test` (`acca-boost-and-catalog.test.ts` +
+        `browser-store.test.ts`), plus matching Vitest assertions added to
+        `slip-math.acceptance.spec.ts`.
+      - `VERIFIED_END_TO_END`: Next.js production build, `eslint .`, `/api/health`
+        healthy (`database: ok`, `redis: ok`), live HTTP `200` on `/`, all 13
+        `/sports?sport=...` routes (including `/sports?sport=mma` rendering `103`
+        matches), `when=3h`, `when=live`, `when=today`, `/check-ticket`, and
+        `/live`, plus `/api/tickets?ref=00000000` -> `404` JSON and invalid/short
+        refs -> `400` JSON.
 
 The developer-completion and sportsbook verification pass described later in
 this file is prior work, not the current assignment. Its evidence is retained

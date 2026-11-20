@@ -3,12 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   ArrowRight,
   Award,
   CheckSquare,
+  ChevronDown,
+  ChevronRight,
   CreditCard,
   Flame,
   Gift,
@@ -16,6 +18,7 @@ import {
   Home,
   Radio,
   ReceiptText,
+  SearchCheck,
   ShieldCheck,
   Sparkles,
   Trophy,
@@ -25,9 +28,18 @@ import {
 } from "lucide-react";
 import { PWAInstallButton } from "@/components/pwa/pwa-install-button";
 
+interface SidebarSportItem {
+  key: string;
+  label: string;
+  href: string;
+  upcoming?: number;
+  live?: number;
+}
+
 interface SidebarProps {
   signedIn: boolean;
   liveCount: number;
+  sports?: SidebarSportItem[];
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }
@@ -45,10 +57,12 @@ interface SideLink {
 export function SportsbookSidebar({
   signedIn,
   liveCount,
+  sports = [],
   mobileOpen,
   onCloseMobile,
 }: SidebarProps) {
   const pathname = usePathname();
+  const [azOpen, setAzOpen] = useState(false);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -76,6 +90,7 @@ export function SportsbookSidebar({
     },
     { href: "/livescore", label: "Livescore", icon: Activity },
     { href: "/results", label: "Results", icon: CheckSquare },
+    { href: "/check-ticket", label: "Check Ticket", icon: SearchCheck },
   ];
 
   const productLinks: SideLink[] = [
@@ -167,6 +182,44 @@ export function SportsbookSidebar({
 
         <nav aria-label="Sidebar Navigation">
           {renderGroup("Board", mainLinks)}
+          {sports.length > 0 ? (
+            <div className="sb-sidebar__group">
+              <button
+                type="button"
+                className="sb-sidebar__group-toggle"
+                aria-expanded={azOpen}
+                onClick={() => setAzOpen((o) => !o)}
+              >
+                <span>A–Z Sports ({sports.length})</span>
+                {azOpen ? (
+                  <ChevronDown size={13} aria-hidden="true" />
+                ) : (
+                  <ChevronRight size={13} aria-hidden="true" />
+                )}
+              </button>
+              {azOpen ? (
+                <div className="sb-sidebar__nav">
+                  {sports.map((sport) => (
+                    <Link
+                      key={sport.key}
+                      href={sport.href}
+                      className="sb-sideitem sb-sideitem--compact"
+                      onClick={onCloseMobile}
+                    >
+                      <span className="sb-truncate">{sport.label}</span>
+                      {sport.live && sport.live > 0 ? (
+                        <span className="sb-sideitem__badge sb-sideitem__badge--red">
+                          {sport.live} LIVE
+                        </span>
+                      ) : sport.upcoming && sport.upcoming > 0 ? (
+                        <span className="sb-sideitem__count">{sport.upcoming}</span>
+                      ) : null}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {renderGroup("Products", productLinks)}
           {renderGroup("Account", accountLinks)}
           {renderGroup("Help & Trust", helpLinks)}

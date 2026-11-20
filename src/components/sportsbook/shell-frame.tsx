@@ -7,11 +7,20 @@ import { SportsbookFooter } from "./footer";
 import { MobileBar } from "./mobile-bar";
 import { PWARuntime } from "@/components/pwa/pwa-runtime";
 
+export interface ShellSportItem {
+  key: string;
+  label: string;
+  href: string;
+  upcoming?: number;
+  live?: number;
+}
+
 interface ShellFrameProps {
   signedIn: boolean;
   balanceMinor: string | null;
   liveCount: number;
-  sports: { key: string; label: string; href: string }[];
+  sports: ShellSportItem[];
+  allSports?: ShellSportItem[];
   activeSport: string;
   banner?: ReactNode;
   children: ReactNode;
@@ -46,6 +55,7 @@ export function SportsbookShellFrame({
   balanceMinor,
   liveCount,
   sports,
+  allSports,
   activeSport,
   banner,
   children,
@@ -76,6 +86,7 @@ export function SportsbookShellFrame({
       <SportsbookSidebar
         signedIn={signedIn}
         liveCount={liveCount}
+        sports={allSports ?? sports}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
       />
