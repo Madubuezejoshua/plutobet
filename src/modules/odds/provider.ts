@@ -78,7 +78,7 @@ export interface EventResult {
 export interface OddsProvider {
   readonly name: string;
 
-  listEvents(sport: string, opts?: { to?: Date }): Promise<SportEvent[]>;
+  listEvents(sport: string, opts?: { from?: Date; to?: Date }): Promise<SportEvent[]>;
   listLiveEvents(): Promise<SportEvent[]>;
 
   /** Batch. Implementations MUST chunk internally to the provider's cap. */

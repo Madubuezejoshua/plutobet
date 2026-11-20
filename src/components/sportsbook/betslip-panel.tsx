@@ -2,47 +2,68 @@
 
 import { useId, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Loader2, Ticket, TrendingDown, TrendingUp, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Bookmark,
+  Check,
+  CheckCircle2,
+  Copy,
+  Download,
+  Loader2,
+  Share2,
+  Shield,
+  Ticket,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { naira } from "@/lib/money";
-import { useBetslip } from "./betslip-store";
-import { slipMath, toKobo } from "./slip-math";
+import { namedSystems } from "@/modules/betting/system-bet";
+import { useBetslip, type Pick } from "./betslip-store";
+import { slipMath, systemSlipMath, toKobo } from "./slip-math";
 
 /**
- * The betslip.
+ * The betslip: Singles, Accumulators, Cut-1 / Flexi System bets, and Booking Codes.
  *
  * MONEY RULES OBSERVED HERE
  * -------------------------
  * 1. "Potential return" is GROSS and includes the stake. "Profit" is shown as
- *    its own, smaller figure. Labelling the gross number as profit overstates
- *    the win by exactly the stake, and it is the single most common way a
- *    betslip misleads.
- * 2. The figures are a PREVIEW. The server prices the bet from stored odds and
- *    its answer is authoritative; this is here so the customer knows what they
- *    are submitting.
- * 3. Placement goes to the real authenticated route. Nothing here writes a
- *    balance, and a success message is only shown for a response that actually
- *    contains a bet id.
- * 4. The submit button disables while a request is in flight, so a double-tap
- *    cannot become two bets. The route is idempotent as well; this is the
- *    cheaper half of the same guarantee.
+ *    its own, smaller figure.
+ * 2. For Cut-1 / System bets, total stake (`unitStake × combinations`) is
+ *    always displayed explicitly before confirmation so nobody confuses a
+ *    unit stake with the full cost.
+ * 3. Booking codes save and load SELECTIONS at live prices via `/api/bookings`
+ *    — never a stake or an already-placed bet.
+ * 4. Placement goes to `/api/bets` with an idempotency key. Nothing here
+ *    writes a balance, and success is only shown for a real bet id.
  */
 
 const QUICK_STAKES = [100, 500, 1000, 5000];
+
+type BetMode = "acca" | "cut1" | "system";
 
 interface CustomerFailure {
   code: string;
   message: string;
 }
 
-/**
- * The per-combination refusals the API returns in `details`.
- *
- * Validated rather than cast. These are curated customer-facing pairs from
- * `customerReason` — never a raw domain message, which carries wallet ids and
- * how much more the book will take on a market — but a response body is still
- * a response body, and rendering an unchecked string from one into the page is
- * the habit worth not having.
- */
+interface BookedSelectionPayload {
+  selectionId: string;
+  eventId: string;
+  fixture: string;
+  marketKey: string;
+  selectionLabel: string;
+  currentPrice: number | null;
+  available: boolean;
+}
+
+interface PlacedSummary {
+  betId: string;
+  placedCount: number;
+  combinationCount: number;
+  totalStakeMinor: string | null;
+}
+
 function customerFailures(body: unknown): CustomerFailure[] {
   if (!body || typeof body !== "object" || !("details" in body)) return [];
   const details = (body as { details: unknown }).details;
@@ -82,89 +103,266 @@ export function BetslipPanel({
   const slip = useBetslip();
   const [tab, setTab] = useState<"slip" | "mine">("slip");
   const [confirming, setConfirming] = useState(false);
+  const [betMode, setBetMode] = useState<BetMode>("acca");
+  const [customSystemSize, setCustomSystemSize] = useState<number>(2);
+  const [bankerIds, setBankerIds] = useState<string[]>([]);
+  const [placedSummary, setPlacedSummary] = useState<PlacedSummary | null>(null);
 
-  /*
-   * UNIQUE IDS, BECAUSE THIS PANEL IS ON THE PAGE TWICE.
-   *
-   * `board-page.tsx` renders it as the sticky column and `mobile-bar.tsx`
-   * renders it again inside the bottom sheet. Both are in the DOM at once — the
-   * column is hidden by CSS below 1180px, not unmounted — so the hard-coded
-   * `id="sb-stake"` and `id="sb-stake-err"` appeared twice on every board page.
-   *
-   * That is invalid HTML, and it breaks the two associations that matter:
-   * `<label htmlFor>` and `aria-describedby` both resolve to the FIRST match in
-   * document order, which on a phone is the HIDDEN desktop copy. So the field a
-   * customer actually types into had its label and its error message pointing at
-   * a different element — exactly the failure the accessible-name work in the
-   * previous pass existed to prevent.
-   *
-   * axe did not catch it: `duplicate-id` is retired for non-ARIA ids, and the
-   * error paragraph only exists while an error is showing, which it was not
-   * during the scan. Playwright caught it as "strict mode violation: resolved
-   * to 2 elements".
-   */
+  // Booking code state
+  const [codeInput, setCodeInput] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
+  const [codeFeedback, setCodeFeedback] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
+  const [showLoaderBar, setShowLoaderBar] = useState(false);
+  const [bookingBusy, setBookingBusy] = useState(false);
+  const [bookedCode, setBookedCode] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+
   const panelId = useId();
   const stakeId = `${panelId}-stake`;
   const stakeErrorId = `${panelId}-stake-error`;
+  const bookingInputId = `${panelId}-booking-code`;
 
-  const stakeMinor = toKobo(slip.stake);
-  const { totalOdds, returnMinor, profitMinor } = useMemo(
-    () => slipMath(slip.picks, stakeMinor ?? 0n),
-    [slip.picks, stakeMinor],
+  const pickCount = slip.picks.length;
+  const systemOptions = useMemo(
+    () => namedSystems(pickCount).filter((opt) => opt.systemSize < pickCount),
+    [pickCount],
   );
 
-  const balance = balanceMinor ? BigInt(balanceMinor) : null;
-  const insufficient = balance !== null && stakeMinor !== null && stakeMinor > balance;
+  // Effective mode gracefully falls back to acca if fewer than 3 selections remain.
+  const effectiveMode: BetMode =
+    pickCount >= 3 && systemOptions.length > 0 ? betMode : "acca";
 
-  /* A price that moved after it was added. The customer must see this. */
+  const activeSystemSize = useMemo(() => {
+    if (effectiveMode === "cut1") return Math.max(2, pickCount - 1);
+    if (effectiveMode === "system") {
+      const validSizes = systemOptions.map((o) => o.systemSize);
+      if (validSizes.includes(customSystemSize)) return customSystemSize;
+      return validSizes[0] ?? Math.max(2, pickCount - 1);
+    }
+    return pickCount;
+  }, [effectiveMode, pickCount, systemOptions, customSystemSize]);
+
+  // Map banker selectionIds to current indices cleanly.
+  const bankerIndices = useMemo(() => {
+    if (effectiveMode !== "system") return [];
+    const indices: number[] = [];
+    slip.picks.forEach((p, idx) => {
+      if (bankerIds.includes(p.selectionId)) indices.push(idx);
+    });
+    return indices;
+  }, [effectiveMode, slip.picks, bankerIds]);
+
+  const isSystemSlip = effectiveMode !== "acca" && pickCount >= 3;
+  const unitStakeMinor = toKobo(slip.stake);
+
+  const accaPreview = useMemo(
+    () => slipMath(slip.picks, unitStakeMinor ?? 0n),
+    [slip.picks, unitStakeMinor],
+  );
+
+  const systemPreview = useMemo(
+    () =>
+      isSystemSlip
+        ? systemSlipMath(slip.picks, unitStakeMinor ?? 0n, activeSystemSize, bankerIndices)
+        : null,
+    [isSystemSlip, slip.picks, unitStakeMinor, activeSystemSize, bankerIndices],
+  );
+
+  const totalCostMinor = isSystemSlip
+    ? (systemPreview?.totalStakeMinor ?? 0n)
+    : (unitStakeMinor ?? 0n);
+
+  const balance = balanceMinor ? BigInt(balanceMinor) : null;
+  const insufficient = balance !== null && totalCostMinor > 0n && totalCostMinor > balance;
+
   const moved = slip.picks
     .map((p) => ({ pick: p, now: slip.drift[p.selectionId] }))
     .filter((x) => typeof x.now === "number" && x.now !== x.pick.odds);
 
-  const stakeInvalid = slip.stake.trim() !== "" && stakeMinor === null;
+  const stakeInvalid = slip.stake.trim() !== "" && unitStakeMinor === null;
+  const systemInvalid = isSystemSlip && Boolean(systemPreview && !systemPreview.valid);
   const canPlace =
     signedIn &&
-    slip.picks.length > 0 &&
-    stakeMinor !== null &&
-    stakeMinor > 0n &&
+    pickCount > 0 &&
+    unitStakeMinor !== null &&
+    unitStakeMinor > 0n &&
     !insufficient &&
+    !systemInvalid &&
     slip.status !== "placing";
 
-  async function place() {
-    if (!canPlace || stakeMinor === null) return;
-    slip.setStatus("placing");
+  function toggleBanker(selectionId: string) {
+    setBookedCode(null);
+    setBankerIds((prev) =>
+      prev.includes(selectionId)
+        ? prev.filter((id) => id !== selectionId)
+        : [...prev, selectionId],
+    );
+  }
+
+  async function loadBookingCode(event: React.FormEvent) {
+    event.preventDefault();
+    const cleaned = codeInput.trim().toUpperCase();
+    if (!cleaned) return;
+    setCodeLoading(true);
+    setCodeFeedback(null);
+    setBookedCode(null);
+
     try {
-      const response = await fetch("/api/bets", {
+      const response = await fetch(`/api/bookings?code=${encodeURIComponent(cleaned)}`);
+      const body = (await response.json().catch(() => null)) as
+        | {
+            code?: string;
+            hasUnavailable?: boolean;
+            selections?: BookedSelectionPayload[];
+            message?: string;
+          }
+        | null;
+
+      if (!response.ok || !body?.selections) {
+        setCodeFeedback({
+          kind: "error",
+          text: body?.message ?? "We could not find an active slip for that booking code.",
+        });
+        return;
+      }
+
+      const available = body.selections.filter(
+        (sel) => sel.available && typeof sel.currentPrice === "number" && sel.currentPrice > 1,
+      );
+
+      if (available.length === 0) {
+        setCodeFeedback({
+          kind: "warn",
+          text: "All matches on that booking code have already started or closed.",
+        });
+        return;
+      }
+
+      const nextPicks: Pick[] = available.map((sel) => ({
+        selectionId: sel.selectionId,
+        eventId: sel.eventId,
+        marketKey: sel.marketKey,
+        selectionKey: sel.selectionLabel.toLowerCase(),
+        selectionLabel: sel.selectionLabel,
+        fixture: sel.fixture,
+        odds: sel.currentPrice!,
+      }));
+
+      slip.replacePicks(nextPicks);
+      setBankerIds([]);
+      setBetMode("acca");
+      setCodeInput("");
+      setShowLoaderBar(false);
+
+      const skipped = body.selections.length - available.length;
+      setCodeFeedback(
+        skipped > 0
+          ? {
+              kind: "warn",
+              text: `Loaded ${available.length} selection${available.length === 1 ? "" : "s"} from ${body.code ?? cleaned}. ${skipped} expired or closed leg${skipped === 1 ? " was" : "s were"} skipped.`,
+            }
+          : {
+              kind: "ok",
+              text: `Loaded ${available.length} selection${available.length === 1 ? "" : "s"} from code ${body.code ?? cleaned} at live odds.`,
+            },
+      );
+    } catch {
+      setCodeFeedback({
+        kind: "error",
+        text: "Network error loading booking code. Please try again.",
+      });
+    } finally {
+      setCodeLoading(false);
+    }
+  }
+
+  async function createBookingCode() {
+    if (pickCount === 0 || bookingBusy) return;
+    setBookingBusy(true);
+    setCodeFeedback(null);
+    setCopiedCode(false);
+
+    try {
+      const response = await fetch("/api/bookings", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          stakeMinor: stakeMinor.toString(),
-          idempotencyKey: safeIdempotencyKey(),
-          legs: slip.picks.map((p) => ({
-            selectionId: p.selectionId,
-            odds: p.odds.toFixed(3),
-          })),
+          selectionIds: slip.picks.map((p) => p.selectionId),
         }),
+      });
+      const body = (await response.json().catch(() => null)) as
+        | { code?: string; message?: string }
+        | null;
+
+      if (!response.ok || !body?.code) {
+        setCodeFeedback({
+          kind: "error",
+          text: body?.message ?? "Could not create a booking code for these selections.",
+        });
+        return;
+      }
+      setBookedCode(body.code);
+    } catch {
+      setCodeFeedback({
+        kind: "error",
+        text: "Network error while booking slip. Please try again.",
+      });
+    } finally {
+      setBookingBusy(false);
+    }
+  }
+
+  async function copyBookingCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(true);
+      window.setTimeout(() => setCopiedCode(false), 2000);
+    } catch {
+      setCodeFeedback({ kind: "ok", text: `Booking code: ${code}` });
+    }
+  }
+
+  async function shareBookingCode(code: string) {
+    const shareText = `Load my PlutoBet slip (${pickCount} ${pickCount === 1 ? "pick" : "picks"}) with booking code: ${code}`;
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: "PlutoBet Booking Code", text: shareText });
+        return;
+      } catch {
+        // User cancelled or share unsupported; fall back to copy
+      }
+    }
+    await copyBookingCode(code);
+  }
+
+  async function place() {
+    if (!canPlace || unitStakeMinor === null) return;
+    slip.setStatus("placing");
+    setPlacedSummary(null);
+    try {
+      const payload: Record<string, unknown> = {
+        stakeMinor: unitStakeMinor.toString(),
+        idempotencyKey: safeIdempotencyKey(),
+        legs: slip.picks.map((p) => ({
+          selectionId: p.selectionId,
+          odds: p.odds.toFixed(3),
+        })),
+      };
+      if (isSystemSlip) {
+        payload.systemSize = activeSystemSize;
+        if (bankerIndices.length > 0) {
+          payload.bankerIndices = bankerIndices;
+        }
+      }
+
+      const response = await fetch("/api/bets", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
       });
       const body: unknown = await response.json().catch(() => null);
 
       if (!response.ok) {
-        /*
-         * THE REASON, NOT THE SUMMARY.
-         *
-         * The service works out exactly why each combination was refused —
-         * a suspended selection, an empty wallet, a full market, a price that
-         * moved, a safer-gambling limit the customer set themselves — and the
-         * route passes those curated messages back in `details`. Both files
-         * carry a comment saying so. Nothing read them: this panel took
-         * `body.message`, which is the AGGREGATE, and every refusal on a
-         * single-selection slip showed "none of the combinations on this slip
-         * could be placed".
-         *
-         * That is the same defect as the safer-gambling one fixed in the
-         * service: a limit that stops somebody silently has done half its job.
-         * The fix reached the API and stopped one layer short of the customer.
-         */
         const failures = customerFailures(body);
         const reasons = [...new Set(failures.map((f) => f.message))];
         const summary =
@@ -172,17 +370,6 @@ export function BetslipPanel({
             ? String((body as { message: unknown }).message)
             : "That bet could not be placed. Nothing has been charged.";
 
-        /*
-         * A MOVED PRICE IS A QUESTION, AND THIS IS WHERE IT GETS ASKED.
-         *
-         * The account preference defaults to "Ask", which the server implements
-         * as "refuse anything that drifted". Until now nothing asked: the
-         * customer saw a refusal, pressed Place bet again with the same stale
-         * number, and was refused again. Adopting the live price puts the new
-         * number on the slip — with its recalculated return — so the next press
-         * is a decision rather than a repetition. The server still prices it and
-         * still decides.
-         */
         if (failures.some((f) => f.code === "ODDS_CHANGED") && slip.adoptDrift() > 0) {
           slip.setStatus(
             "error",
@@ -193,21 +380,30 @@ export function BetslipPanel({
 
         slip.setStatus(
           "error",
-          reasons.length === 1 ? reasons[0]! : reasons.length > 1 ? `${summary}: ${reasons.join(" ")}` : summary,
+          reasons.length === 1
+            ? reasons[0]!
+            : reasons.length > 1
+              ? `${summary}: ${reasons.join(" ")}`
+              : summary,
         );
         return;
       }
 
-      const betId =
-        body && typeof body === "object" && "betId" in body
-          ? String((body as { betId: unknown }).betId)
-          : null;
+      const rec = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+      const betId = rec && typeof rec.betId === "string" ? rec.betId : null;
 
-      // Only a response carrying a real bet id counts as placed.
       if (!betId) {
         slip.setStatus("error", "The bet may not have been placed. Check My Bets before retrying.");
         return;
       }
+
+      setPlacedSummary({
+        betId,
+        placedCount: typeof rec?.placedCount === "number" ? rec.placedCount : 1,
+        combinationCount: typeof rec?.combinationCount === "number" ? rec.combinationCount : 1,
+        totalStakeMinor: typeof rec?.totalStakeMinor === "string" ? rec.totalStakeMinor : null,
+      });
+      setBookedCode(null);
       slip.setStatus("placed", null, betId);
     } catch {
       slip.setStatus(
@@ -219,18 +415,54 @@ export function BetslipPanel({
     }
   }
 
+  const bookingForm = (
+    <form onSubmit={loadBookingCode} className="sb-booking-form" aria-label="Load booking code">
+      <label className="sb-sr" htmlFor={bookingInputId}>
+        Booking code
+      </label>
+      <input
+        id={bookingInputId}
+        type="text"
+        value={codeInput}
+        onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+        placeholder="Enter booking code"
+        autoComplete="off"
+        maxLength={24}
+        className="sb-booking-input"
+      />
+      <button
+        type="submit"
+        className="sb-btn sb-btn--dark sb-booking-submit"
+        disabled={codeLoading || codeInput.trim().length < 3}
+      >
+        {codeLoading ? (
+          <Loader2 size={14} className="sb-spin" aria-hidden="true" />
+        ) : (
+          <Download size={14} aria-hidden="true" />
+        )}
+        <span>Load</span>
+      </button>
+    </form>
+  );
+
   return (
     <section className="sb-panel sb-slip" aria-label="Betslip">
       <div className="sb-slip__tabs" role="tablist" aria-label="Betslip sections">
         <button
-          type="button" role="tab" className="sb-slip__tab"
-          aria-selected={tab === "slip"} onClick={() => setTab("slip")}
+          type="button"
+          role="tab"
+          className="sb-slip__tab"
+          aria-selected={tab === "slip"}
+          onClick={() => setTab("slip")}
         >
-          Betslip{slip.picks.length > 0 ? ` (${slip.picks.length})` : ""}
+          Betslip{pickCount > 0 ? ` (${pickCount})` : ""}
         </button>
         <button
-          type="button" role="tab" className="sb-slip__tab"
-          aria-selected={tab === "mine"} onClick={() => setTab("mine")}
+          type="button"
+          role="tab"
+          className="sb-slip__tab"
+          aria-selected={tab === "mine"}
+          onClick={() => setTab("mine")}
         >
           My Bets
         </button>
@@ -249,7 +481,7 @@ export function BetslipPanel({
       {tab === "mine" ? (
         <div className="sb-pad sb-stack">
           <p className="sb-small sb-muted">
-            Your open and settled bets, with real settlement status.
+            Your open and settled bets, live cash-out offers, and 1-tap re-bet.
           </p>
           <Link href="/bets" className="sb-btn sb-btn--ghost" style={{ width: "100%" }}>
             Open My Bets
@@ -262,29 +494,144 @@ export function BetslipPanel({
             <div className="sb-pad sb-stack">
               <div className="sb-note sb-note--ok" role="status">
                 <CheckCircle2 size={15} aria-hidden="true" />
-                <span>Bet placed. Reference <strong>{slip.placedBetId.slice(0, 8)}</strong>.</span>
+                <span>
+                  {placedSummary && placedSummary.placedCount > 1
+                    ? `${placedSummary.placedCount} of ${placedSummary.combinationCount} system bets placed${
+                        placedSummary.totalStakeMinor
+                          ? ` (${naira(placedSummary.totalStakeMinor)})`
+                          : ""
+                      }.`
+                    : `Bet placed. Reference ${slip.placedBetId.slice(0, 8)}.`}
+                </span>
               </div>
               <Link href="/bets" className="sb-btn sb-btn--ghost" style={{ width: "100%" }}>
                 View in My Bets
               </Link>
-              <button type="button" className="sb-btn sb-btn--primary" style={{ width: "100%" }} onClick={slip.clear}>
+              <button
+                type="button"
+                className="sb-btn sb-btn--primary"
+                style={{ width: "100%" }}
+                onClick={() => {
+                  setPlacedSummary(null);
+                  setBankerIds([]);
+                  setBetMode("acca");
+                  slip.clear();
+                }}
+              >
                 New betslip
               </button>
             </div>
-          ) : slip.picks.length === 0 ? (
+          ) : pickCount === 0 ? (
             /* ------------------------------------------------- empty */
-            <div className="sb-empty">
-              <Ticket className="sb-empty__icon" size={26} aria-hidden="true" />
-              <p className="sb-empty__title">Your betslip is empty</p>
-              <p className="sb-small">Tap any odds to add a selection.</p>
+            <div className="sb-pad sb-stack">
+              <div className="sb-empty" style={{ padding: "18px 8px 10px" }}>
+                <Ticket className="sb-empty__icon" size={26} aria-hidden="true" />
+                <p className="sb-empty__title">Your betslip is empty</p>
+                <p className="sb-small">Tap any odds to add a selection, or load a booking code below.</p>
+              </div>
+
+              <div className="sb-booking-box">
+                <p className="sb-booking-box__title">
+                  <Bookmark size={13} aria-hidden="true" /> Have a Booking Code?
+                </p>
+                {bookingForm}
+              </div>
+
+              {codeFeedback ? (
+                <p
+                  className={`sb-note ${
+                    codeFeedback.kind === "error"
+                      ? "sb-note--error"
+                      : codeFeedback.kind === "warn"
+                        ? "sb-note--warn"
+                        : "sb-note--ok"
+                  }`}
+                  role="status"
+                >
+                  {codeFeedback.text}
+                </p>
+              ) : null}
             </div>
           ) : (
             <>
+              {/* ------------------------ bet mode bar (Acca / Cut 1 / System) */}
+              {pickCount >= 3 && systemOptions.length > 0 ? (
+                <div className="sb-slip-modes" role="tablist" aria-label="Bet type">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={effectiveMode === "acca"}
+                    className="sb-slip-mode"
+                    onClick={() => {
+                      setBetMode("acca");
+                      setConfirming(false);
+                    }}
+                  >
+                    Acca ({pickCount})
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={effectiveMode === "cut1"}
+                    className="sb-slip-mode"
+                    onClick={() => {
+                      setBetMode("cut1");
+                      setConfirming(false);
+                    }}
+                  >
+                    <Shield size={12} aria-hidden="true" />
+                    Cut 1 ({pickCount - 1}/{pickCount})
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={effectiveMode === "system"}
+                    className="sb-slip-mode"
+                    onClick={() => {
+                      setBetMode("system");
+                      setConfirming(false);
+                    }}
+                  >
+                    System
+                  </button>
+                </div>
+              ) : null}
+
+              {effectiveMode === "system" && systemOptions.length > 0 ? (
+                <div className="sb-system-bar">
+                  <div className="sb-system-bar__chips" role="group" aria-label="System combinations">
+                    {systemOptions.map((opt) => (
+                      <button
+                        key={opt.systemSize}
+                        type="button"
+                        className="sb-system-pill"
+                        aria-pressed={activeSystemSize === opt.systemSize}
+                        onClick={() => setCustomSystemSize(opt.systemSize)}
+                      >
+                        {opt.systemSize}/{pickCount}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="sb-xs sb-muted" style={{ margin: 0 }}>
+                    Tap <strong>B</strong> on a leg to lock it as a banker in every combo.
+                  </p>
+                </div>
+              ) : effectiveMode === "cut1" ? (
+                <div className="sb-system-bar">
+                  <p className="sb-xs sb-muted" style={{ margin: 0 }}>
+                    <strong>Cut 1 protection:</strong> backs all{" "}
+                    <strong>{systemPreview?.combinations ?? pickCount}</strong> combinations of{" "}
+                    {activeSystemSize}/{pickCount} — you still win a payout even if 1 game cuts!
+                  </p>
+                </div>
+              ) : null}
+
               {/* ---------------------------------------- selections */}
               <div>
                 {slip.picks.map((pick) => {
                   const now = slip.drift[pick.selectionId];
                   const changed = typeof now === "number" && now !== pick.odds;
+                  const isBanker = effectiveMode === "system" && bankerIds.includes(pick.selectionId);
                   return (
                     <div className="sb-pick" key={pick.selectionId}>
                       <div className="sb-pick__top">
@@ -293,30 +640,39 @@ export function BetslipPanel({
                           <div className="sb-pick__market">{pick.marketKey.replace(/_/g, " ")}</div>
                           <div className="sb-pick__fixture">{pick.fixture}</div>
                         </div>
+                        {effectiveMode === "system" ? (
+                          <button
+                            type="button"
+                            className="sb-banker-btn"
+                            aria-pressed={isBanker}
+                            title={isBanker ? "Remove banker" : "Mark as banker"}
+                            aria-label={`Mark ${pick.selectionLabel} as banker`}
+                            onClick={() => toggleBanker(pick.selectionId)}
+                          >
+                            B
+                          </button>
+                        ) : null}
                         <span className="sb-pick__odds">{pick.odds.toFixed(2)}</span>
                         <button
-                          type="button" className="sb-pick__x"
+                          type="button"
+                          className="sb-pick__x"
                           aria-label={`Remove ${pick.selectionLabel} from betslip`}
-                          onClick={() => slip.remove(pick.selectionId)}
+                          onClick={() => {
+                            setBookedCode(null);
+                            setBankerIds((prev) => prev.filter((id) => id !== pick.selectionId));
+                            slip.remove(pick.selectionId);
+                          }}
                         >
                           <X size={14} aria-hidden="true" />
                         </button>
                       </div>
                       {changed ? (
                         <div className="sb-note sb-note--warn" style={{ padding: "6px 0 0" }} role="status">
-                          {now > pick.odds
-                            ? <TrendingUp size={14} aria-hidden="true" />
-                            : <TrendingDown size={14} aria-hidden="true" />}
-                          {/*
-                            * SAYS WHAT ACTUALLY HAPPENS.
-                            *
-                            * This read "Your bet will be placed at the current
-                            * price", which is untrue under the DEFAULT account
-                            * setting: "Ask" makes the server refuse a drifted
-                            * price outright. A customer was promised a
-                            * placement and given a refusal, which is the worst
-                            * order to put those two in.
-                            */}
+                          {now > pick.odds ? (
+                            <TrendingUp size={14} aria-hidden="true" />
+                          ) : (
+                            <TrendingDown size={14} aria-hidden="true" />
+                          )}
                           <span>
                             Odds moved to <strong>{now.toFixed(2)}</strong>. Your{" "}
                             <Link href="/account/preferences">odds-change setting</Link> decides
@@ -331,20 +687,29 @@ export function BetslipPanel({
 
               {/* --------------------------------------------- stake */}
               <div className="sb-pad sb-stack">
-                {slip.picks.length > 1 ? (
+                {!isSystemSlip && pickCount > 1 ? (
                   <p className="sb-xs sb-muted" style={{ margin: 0 }}>
-                    Accumulator · {slip.picks.length} selections · all must win
+                    Accumulator · {pickCount} selections · all must win
                   </p>
                 ) : null}
 
-                <label className="sb-sr" htmlFor={stakeId}>Stake in naira</label>
+                {isSystemSlip && systemPreview?.valid ? (
+                  <p className="sb-xs sb-muted" style={{ margin: 0 }}>
+                    Stake per combination ({systemPreview.combinations}{" "}
+                    {systemPreview.combinations === 1 ? "bet" : "bets"})
+                  </p>
+                ) : null}
+
+                <label className="sb-sr" htmlFor={stakeId}>
+                  {isSystemSlip ? "Stake per combination in naira" : "Stake in naira"}
+                </label>
                 <input
                   id={stakeId}
                   className="sb-stake"
                   inputMode="decimal"
-                  placeholder="Stake (₦)"
+                  placeholder={isSystemSlip ? "Stake per bet (₦)" : "Stake (₦)"}
                   value={slip.stake}
-                  aria-invalid={stakeInvalid || insufficient}
+                  aria-invalid={stakeInvalid || insufficient || systemInvalid}
                   aria-describedby={stakeInvalid || insufficient ? stakeErrorId : undefined}
                   onChange={(e) => slip.setStake(e.target.value)}
                 />
@@ -357,6 +722,13 @@ export function BetslipPanel({
                   ))}
                 </div>
 
+                {systemInvalid && systemPreview?.error ? (
+                  <p className="sb-note sb-note--error" role="alert">
+                    <AlertTriangle size={14} aria-hidden="true" />
+                    {systemPreview.error}
+                  </p>
+                ) : null}
+
                 {stakeInvalid ? (
                   <p id={stakeErrorId} className="sb-note sb-note--error" role="alert">
                     <AlertTriangle size={14} aria-hidden="true" />
@@ -366,7 +738,8 @@ export function BetslipPanel({
                 {insufficient ? (
                   <p id={stakeErrorId} className="sb-note sb-note--error" role="alert">
                     <AlertTriangle size={14} aria-hidden="true" />
-                    That is more than your balance. <Link href="/deposit">Add funds</Link> or lower the stake.
+                    Total stake ({naira(totalCostMinor)}) exceeds your balance.{" "}
+                    <Link href="/deposit">Add funds</Link> or lower the stake.
                   </p>
                 ) : null}
                 {moved.length > 0 ? (
@@ -377,20 +750,44 @@ export function BetslipPanel({
                   </p>
                 ) : null}
 
-                <dl style={{ margin: 0 }}>
-                  <div className="sb-total">
-                    <dt>Total odds</dt>
-                    <dd>{totalOdds.toFixed(2)}</dd>
-                  </div>
-                  <div className="sb-total">
-                    <dt>Possible profit</dt>
-                    <dd>{naira(profitMinor)}</dd>
-                  </div>
-                  <div className="sb-total sb-total--major">
-                    <dt>Potential return</dt>
-                    <dd>{naira(returnMinor)}</dd>
-                  </div>
-                </dl>
+                {isSystemSlip && systemPreview?.valid ? (
+                  <dl style={{ margin: 0 }}>
+                    <div className="sb-total">
+                      <dt>Combinations</dt>
+                      <dd>{systemPreview.combinations} bets</dd>
+                    </div>
+                    <div className="sb-total">
+                      <dt>Total stake</dt>
+                      <dd>{naira(systemPreview.totalStakeMinor)}</dd>
+                    </div>
+                    {systemPreview.minWinningReturnMinor > 0n ? (
+                      <div className="sb-total">
+                        <dt>If {activeSystemSize}/{pickCount} win (min)</dt>
+                        <dd>{naira(systemPreview.minWinningReturnMinor)}</dd>
+                      </div>
+                    ) : null}
+                    <div className="sb-total sb-total--major">
+                      <dt>Max potential return</dt>
+                      <dd>{naira(systemPreview.maxReturnMinor)}</dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <dl style={{ margin: 0 }}>
+                    <div className="sb-total">
+                      <dt>Total odds</dt>
+                      <dd>{accaPreview.totalOdds.toFixed(2)}</dd>
+                    </div>
+                    <div className="sb-total">
+                      <dt>Possible profit</dt>
+                      <dd>{naira(accaPreview.profitMinor)}</dd>
+                    </div>
+                    <div className="sb-total sb-total--major">
+                      <dt>Potential return</dt>
+                      <dd>{naira(accaPreview.returnMinor)}</dd>
+                    </div>
+                  </dl>
+                )}
+
                 <p className="sb-xs sb-muted" style={{ margin: 0 }}>
                   Potential return includes your stake. Final prices are confirmed by the server.
                 </p>
@@ -402,6 +799,54 @@ export function BetslipPanel({
                   </p>
                 ) : null}
 
+                {bookedCode ? (
+                  <div className="sb-booked-card" role="status">
+                    <div className="sb-booked-card__top">
+                      <span className="sb-xs sb-muted">Booking Code</span>
+                      <strong className="sb-booked-card__code">{bookedCode}</strong>
+                    </div>
+                    <div className="sb-booked-card__actions">
+                      <button
+                        type="button"
+                        className="sb-btn sb-btn--dark"
+                        onClick={() => copyBookingCode(bookedCode)}
+                      >
+                        {copiedCode ? (
+                          <>
+                            <Check size={13} aria-hidden="true" /> Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={13} aria-hidden="true" /> Copy
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="sb-btn sb-btn--ghost"
+                        onClick={() => shareBookingCode(bookedCode)}
+                      >
+                        <Share2 size={13} aria-hidden="true" /> Share
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {codeFeedback ? (
+                  <p
+                    className={`sb-note ${
+                      codeFeedback.kind === "error"
+                        ? "sb-note--error"
+                        : codeFeedback.kind === "warn"
+                          ? "sb-note--warn"
+                          : "sb-note--ok"
+                    }`}
+                    role="status"
+                  >
+                    {codeFeedback.text}
+                  </p>
+                ) : null}
+
                 {!signedIn ? (
                   <Link href="/signin" className="sb-btn sb-btn--primary sb-btn--lg">
                     Sign in to place bet
@@ -409,15 +854,37 @@ export function BetslipPanel({
                 ) : confirming && canPlace ? (
                   <div className="sb-stack">
                     <p className="sb-small sb-bold" style={{ margin: 0 }}>
-                      Place {slip.picks.length === 1 ? "this bet" : `this ${slip.picks.length}-fold`} for{" "}
-                      {stakeMinor !== null ? naira(stakeMinor) : "—"}?
+                      {isSystemSlip && systemPreview?.valid
+                        ? `Place ${systemPreview.combinations} ${
+                            effectiveMode === "cut1" ? "Cut-1" : "system"
+                          } bets for ${naira(systemPreview.totalStakeMinor)} total?`
+                        : `Place ${pickCount === 1 ? "this bet" : `this ${pickCount}-fold`} for ${
+                            unitStakeMinor !== null ? naira(unitStakeMinor) : "—"
+                          }?`}
                     </p>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button type="button" className="sb-btn sb-btn--ghost" style={{ flex: 1 }} onClick={() => setConfirming(false)}>
+                      <button
+                        type="button"
+                        className="sb-btn sb-btn--ghost"
+                        style={{ flex: 1 }}
+                        onClick={() => setConfirming(false)}
+                      >
                         Cancel
                       </button>
-                      <button type="button" className="sb-btn sb-btn--primary" style={{ flex: 1 }} onClick={place} disabled={slip.status === "placing"}>
-                        {slip.status === "placing" ? <><Loader2 size={15} className="sb-spin" aria-hidden="true" /> Placing</> : "Confirm"}
+                      <button
+                        type="button"
+                        className="sb-btn sb-btn--primary"
+                        style={{ flex: 1 }}
+                        onClick={place}
+                        disabled={slip.status === "placing"}
+                      >
+                        {slip.status === "placing" ? (
+                          <>
+                            <Loader2 size={15} className="sb-spin" aria-hidden="true" /> Placing
+                          </>
+                        ) : (
+                          "Confirm"
+                        )}
                       </button>
                     </div>
                   </div>
@@ -428,25 +895,57 @@ export function BetslipPanel({
                     disabled={!canPlace}
                     onClick={() => setConfirming(true)}
                   >
-                    Place bet
+                    {isSystemSlip && systemPreview?.valid && totalCostMinor > 0n
+                      ? `Place ${systemPreview.combinations} bets · ${naira(totalCostMinor)}`
+                      : "Place bet"}
                   </button>
                 )}
 
-                <div className="sb-row-between">
+                <div className="sb-slip-footer-actions">
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--dark"
+                    onClick={createBookingCode}
+                    disabled={bookingBusy}
+                  >
+                    {bookingBusy ? (
+                      <Loader2 size={13} className="sb-spin" aria-hidden="true" />
+                    ) : (
+                      <Bookmark size={13} aria-hidden="true" />
+                    )}
+                    <span>Book bet</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="sb-btn sb-btn--ghost"
+                    onClick={() => setShowLoaderBar((v) => !v)}
+                  >
+                    Load code
+                  </button>
                   <button
                     type="button"
                     className="sb-btn sb-btn--danger"
                     onClick={() => {
                       setConfirming(false);
+                      setBookedCode(null);
+                      setCodeFeedback(null);
+                      setBankerIds([]);
+                      setBetMode("acca");
                       slip.clear();
                     }}
                   >
-                    Clear all
+                    Clear
                   </button>
-                  {balance !== null ? (
-                    <span className="sb-xs sb-muted">Balance {naira(balance)}</span>
-                  ) : null}
                 </div>
+
+                {showLoaderBar ? <div className="sb-booking-box">{bookingForm}</div> : null}
+
+                {balance !== null ? (
+                  <div className="sb-row-between">
+                    <span className="sb-xs sb-muted">Available balance</span>
+                    <span className="sb-xs sb-bold sb-num">{naira(balance)}</span>
+                  </div>
+                ) : null}
 
                 <p className="sb-xs sb-muted" style={{ margin: 0 }}>
                   18+. Bet responsibly. <Link href="/responsible">Set a limit</Link>.

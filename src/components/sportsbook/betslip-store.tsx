@@ -57,6 +57,7 @@ interface BetslipValue {
   add: (pick: Pick) => void;
   remove: (selectionId: string) => void;
   toggle: (pick: Pick) => void;
+  replacePicks: (nextPicks: Pick[]) => void;
   clear: () => void;
   setStake: (value: string) => void;
   has: (selectionId: string) => boolean;
@@ -197,6 +198,17 @@ export function BetslipProvider({ children }: { children: ReactNode }) {
     [picks, add, remove],
   );
 
+  const replacePicks = useCallback(
+    (nextPicks: Pick[]) => {
+      updateSlip((current) => ({ ...current, picks: nextPicks }));
+      setDrift({});
+      setStatusRaw("idle");
+      setMessage(null);
+      setPlacedBetId(null);
+    },
+    [updateSlip],
+  );
+
   const clear = useCallback(() => {
     updateSlip(() => ({ picks: [], stake: "" }));
     setDrift({});
@@ -242,10 +254,10 @@ export function BetslipProvider({ children }: { children: ReactNode }) {
   const value = useMemo<BetslipValue>(
     () => ({
       picks, status, message, placedBetId, stake, drift, open,
-      add, remove, toggle, clear, setStake, has, noteLivePrice, adoptDrift, setStatus, setOpen,
+      add, remove, toggle, replacePicks, clear, setStake, has, noteLivePrice, adoptDrift, setStatus, setOpen,
     }),
     [picks, status, message, placedBetId, stake, drift, open,
-      add, remove, toggle, clear, setStake, has, noteLivePrice, adoptDrift, setStatus],
+      add, remove, toggle, replacePicks, clear, setStake, has, noteLivePrice, adoptDrift, setStatus],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

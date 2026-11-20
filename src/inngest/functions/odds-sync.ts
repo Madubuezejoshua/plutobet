@@ -26,7 +26,7 @@ export const SYNC_SPORTS = [
 
 const BOOKMAKERS = process.env.ODDS_BOOKMAKERS
   ? process.env.ODDS_BOOKMAKERS.split(",").map((b) => b.trim()).filter(Boolean)
-  : ["Betway", "1xbet"];
+  : ["1xbet", "Betway"];
 
 function syncService(sport = "football"): OddsSyncService {
   const apiKey = process.env.ODDS_API_KEY;
@@ -35,7 +35,8 @@ function syncService(sport = "football"): OddsSyncService {
     sport,
     /*
      * Names are CASE-SENSITIVE and validated by the provider.
-     * Bet365 publishes `ML` (1x2), which is first in canonical order.
+     * 1xbet covers all five synced sports (including Esports and Basketball),
+     * with Betway as the second configured bookmaker.
      */
     bookmakers: BOOKMAKERS,
   };
@@ -112,6 +113,13 @@ export const syncLiveOdds = inngest.createFunction(
   },
   async ({ step }) =>
     runIfDue("live-tick", () =>
-      step.run("fetch-and-persist", () => syncService("football").syncLiveOdds()),
+      step.run("fetch-and-persist", async () => {
+        const result = await syncService("football").syncLiveOdds();
+        if (result.events > 0) {
+          const { invalidateLiveVersion } = await import("@/modules/odds/live-version-cache");
+          await Promise.all(SYNC_SPORTS.map((sport) => invalidateLiveVersion(sport)));
+        }
+        return result;
+      }),
     ),
 );

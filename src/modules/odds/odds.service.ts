@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or } from "drizzle-orm";
 import { db } from "@/db/pooled";
 import { events, markets, oddsSnapshots, selections } from "./schema";
 import type { OddsSnapshot } from "./provider";
@@ -84,8 +84,13 @@ export async function listUpcoming(opts?: {
       and(
         opts?.sport ? eq(events.sport, opts.sport) : undefined,
         opts?.competitionId ? eq(events.competitionId, opts.competitionId) : undefined,
-        inArray(events.status, ["PENDING", "LIVE"]),
-        gte(events.startsAt, new Date()),
+        or(
+          and(eq(events.status, "PENDING"), gte(events.startsAt, new Date())),
+          and(
+            eq(events.status, "LIVE"),
+            gte(events.startsAt, new Date(Date.now() - 4 * 60 * 60_000)),
+          ),
+        ),
       ),
     )
     .orderBy(asc(events.startsAt))

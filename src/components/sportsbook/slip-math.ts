@@ -1,7 +1,13 @@
+import {
+  describeSystem,
+  expandSystem,
+  systemTotalStake,
+} from "@/modules/betting/system-bet";
+
 /**
  * Betslip arithmetic.
  *
- * Pulled out of the components so it can be tested without a DOM. These two
+ * Pulled out of the components so it can be tested without a DOM. These
  * functions decide what number a customer is shown before they part with
  * money, which makes them the part of the redesign most worth testing and the
  * part least worth testing through a rendered component.
@@ -31,19 +37,12 @@ export function toKobo(input: string): bigint | null {
 }
 
 /**
- * What the slip is worth.
+ * What a single or accumulator slip is worth.
  *
  * `returnMinor` is GROSS — it includes the stake. `profitMinor` is what the
  * customer actually gains. Both are returned so the UI cannot accidentally
  * label one as the other, which is the single most common way a betslip
  * overstates a win.
- *
- * The multiplication runs through `Number` because decimal odds are decimal
- * fractions and BigInt cannot hold them. That is safe HERE and nowhere else:
- * this figure is a preview, the server re-prices the bet from stored odds
- * under a lock, and its answer is the one that is paid. The rounding is to the
- * nearest kobo so the preview cannot be a kobo under what is paid, which would
- * read as being short-changed.
  */
 export function slipMath(picks: readonly SlipLeg[], stakeMinor: bigint) {
   const totalOdds = picks.reduce((acc, pick) => acc * pick.odds, 1);
@@ -51,4 +50,88 @@ export function slipMath(picks: readonly SlipLeg[], stakeMinor: bigint) {
     stakeMinor > 0n ? BigInt(Math.round(Number(stakeMinor) * totalOdds)) : 0n;
   const profitMinor = returnMinor > 0n ? returnMinor - stakeMinor : 0n;
   return { totalOdds, returnMinor, profitMinor };
+}
+
+export interface SystemSlipPreview {
+  valid: boolean;
+  error: string | null;
+  combinations: number;
+  totalStakeMinor: bigint;
+  maxReturnMinor: bigint;
+  maxProfitMinor: bigint;
+  minWinningReturnMinor: bigint;
+}
+
+/**
+ * Preview arithmetic for Cut-1 and System slips.
+ *
+ * Every combination is its own real accumulator staked at `unitStakeMinor`,
+ * so `totalStakeMinor = unitStakeMinor * combinations`. If all legs win,
+ * every combination pays; if only `systemSize` legs win (e.g. one leg cuts
+ * on a Cut-1 ticket), the single surviving combination pays at least
+ * `minWinningReturnMinor`.
+ */
+export function systemSlipMath(
+  picks: readonly SlipLeg[],
+  unitStakeMinor: bigint,
+  systemSize: number,
+  bankerIndices: number[],
+): SystemSlipPreview {
+  try {
+    const { combinations } = describeSystem({
+      selectionCount: picks.length,
+      systemSize,
+      bankerIndices,
+    });
+    const totalStakeMinor = systemTotalStake(unitStakeMinor, combinations);
+    if (unitStakeMinor <= 0n) {
+      return {
+        valid: true,
+        error: null,
+        combinations,
+        totalStakeMinor: 0n,
+        maxReturnMinor: 0n,
+        maxProfitMinor: 0n,
+        minWinningReturnMinor: 0n,
+      };
+    }
+
+    const combos = expandSystem({
+      selectionCount: picks.length,
+      systemSize,
+      bankerIndices,
+    });
+
+    let maxReturnMinor = 0n;
+    let minWinningReturnMinor: bigint | null = null;
+    for (const combo of combos) {
+      const odds = combo.reduce((acc, idx) => acc * (picks[idx]?.odds ?? 1), 1);
+      const comboReturn = BigInt(Math.round(Number(unitStakeMinor) * odds));
+      maxReturnMinor += comboReturn;
+      if (minWinningReturnMinor === null || comboReturn < minWinningReturnMinor) {
+        minWinningReturnMinor = comboReturn;
+      }
+    }
+
+    const maxProfitMinor = maxReturnMinor > totalStakeMinor ? maxReturnMinor - totalStakeMinor : 0n;
+    return {
+      valid: true,
+      error: null,
+      combinations,
+      totalStakeMinor,
+      maxReturnMinor,
+      maxProfitMinor,
+      minWinningReturnMinor: minWinningReturnMinor ?? 0n,
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      error: error instanceof Error ? error.message : "Invalid system configuration",
+      combinations: 0,
+      totalStakeMinor: 0n,
+      maxReturnMinor: 0n,
+      maxProfitMinor: 0n,
+      minWinningReturnMinor: 0n,
+    };
+  }
 }

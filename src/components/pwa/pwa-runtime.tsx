@@ -9,9 +9,14 @@ export function PWARuntime() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
-      // Service worker registration may be blocked in restricted iframes; ignore cleanly.
-    });
+    navigator.serviceWorker
+      .register("/sw.js", { scope: "/", updateViaCache: "none" })
+      .then((registration) => {
+        registration.update().catch(() => {});
+      })
+      .catch(() => {
+        // Service worker registration may be blocked in restricted iframes; ignore cleanly.
+      });
   }, []);
 
   if (isOnline) return null;

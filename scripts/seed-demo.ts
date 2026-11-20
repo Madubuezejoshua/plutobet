@@ -21,12 +21,29 @@ const DEMO_PASSWORD = "demo-password-1234";
 const DEMO_ADMIN_EMAIL = "admin@demo.local";
 const DEMO_SUPPORT_EMAIL = "support@demo.local";
 
-const FIXTURES = [
-  { league: "Premier League", home: "Arsenal", away: "Chelsea", hours: 3, prices: ["2.100", "3.400", "3.600"] },
-  { league: "Premier League", home: "Liverpool", away: "Man City", hours: 5, prices: ["2.750", "3.500", "2.500"] },
-  { league: "La Liga", home: "Real Madrid", away: "Barcelona", hours: 27, prices: ["2.300", "3.600", "3.000"] },
-  { league: "NPFL", home: "Enyimba", away: "Rivers United", hours: 30, prices: ["1.900", "3.300", "4.200"] },
-  { league: "Serie A", home: "Inter", away: "Juventus", hours: 51, prices: ["2.050", "3.200", "3.900"] },
+const FIXTURES: Array<{
+  sport: string;
+  league: string;
+  home: string;
+  away: string;
+  hours: number;
+  prices: [string, string, string] | [string, string];
+  total?: { line: string; over: string; under: string };
+}> = [
+  { sport: "football", league: "Premier League", home: "Arsenal", away: "Chelsea", hours: 3, prices: ["2.100", "3.400", "3.600"], total: { line: "2.5", over: "1.880", under: "1.950" } },
+  { sport: "football", league: "Premier League", home: "Liverpool", away: "Man City", hours: 5, prices: ["2.750", "3.500", "2.500"], total: { line: "2.5", over: "1.740", under: "2.100" } },
+  { sport: "football", league: "La Liga", home: "Real Madrid", away: "Barcelona", hours: 27, prices: ["2.300", "3.600", "3.000"], total: { line: "2.5", over: "1.680", under: "2.180" } },
+  { sport: "football", league: "NPFL", home: "Enyimba", away: "Rivers United", hours: 30, prices: ["1.900", "3.300", "4.200"], total: { line: "2.5", over: "2.050", under: "1.780" } },
+  { sport: "football", league: "Serie A", home: "Inter", away: "Juventus", hours: 51, prices: ["2.050", "3.200", "3.900"], total: { line: "2.5", over: "1.950", under: "1.860" } },
+  { sport: "basketball", league: "USA - NBA", home: "Los Angeles Lakers", away: "Boston Celtics", hours: 4, prices: ["2.150", "1.720"], total: { line: "226.5", over: "1.900", under: "1.900" } },
+  { sport: "basketball", league: "USA - NBA", home: "Golden State Warriors", away: "Denver Nuggets", hours: 6, prices: ["1.850", "1.960"], total: { line: "231.5", over: "1.880", under: "1.920" } },
+  { sport: "basketball", league: "Europe - EuroLeague", home: "Real Madrid Baloncesto", away: "Olympiacos", hours: 9, prices: ["1.620", "2.300"], total: { line: "163.5", over: "1.910", under: "1.890" } },
+  { sport: "tennis", league: "ATP - Tour Finals", home: "Carlos Alcaraz", away: "Jannik Sinner", hours: 4, prices: ["1.920", "1.900"] },
+  { sport: "tennis", league: "WTA - Tour", home: "Iga Swiatek", away: "Aryna Sabalenka", hours: 7, prices: ["1.800", "2.020"] },
+  { sport: "table-tennis", league: "International - WTT Series", home: "Fan Zhendong", away: "Felix Lebrun", hours: 2, prices: ["1.450", "2.720"] },
+  { sport: "table-tennis", league: "Europe - TT Cup", home: "Tomas Polansky", away: "Lubomir Jancarik", hours: 3, prices: ["1.760", "2.040"] },
+  { sport: "esports", league: "Counter-Strike 2 - ESL Pro League", home: "Natus Vincere", away: "FaZe Clan", hours: 3, prices: ["1.720", "2.120"] },
+  { sport: "esports", league: "League of Legends - LCK", home: "T1", away: "Gen.G", hours: 8, prices: ["2.050", "1.780"] },
 ];
 
 async function main(): Promise<void> {
@@ -177,6 +194,7 @@ async function main(): Promise<void> {
       const [existing] = await tx.execute<{ id: string }>(sql`
         SELECT id FROM events
         WHERE provider = 'demo'
+          AND sport = ${fixture.sport}
           AND league = ${fixture.league}
           AND home = ${fixture.home}
           AND away = ${fixture.away}
@@ -188,7 +206,7 @@ async function main(): Promise<void> {
       const [event] = await tx.execute<{ id: string }>(sql`
         INSERT INTO events (provider, provider_event_id, sport, league, home, away, starts_at, status)
         VALUES (
-          'demo', ${`demo-${randomUUID()}`}, 'football', ${fixture.league},
+          'demo', ${`demo-${randomUUID()}`}, ${fixture.sport}, ${fixture.league},
           ${fixture.home}, ${fixture.away},
           now() + (${fixture.hours}::text || ' hours')::interval, 'PENDING'
         )
@@ -201,12 +219,36 @@ async function main(): Promise<void> {
         RETURNING id
       `);
 
-      const labels = [fixture.home, "Draw", fixture.away];
-      const keys = ["home", "draw", "away"];
-      for (let i = 0; i < 3; i++) {
+      const entries: Array<[string, string, string]> =
+        fixture.prices.length === 3
+          ? [
+              ["home", fixture.home, fixture.prices[0]],
+              ["draw", "Draw", fixture.prices[1]],
+              ["away", fixture.away, fixture.prices[2]],
+            ]
+          : [
+              ["home", fixture.home, fixture.prices[0]],
+              ["away", fixture.away, fixture.prices[1]],
+            ];
+
+      for (const [key, label, price] of entries) {
         await tx.execute(sql`
           INSERT INTO selections (market_id, key, label, current_price_decimal, status)
-          VALUES (${market!.id}::uuid, ${keys[i]}, ${labels[i]}, ${fixture.prices[i]}::numeric, 'OPEN')
+          VALUES (${market!.id}::uuid, ${key}, ${label}, ${price}::numeric, 'OPEN')
+        `);
+      }
+
+      if (fixture.total) {
+        const [ouMarket] = await tx.execute<{ id: string }>(sql`
+          INSERT INTO markets (event_id, key, status)
+          VALUES (${event!.id}::uuid, 'over_under', 'OPEN')
+          RETURNING id
+        `);
+        await tx.execute(sql`
+          INSERT INTO selections (market_id, key, label, line, current_price_decimal, status)
+          VALUES
+            (${ouMarket!.id}::uuid, ${`over_${fixture.total.line}`}, ${`Over ${fixture.total.line}`}, ${fixture.total.line}::numeric, ${fixture.total.over}::numeric, 'OPEN'),
+            (${ouMarket!.id}::uuid, ${`under_${fixture.total.line}`}, ${`Under ${fixture.total.line}`}, ${fixture.total.line}::numeric, ${fixture.total.under}::numeric, 'OPEN')
         `);
       }
       markets += 1;

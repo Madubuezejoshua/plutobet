@@ -133,9 +133,10 @@ export class OddsApiIoProvider implements OddsProvider {
     return (await res.json()) as T;
   }
 
-  async listEvents(sport: string, opts?: { to?: Date }): Promise<SportEvent[]> {
+  async listEvents(sport: string, opts?: { from?: Date; to?: Date }): Promise<SportEvent[]> {
     const raw = await this.get<unknown>("/events", {
       sport,
+      from: opts?.from?.toISOString(),
       to: opts?.to?.toISOString(),
       limit: "500",
     });

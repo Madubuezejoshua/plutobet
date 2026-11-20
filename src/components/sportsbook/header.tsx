@@ -41,8 +41,18 @@ const PRIMARY = [
 
 const MORE = NAV_ITEMS.filter(
   (item) =>
+    item.status === "LIVE" &&
     item.group !== "ACCOUNT" &&
-    !["home", "sports", "live", "jackpot", "promotions", "pluto-ai"].includes(item.key),
+    ![
+      "home",
+      "sports",
+      "live",
+      "jackpot",
+      "promotions",
+      "pluto-ai",
+      "casino",
+      "virtuals",
+    ].includes(item.key),
 );
 
 function SportsSubnav({

@@ -3410,3 +3410,304 @@ footer p a {
     margin-left: 0;
   }
 }
+
+/* ==========================================================================
+   BOOKING CODES, CUT-1 / SYSTEM BETS, STARRED FILTER, LIVE FLASHES & RE-BET
+   ========================================================================== */
+
+.sb-booking-box {
+  padding: var(--sb-2);
+  border-radius: var(--sb-r-md);
+  border: 1px solid var(--sb-border);
+  background: var(--sb-surface-2);
+  display: grid;
+  gap: 8px;
+}
+
+.sb-booking-box__title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--sb-t-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sb-ink-2);
+}
+
+.sb-booking-form {
+  display: flex;
+  gap: 6px;
+}
+
+.sb-booking-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--sb-r-sm);
+  border: 1px solid var(--sb-border-strong);
+  background: var(--sb-surface);
+  color: var(--sb-ink);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--sb-t-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.sb-booking-input:focus {
+  outline: none;
+  border-color: var(--sb-brand);
+  box-shadow: var(--sb-focus);
+}
+
+.sb-booking-submit {
+  flex: none;
+  height: 36px;
+  padding: 0 12px;
+  font-size: var(--sb-t-xs);
+}
+
+.sb-booked-card {
+  padding: 10px 12px;
+  border-radius: var(--sb-r-md);
+  border: 1px solid var(--sb-brand);
+  background: rgba(86, 88, 245, 0.1);
+  display: grid;
+  gap: 8px;
+}
+
+.sb-booked-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sb-booked-card__code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--sb-t-md);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--sb-ink);
+}
+
+.sb-booked-card__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.sb-booked-card__actions .sb-btn {
+  flex: 1 1 0;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: var(--sb-t-xs);
+}
+
+.sb-slip-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 8px var(--sb-3);
+  border-bottom: 1px solid var(--sb-border);
+  background: var(--sb-surface-2);
+}
+
+.sb-slip-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 4px 6px;
+  border-radius: var(--sb-r-sm);
+  border: 1px solid var(--sb-border);
+  background: var(--sb-surface);
+  color: var(--sb-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.sb-slip-mode:hover {
+  color: var(--sb-ink);
+  border-color: var(--sb-border-strong);
+}
+
+.sb-slip-mode[aria-selected="true"] {
+  background: #5658f5;
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.sb-system-bar {
+  padding: 8px var(--sb-3);
+  border-bottom: 1px solid var(--sb-border);
+  background: var(--sb-surface-2);
+  display: grid;
+  gap: 6px;
+}
+
+.sb-system-bar__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sb-system-pill {
+  min-height: 26px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--sb-border-strong);
+  background: var(--sb-surface);
+  color: var(--sb-ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sb-system-pill[aria-pressed="true"] {
+  background: #5658f5;
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.sb-banker-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--sb-border-strong);
+  background: var(--sb-surface-2);
+  color: var(--sb-muted);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sb-banker-btn[aria-pressed="true"] {
+  background: var(--sb-gold);
+  border-color: transparent;
+  color: #111827;
+}
+
+.sb-slip-footer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 6px;
+}
+
+.sb-slip-footer-actions .sb-btn {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: var(--sb-t-xs);
+}
+
+.sb-board-filterbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sb-2);
+  padding: var(--sb-2) var(--sb-3);
+  border-bottom: 1px solid var(--sb-border);
+  background: var(--sb-surface-2);
+}
+
+.sb-board-clearstars {
+  background: none;
+  border: none;
+  color: var(--sb-muted);
+  font-size: var(--sb-t-xs);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.sb-board-clearstars:hover {
+  color: var(--sb-ink);
+  text-decoration: underline;
+}
+
+.sb-live-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sb-odd--flash-up {
+  border-color: var(--sb-up) !important;
+  box-shadow: inset 0 0 0 1px var(--sb-up);
+}
+
+.sb-odd--flash-down {
+  border-color: var(--sb-down) !important;
+  box-shadow: inset 0 0 0 1px var(--sb-down);
+}
+
+.sb-live-arrow--up {
+  color: var(--sb-up);
+}
+
+.sb-live-arrow--down {
+  color: var(--sb-down);
+}
+
+.sb-ticket__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sb-2);
+  margin-top: var(--sb-2);
+}
+
+.sb-ticket__rebetwrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sb-ticket__rebet {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: var(--sb-t-xs);
+}
+
+/* 2-way sports (Basketball, Tennis, Table Tennis, Esports): 1 | 2 | O | U | more */
+.sb-board--2way {
+  --sb-boardcols: 1fr repeat(2, 64px) repeat(2, 68px) 42px;
+}
+
+@media (max-width: 1080px) {
+  .sb-board--2way {
+    --sb-boardcols: 1fr repeat(2, 54px) repeat(2, 58px) 36px;
+  }
+}
+
+@container (max-width: 580px) {
+  .sb-board--2way .sb-league .sb-cols,
+  .sb-board--2way .sb-league .sb-row {
+    grid-template-columns: 1fr repeat(2, 56px) 34px;
+  }
+}
+
+@media (max-width: 720px) {
+  .sb-board.sb-board--2way .sb-cols,
+  .sb-board.sb-board--2way .sb-row {
+    grid-template-columns: 1fr repeat(2, 56px) 34px;
+  }
+}
+
+@media (max-width: 640px) {
+  .sb-board.sb-board--2way .sb-row,
+  .sb-board.sb-board--2way .sb-league .sb-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 46px;
+  }
+}
+
+

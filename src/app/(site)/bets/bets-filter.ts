@@ -3,6 +3,12 @@ export interface SerializedBetLeg {
   selection: string;
   odds: string;
   result: string;
+  selectionId?: string;
+  eventId?: string;
+  marketKey?: string;
+  selectionKey?: string;
+  currentPrice?: number | null;
+  available?: boolean;
 }
 
 export interface SerializedBetRow {

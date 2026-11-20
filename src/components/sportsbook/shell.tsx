@@ -44,9 +44,13 @@ export async function SportsbookShell({
           return false;
         })
       : Promise.resolve(false),
-    liveSnapshot("football")
-      .then((snap) => snap.events.filter((e) => e.status === "LIVE").length)
-      .catch(() => 0),
+    Promise.all(
+      SPORTS.map((s) =>
+        liveSnapshot(s.key)
+          .then((snap) => snap.events.filter((e) => e.status === "LIVE").length)
+          .catch(() => 0),
+      ),
+    ).then((counts) => counts.reduce((sum, n) => sum + n, 0)),
   ]);
 
   return (

@@ -96,8 +96,9 @@ export class OddsSyncService {
        * settled event we actually care about is already in the table from when
        * it was pending — that is what the settlement poller reads.
        */
+      const from = new Date(Date.now() - 3 * 60 * 60_000);
       const horizon = new Date(Date.now() + FIXTURE_HORIZON_DAYS * 24 * 60 * 60_000);
-      const returned = await this.provider.listEvents(this.config.sport, { to: horizon });
+      const returned = await this.provider.listEvents(this.config.sport, { from, to: horizon });
       const found = returned.filter(
         (event) => event.status === "PENDING" || event.status === "LIVE",
       );
@@ -338,8 +339,8 @@ export class OddsSyncService {
           eq(events.provider, this.provider.name),
           eq(events.sport, this.config.sport),
           inArray(events.status, ["PENDING", "LIVE"]),
-          gte(events.startsAt, new Date()),
-          lte(events.startsAt, new Date(Date.now() + 48 * 60 * 60_000)),
+          gte(events.startsAt, new Date(Date.now() - 3 * 60 * 60_000)),
+          lte(events.startsAt, new Date(Date.now() + 72 * 60 * 60_000)),
         ),
       )
       .orderBy(asc(events.startsAt))

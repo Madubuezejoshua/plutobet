@@ -24,6 +24,7 @@ import type { EventView, MarketView, SelectionView } from "@/modules/odds/odds.s
 
 interface Props {
   events: EventView[];
+  sport?: string;
   teamBadges?: Record<string, string>;
   /** Shown while the server component is streaming. */
   loading?: boolean;
@@ -106,8 +107,9 @@ function splitLeague(label: string): { country: string | null; name: string } {
   return { country: label.slice(0, at), name: label.slice(at + 3) };
 }
 
-export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }: Props) {
+export function MatchBoard({ events, sport, teamBadges, loading = false, emptyMessage }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [onlyStarred, setOnlyStarred] = useState(false);
   const [favourites, setFavourites] = useBrowserStore(favouriteMatches);
 
   function toggleFavourite(eventId: string) {
@@ -117,6 +119,15 @@ export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }
         : [...favourites, eventId],
     );
   }
+
+  const hasAnyDraw = useMemo(
+    () =>
+      events.some((event) =>
+        Boolean(selectionFor(marketFor(event, "1x2"), "draw")),
+      ),
+    [events],
+  );
+  const isTwoWay = Boolean(sport && sport !== "football" && !hasAnyDraw);
 
   const starred = useMemo(
     () => events.filter((event) => favourites.includes(event.id)),
@@ -130,7 +141,12 @@ export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }
       list.push(event);
       map.set(event.league, list);
     }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    return [...map.entries()].sort((a, b) => {
+      const aPriced = a[1].some((ev) => ev.markets.length > 0) ? 0 : 1;
+      const bPriced = b[1].some((ev) => ev.markets.length > 0) ? 0 : 1;
+      if (aPriced !== bPriced) return aPriced - bPriced;
+      return a[0].localeCompare(b[0]);
+    });
   }, [events]);
 
   if (loading) return <BoardSkeleton />;
@@ -147,8 +163,48 @@ export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }
     );
   }
 
+  const showingStarredOnly = onlyStarred && starred.length > 0;
+
   return (
-    <div className="sb-board">
+    <div className={isTwoWay ? "sb-board sb-board--2way" : "sb-board"}>
+      {starred.length > 0 ? (
+        <div className="sb-board-filterbar" role="group" aria-label="Match view filter">
+          <div className="sb-chips">
+            <button
+              type="button"
+              className="sb-chip"
+              aria-pressed={!showingStarredOnly}
+              onClick={() => setOnlyStarred(false)}
+            >
+              <span>All matches</span>
+              <span className="sb-chip__count">{events.length}</span>
+            </button>
+            <button
+              type="button"
+              className="sb-chip"
+              aria-pressed={showingStarredOnly}
+              onClick={() => setOnlyStarred(true)}
+            >
+              <Star size={13} aria-hidden="true" />
+              <span>Starred</span>
+              <span className="sb-chip__count">{starred.length}</span>
+            </button>
+          </div>
+          {showingStarredOnly ? (
+            <button
+              type="button"
+              className="sb-board-clearstars"
+              onClick={() => {
+                setFavourites([]);
+                setOnlyStarred(false);
+              }}
+            >
+              Clear stars
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {starred.length > 0 ? (
         <section className="sb-league">
           <h3 style={{ margin: 0 }}>
@@ -161,7 +217,7 @@ export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }
           <div className="sb-cols" aria-hidden="true">
             <span>Match</span>
             <span className="sb-cols__odds">1</span>
-            <span className="sb-cols__odds">X</span>
+            {!isTwoWay ? <span className="sb-cols__odds">X</span> : null}
             <span className="sb-cols__odds">2</span>
             <span className="sb-cols__odds sb-cols__ou">Over</span>
             <span className="sb-cols__odds sb-cols__ou">Under</span>
@@ -171,6 +227,7 @@ export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }
             <EventRow
               key={`fav-${event.id}`}
               event={event}
+              isTwoWay={isTwoWay}
               teamBadges={teamBadges}
               favourite
               onFavourite={() => toggleFavourite(event.id)}
@@ -179,7 +236,7 @@ export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }
         </section>
       ) : null}
 
-      {grouped.map(([league, list]) => {
+      {!showingStarredOnly && grouped.map(([league, list]) => {
         const { country, name } = splitLeague(league);
         const isCollapsed = collapsed[league] ?? false;
         const panelId = `lg-${league.replace(/\W+/g, "-").toLowerCase()}`;
@@ -206,7 +263,7 @@ export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }
                 <div className="sb-cols" aria-hidden="true">
                   <span>Match</span>
                   <span className="sb-cols__odds">1</span>
-                  <span className="sb-cols__odds">X</span>
+                  {!isTwoWay ? <span className="sb-cols__odds">X</span> : null}
                   <span className="sb-cols__odds">2</span>
                   <span className="sb-cols__odds sb-cols__ou">Over</span>
                   <span className="sb-cols__odds sb-cols__ou">Under</span>
@@ -217,6 +274,7 @@ export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }
                   <EventRow
                     key={event.id}
                     event={event}
+                    isTwoWay={isTwoWay}
                     teamBadges={teamBadges}
                     favourite={favourites.includes(event.id)}
                     onFavourite={() => toggleFavourite(event.id)}
@@ -231,13 +289,65 @@ export function MatchBoard({ events, teamBadges, loading = false, emptyMessage }
   );
 }
 
+function primaryOverUnder(
+  market: MarketView | undefined,
+  sport: string,
+): { over?: SelectionView; under?: SelectionView; lineLabel: string } {
+  if (!market || market.selections.length === 0) {
+    return { lineLabel: sport === "football" ? "2.5" : "" };
+  }
+
+  // Football always pins the canonical 2.5 goals line on the board.
+  if (sport === "football") {
+    const over = market.selections.find(
+      (s) => s.key === "over_2.5" || (s.key.startsWith("over") && s.line === 2.5),
+    );
+    const under = market.selections.find(
+      (s) => s.key === "under_2.5" || (s.key.startsWith("under") && s.line === 2.5),
+    );
+    return { over, under, lineLabel: "2.5" };
+  }
+
+  // Non-football totals (e.g. Basketball 221.5 pts) have sport-specific lines:
+  // pick the most balanced paired line (smallest |over.price - under.price|)
+  // and display its exact line number on both buttons.
+  const pairs = new Map<number, { over?: SelectionView; under?: SelectionView }>();
+  for (const sel of market.selections) {
+    if (sel.line === null || !Number.isFinite(sel.line)) continue;
+    const entry = pairs.get(sel.line) ?? {};
+    if (sel.key.startsWith("over")) entry.over = sel;
+    else if (sel.key.startsWith("under")) entry.under = sel;
+    pairs.set(sel.line, entry);
+  }
+
+  let bestLine: number | null = null;
+  let bestPair: { over?: SelectionView; under?: SelectionView } | null = null;
+  let bestDiff = Number.POSITIVE_INFINITY;
+  for (const [line, pair] of pairs.entries()) {
+    if (!pair.over || !pair.under) continue;
+    const diff = Math.abs(pair.over.price - pair.under.price);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestLine = line;
+      bestPair = pair;
+    }
+  }
+
+  if (bestPair && bestLine !== null) {
+    return { over: bestPair.over, under: bestPair.under, lineLabel: String(bestLine) };
+  }
+  return { lineLabel: "" };
+}
+
 function EventRow({
   event,
+  isTwoWay,
   teamBadges,
   favourite,
   onFavourite,
 }: {
   event: EventView;
+  isTwoWay: boolean;
   teamBadges?: Record<string, string>;
   favourite: boolean;
   onFavourite: () => void;
@@ -252,14 +362,7 @@ function EventRow({
   const draw = selectionFor(oneXTwo, "draw");
   const away = selectionFor(oneXTwo, "away");
 
-  /*
-   * The main Over/Under line. Providers send several; the 2.5 line is the one
-   * customers expect on a board, and if it is absent the column shows
-   * unavailable rather than silently substituting a different handicap — a
-   * price for a line you did not choose is the wrong price.
-   */
-  const over = overUnder?.selections.find((s) => s.key === "over_2.5" || (s.key.startsWith("over") && s.line === 2.5));
-  const under = overUnder?.selections.find((s) => s.key === "under_2.5" || (s.key.startsWith("under") && s.line === 2.5));
+  const { over, under, lineLabel } = primaryOverUnder(overUnder, event.sport);
 
   const fixture = `${event.home} v ${event.away}`;
 
@@ -325,10 +428,12 @@ function EventRow({
       </div>
 
       <OddsButton label="1" price={home?.price ?? null} state={stateOf(oneXTwo, home)} pick={pickFor(oneXTwo, home)} />
-      <OddsButton label="X" price={draw?.price ?? null} state={stateOf(oneXTwo, draw)} pick={pickFor(oneXTwo, draw)} />
+      {!isTwoWay ? (
+        <OddsButton label="X" price={draw?.price ?? null} state={stateOf(oneXTwo, draw)} pick={pickFor(oneXTwo, draw)} />
+      ) : null}
       <OddsButton label="2" price={away?.price ?? null} state={stateOf(oneXTwo, away)} pick={pickFor(oneXTwo, away)} />
-      <OddsButton className="sb-row__ou" label="O 2.5" price={over?.price ?? null} state={stateOf(overUnder, over)} pick={pickFor(overUnder, over)} />
-      <OddsButton className="sb-row__ou" label="U 2.5" price={under?.price ?? null} state={stateOf(overUnder, under)} pick={pickFor(overUnder, under)} />
+      <OddsButton className="sb-row__ou" label={lineLabel ? `O ${lineLabel}` : "Over"} price={over?.price ?? null} state={stateOf(overUnder, over)} pick={pickFor(overUnder, over)} />
+      <OddsButton className="sb-row__ou" label={lineLabel ? `U ${lineLabel}` : "Under"} price={under?.price ?? null} state={stateOf(overUnder, under)} pick={pickFor(overUnder, under)} />
 
       <Link
         href={`/sports/event/${event.providerEventId}`}

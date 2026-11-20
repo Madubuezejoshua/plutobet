@@ -1,15 +1,18 @@
-const CACHE_NAME = "plutobet-shell-v1";
+const CACHE_NAME = "plutobet-shell-v2";
 const PRECACHE_URLS = [
   "/offline",
   "/icon.svg",
   "/pwa-192x192.png",
   "/pwa-512x512.png",
+  "/pwa-maskable-512x512.png",
   "/apple-touch-icon.png",
 ];
 
-// Never cache API endpoints, admin routes, or account/money pages — balances,
-// odds, and bet placements must always come live from the server.
+// Strictly never intercept Next.js chunks, API endpoints, admin routes, or
+// account/money pages. Caching `/_next/static/` breaks Turbopack dev chunks
+// across rebuilds and caching money/odds routes risks stale balances.
 const BYPASS_PREFIXES = [
+  "/_next/",
   "/api/",
   "/admin",
   "/wallet",
@@ -21,6 +24,8 @@ const BYPASS_PREFIXES = [
   "/signin",
   "/register",
 ];
+
+const CACHEABLE_EXACT_PATHS = new Set(PRECACHE_URLS);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -50,7 +55,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (BYPASS_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return;
 
-  // Navigation requests: network-first, fall back to cached /offline page.
+  // Navigation requests: always network-first, falling back to /offline only on network failure.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).catch(async () => {
@@ -61,25 +66,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static icon / font / image assets: cache-first with background refresh.
-  if (
-    url.pathname.startsWith("/_next/static/") ||
-    url.pathname.endsWith(".png") ||
-    url.pathname.endsWith(".svg") ||
-    url.pathname.endsWith(".woff2")
-  ) {
+  // Only serve our precached static PWA shell assets from cache.
+  if (CACHEABLE_EXACT_PATHS.has(url.pathname)) {
     event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((response) => {
-            if (response.ok) {
-              const copy = response.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-            }
-            return response;
-          }),
-      ),
+      caches.match(request).then((cached) => cached || fetch(request)),
     );
   }
 });

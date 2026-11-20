@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Search, Ticket, X } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, RotateCcw, Search, Ticket, X } from "lucide-react";
 import { naira } from "@/lib/money";
+import { useBetslip, type Pick } from "@/components/sportsbook/betslip-store";
 import { CashOut } from "./cash-out";
 import {
   betPillClass,
@@ -16,8 +18,10 @@ import {
 export type { SerializedBetLeg, SerializedBetRow } from "./bets-filter";
 
 export function BetsList({ bets }: { bets: SerializedBetRow[] }) {
+  const slip = useBetslip();
   const [query, setQuery] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>("ALL");
+  const [rebetTicketId, setRebetTicketId] = useState<string | null>(null);
 
   const filtered = useMemo(
     () => filterBets(bets, query, outcomeFilter),
@@ -212,7 +216,60 @@ export function BetsList({ bets }: { bets: SerializedBetRow[] }) {
                   </div>
                 </dl>
 
-                <p className="sb-ticket__ref">Reference {bet.id.slice(0, 8)}</p>
+                <div className="sb-ticket__actions">
+                  <p className="sb-ticket__ref" style={{ margin: 0 }}>
+                    Reference {bet.id.slice(0, 8)}
+                  </p>
+                  {(() => {
+                    const openLegs = bet.legs.filter(
+                      (leg) =>
+                        leg.available &&
+                        leg.selectionId &&
+                        leg.eventId &&
+                        leg.marketKey &&
+                        typeof leg.currentPrice === "number" &&
+                        leg.currentPrice > 1,
+                    );
+                    if (openLegs.length === 0) return null;
+                    const justLoaded = rebetTicketId === bet.id;
+                    return (
+                      <div className="sb-ticket__rebetwrap">
+                        <button
+                          type="button"
+                          className="sb-btn sb-btn--dark sb-ticket__rebet"
+                          onClick={() => {
+                            const nextPicks: Pick[] = openLegs.map((leg) => ({
+                              selectionId: leg.selectionId!,
+                              eventId: leg.eventId!,
+                              marketKey: leg.marketKey!,
+                              selectionKey: leg.selectionKey ?? leg.selection.toLowerCase(),
+                              selectionLabel: leg.selection,
+                              fixture: leg.fixture,
+                              odds: leg.currentPrice!,
+                            }));
+                            slip.replacePicks(nextPicks);
+                            slip.setOpen(true);
+                            setRebetTicketId(bet.id);
+                          }}
+                        >
+                          <RotateCcw size={13} aria-hidden="true" />
+                          <span>
+                            {justLoaded
+                              ? "Loaded in slip"
+                              : openLegs.length === bet.legs.length
+                                ? "Re-Bet"
+                                : `Re-Bet (${openLegs.length}/${bet.legs.length} open)`}
+                          </span>
+                        </button>
+                        {justLoaded ? (
+                          <Link href="/sports" className="sb-xs sb-footer__cta">
+                            Go to board
+                          </Link>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
+                </div>
 
                 {bet.status === "PENDING" ? (
                   <CashOut betId={bet.id} stakeMinor={bet.stake_minor} />

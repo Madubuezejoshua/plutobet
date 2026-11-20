@@ -257,6 +257,88 @@ repository state:
       home-screen install prompts; local compilation, ESLint, secret scan, docs
       check, and live HTTP 200 verification on the local dev server recorded on
       2026-11-19.
+11. Wired Booking Codes UI, Cut-1 / System bets UI, Sportsbook UX upgrades, and
+    nav cleanup while preserving the Midnight Stadium theme:
+    - Booking Codes & Cut-1/System Bets (`src/components/sportsbook/betslip-store.tsx`,
+      `src/components/sportsbook/slip-math.ts`, `src/components/sportsbook/betslip-panel.tsx`):
+      added `replacePicks()`, `systemSlipMath()`, live **Load Booking Code**
+      (`GET /api/bookings?code=...`) and **Book Bet / Copy / Share** (`POST /api/bookings`),
+      plus **Acca / Cut 1 / System** bet mode tabs with Banker (`B`) toggles and
+      explicit unit-stake × combinations = total-stake pricing wired directly to
+      `POST /api/bets` (`systemSize`, `bankerIndices`).
+    - Sportsbook UX (`src/components/sportsbook/match-board.tsx`,
+      `src/app/(site)/live/page.tsx`, `src/app/(site)/live/live-board.tsx`,
+      `src/app/(site)/bets/bets-filter.ts`, `src/app/(site)/bets/page.tsx`,
+      `src/app/(site)/bets/bets-list.tsx`): added **All / Starred** match view
+      filter on `MatchBoard`, multi-sport `?sport=` tabs (`football`,
+      `basketball`, `tennis`, `table-tennis`, `esports`) and green/red live
+      odds-movement flashes on `/live`, and 1-tap **Re-Bet** for open legs on
+      `/bets`.
+    - Nav cleanup (`src/components/sportsbook/header.tsx`,
+      `src/components/sportsbook/sidebar.tsx`): hid `PLANNED` and uncontracted
+      verticals (`Live Casino`, `Fantasy`, `Lucky Numbers`, `Casino`, `Virtuals`)
+      from primary header `More` and sidebar navigation while preserving all
+      routes and `NAV_ITEMS` registry tests.
+    - Evidence status: verified via Next.js production compile, ESLint, and
+      existing unit tests on 2026-11-19; live multi-bet placement and live
+      odds-movement flashing remain `IMPLEMENTED_NOT_LIVE_TESTED` until run
+      against live real-time provider ticks.
+12. Fixed stale Turbopack client chunk error (`Gamepad2` missing module factory
+    from cached `sidebar.tsx`) and local `[board] fixtures unavailable` DB
+    query failure:
+    - Service worker & cache headers (`public/sw.js`,
+      `src/components/pwa/pwa-runtime.tsx`, `next.config.ts`): bumped
+      `CACHE_NAME` to `"plutobet-shell-v2"` so `activate` evicts stale `v1`
+      caches, added `"/_next/"` to `BYPASS_PREFIXES` and restricted cache-first
+      serving strictly to static icon/offline shell assets (never caching
+      `/_next/static/` JS chunks), updated `navigator.serviceWorker.register`
+      with `updateViaCache: "none"` plus `registration.update()`, and added
+      `Cache-Control: no-cache, no-store, must-revalidate` and
+      `Service-Worker-Allowed: /` headers for `/sw.js` in `next.config.ts`.
+    - Local disposable Postgres (`127.0.0.1:5432`) & Redis (`127.0.0.1:6379`):
+      resolved missing `libicu*.so.60` symlinks in
+      `@embedded-postgres/linux-x64/native/lib`, started `scripts/dev-stack.ts`
+      against `.pgdata-dev`, seeded 5 demo fixtures via `npm run db:seed-demo`,
+      attached an `"error"` listener to the shared `ioredis` client in
+      `src/db/redis.ts` (suppressing `[ioredis] Unhandled error event` noise
+      while preserving command rejections and health checks), and started local
+      `redis-server` (7.0.15) on `127.0.0.1:6379`. `VERIFIED_END_TO_END` on
+      2026-11-19 against the local dev server: `/api/health` returned
+      `{"status":"healthy","summary":"all checks passed"}` (`database: ok`,
+      `redis: ok`), `/sw.js` served `plutobet-shell-v2` with
+      `Cache-Control: no-cache, no-store, must-revalidate`, and `/`, `/sports`,
+      `/live`, and `/api/live` returned HTTP `200` with seeded fixtures and zero
+      board load errors.
+13. Enabled multi-sport fixture ingestion, pricing, and 2-way board rendering
+    for Basketball, Tennis, Table Tennis, and Esports:
+    - Provider & sync pipeline (`src/modules/odds/provider.ts`,
+      `src/modules/odds/odds-api-io.ts`, `src/modules/odds/sync.service.ts`,
+      `src/modules/odds/odds.service.ts`, `src/inngest/functions/odds-sync.ts`,
+      `src/components/sportsbook/shell.tsx`, `scripts/qa-odds-sync.ts`,
+      `scripts/seed-demo.ts`): added optional `from` bound to `listEvents()`
+      (`now - 3h`) so `/v3/events` does not waste its 500-row limit on settled
+      history (restoring `table-tennis` from `0` to `390` upcoming/live
+      fixtures), widened watchlist pricing to `-3h..+72h`, ordered default
+      bookmakers as `["1xbet", "Betway"]` for broader multi-sport coverage,
+      included active `LIVE` fixtures (started within `4h`) in `listUpcoming()`,
+      invalidated live caches across all `SYNC_SPORTS` in `syncLiveOdds`, and
+      summed header live counts across all 5 sports.
+    - Multi-sport board UX (`src/components/sportsbook/board-page.tsx`,
+      `src/components/sportsbook/match-board.tsx`, `src/styles/sportsbook.css`):
+      surfaced priced fixtures and leagues first, added responsive
+      `.sb-board--2way` layout (omitting the unused `X` draw column on 2-way
+      sports), and dynamically selected the balanced primary Over/Under line
+      with explicit line labels (`O <line>` / `U <line>`) for non-football
+      totals while keeping football pinned to `2.5`.
+    - `VERIFIED_AGAINST_REAL_PROVIDER_DATA` (2026-11-19, local disposable
+      Postgres + Redis via `npx tsx scripts/qa-odds-sync.ts` against live
+      `api.odds-api.io` with `1xbet, Betway`): synced `1,815` events across 5
+      sports (`football`: 478 / 33 priced / 19 live; `basketball`: 452 / 12
+      priced / 63 live; `tennis`: 289 / 35 priced / 17 live; `esports`: 181 /
+      25 priced / 4 live; `table-tennis`: 384 / 0 priced in the 40-event
+      watchlist slice / 10 live), `205` markets, `1,406` priced selections,
+      zero `[object Object]` rows. Verified Next.js build, ESLint, and live
+      HTTP `200` on all 5 `/sports?sport=...` and `/live?sport=...` routes.
 
 The developer-completion and sportsbook verification pass described later in
 this file is prior work, not the current assignment. Its evidence is retained

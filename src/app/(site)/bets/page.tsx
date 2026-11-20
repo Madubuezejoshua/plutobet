@@ -22,7 +22,18 @@ type BetRow = {
   cashed_out_stake_minor: string;
   placed_at: Date;
   settled_at: Date | null;
-  legs: { fixture: string; selection: string; odds: string; result: string }[];
+  legs: {
+    fixture: string;
+    selection: string;
+    odds: string;
+    result: string;
+    selectionId?: string;
+    eventId?: string;
+    marketKey?: string;
+    selectionKey?: string;
+    currentPrice?: number | null;
+    available?: boolean;
+  }[];
 };
 
 /**
@@ -59,10 +70,16 @@ export default async function BetsPage() {
       COALESCE(
         json_agg(
           json_build_object(
-            'fixture',   e.home || ' v ' || e.away,
-            'selection', s.label,
-            'odds',      bl.locked_odds_decimal::text,
-            'result',    bl.result::text
+            'fixture',      e.home || ' v ' || e.away,
+            'selection',    s.label,
+            'odds',         bl.locked_odds_decimal::text,
+            'result',       bl.result::text,
+            'selectionId',  s.id,
+            'eventId',      e.id,
+            'marketKey',    m.key,
+            'selectionKey', s.key,
+            'currentPrice', s.current_price_decimal::float8,
+            'available',    (m.status = 'OPEN' AND s.status = 'OPEN' AND e.status IN ('PENDING', 'LIVE') AND e.starts_at > now())
           ) ORDER BY bl.created_at
         ) FILTER (WHERE bl.id IS NOT NULL),
         '[]'

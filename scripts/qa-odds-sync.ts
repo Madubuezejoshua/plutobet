@@ -13,9 +13,14 @@ import { db } from "@/db/pooled";
 import { OddsApiIoProvider } from "@/modules/odds/odds-api-io";
 import { OddsSyncService } from "@/modules/odds/sync.service";
 
-const BOOKMAKERS = (process.env.QA_BOOKMAKERS ?? "1xbet")
+const BOOKMAKERS = (process.env.QA_BOOKMAKERS ?? "1xbet,Betway")
   .split(",")
   .map((b) => b.trim())
+  .filter(Boolean);
+
+const SPORTS = (process.env.QA_SPORTS ?? "football,basketball,tennis,table-tennis,esports")
+  .split(",")
+  .map((s) => s.trim())
   .filter(Boolean);
 
 async function main() {
@@ -23,19 +28,27 @@ async function main() {
   if (!apiKey) throw new Error("ODDS_API_KEY is required");
 
   const provider = new OddsApiIoProvider(apiKey);
-  const service = new OddsSyncService(provider, { sport: "football", bookmakers: BOOKMAKERS });
 
   console.log(`bookmakers requested: ${BOOKMAKERS.join(", ")}`);
+  console.log(`sports requested: ${SPORTS.join(", ")}`);
 
-  // Fixture ingestion is the slow half (an upsert plus taxonomy work per
-  // event). Once the board is populated, a run that only needs to prove the
-  // PRICING path should not pay for it again.
-  if (process.env.QA_SKIP_FIXTURES === "true") {
-    console.log("\n1. syncFixtures() SKIPPED (QA_SKIP_FIXTURES=true)");
-  } else {
-    console.log("\n1. syncFixtures() against the live provider");
-    const fixtures = await service.syncFixtures();
-    console.log(`   upserted: ${fixtures.upserted}`);
+  for (const sport of SPORTS) {
+    const service = new OddsSyncService(provider, { sport, bookmakers: BOOKMAKERS });
+    if (process.env.QA_SKIP_FIXTURES === "true") {
+      console.log(`\n[${sport}] 1. syncFixtures() SKIPPED (QA_SKIP_FIXTURES=true)`);
+    } else {
+      console.log(`\n[${sport}] 1. syncFixtures() against the live provider`);
+      const fixtures = await service.syncFixtures();
+      console.log(`   upserted: ${fixtures.upserted}`);
+    }
+
+    console.log(`[${sport}] 2. refreshWatchlist() — price the upcoming board`);
+    try {
+      const refreshed = await service.refreshWatchlist();
+      console.log(`   events priced: ${refreshed.events}`);
+    } catch (error) {
+      console.log(`   FAILED: ${error instanceof Error ? error.message.slice(0, 220) : error}`);
+    }
   }
 
   const [stored] = await db.execute<{
@@ -52,22 +65,15 @@ async function main() {
            count(*) FILTER (WHERE starts_at > now())::int AS future
     FROM events
   `);
+  console.log(`\nStored summary:`);
   console.log(`   events stored: ${stored?.total} (${stored?.future} upcoming)`);
   console.log(`   distinct sport values: ${stored?.distinct_sports}`);
   console.log(`   sport = '[object Object]': ${stored?.bad_sport}`);
 
   const sports = await db.execute<{ sport: string; n: number }>(sql`
-    SELECT sport, count(*)::int AS n FROM events GROUP BY sport ORDER BY 2 DESC LIMIT 5
+    SELECT sport, count(*)::int AS n FROM events GROUP BY sport ORDER BY 2 DESC LIMIT 10
   `);
   console.log(`   sport values: ${sports.map((s) => `${s.sport}(${s.n})`).join(", ")}`);
-
-  console.log("\n2. refreshWatchlist() — price the upcoming board");
-  try {
-    const refreshed = await service.refreshWatchlist();
-    console.log(`   events priced: ${refreshed.events}`);
-  } catch (error) {
-    console.log(`   FAILED: ${error instanceof Error ? error.message.slice(0, 220) : error}`);
-  }
 
   const [markets] = await db.execute<{
     markets: number;

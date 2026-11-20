@@ -106,6 +106,14 @@ export async function SportsbookBoardPage({
     );
   }
 
+  // Keep priced matches visible at the top while preserving kickoff order.
+  shown = [...shown].sort((a, b) => {
+    const aPriced = a.markets.length > 0 ? 0 : 1;
+    const bPriced = b.markets.length > 0 ? 0 : 1;
+    if (aPriced !== bPriced) return aPriced - bPriced;
+    return Date.parse(a.startsAt) - Date.parse(b.startsAt);
+  });
+
   const hotMatches =
     showHero && !league && !needle && shown.length > 0
       ? pickHotMatches(shown, 5)
@@ -186,6 +194,7 @@ export async function SportsbookBoardPage({
 
         <MatchBoard
           events={shown}
+          sport={sport}
           teamBadges={teamBadges}
           emptyMessage={
             needle

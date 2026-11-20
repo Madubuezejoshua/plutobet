@@ -22,11 +22,19 @@ export function getRedisClient(): Redis {
     throw new Error("REDIS_URL or KV_URL is required");
   }
 
-  redisClient ??= new Redis(redisUrl, {
-    maxRetriesPerRequest: null,
-    lazyConnect: true,
-    enableAutoPipelining: true,
-  });
+  if (!redisClient) {
+    redisClient = new Redis(redisUrl, {
+      maxRetriesPerRequest: null,
+      lazyConnect: true,
+      enableAutoPipelining: true,
+    });
+    // ioredis logs "[ioredis] Unhandled error event" on every reconnect tick if
+    // no listener is attached. Registering a listener suppresses EventEmitter
+    // noise while leaving command rejections and /api/health errors intact.
+    redisClient.on("error", () => {
+      // Handled at command call-sites (rate limiter, health check, cache).
+    });
+  }
   return redisClient;
 }
 
