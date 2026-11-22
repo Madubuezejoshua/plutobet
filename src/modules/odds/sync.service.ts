@@ -49,6 +49,12 @@ export interface SyncConfig {
   sport: string;
   /** Free tier allows exactly 2. Order matters — see canonicalBook(). */
   bookmakers: string[];
+  /**
+   * Max upcoming events priced per watchlist refresh (chunks of 10).
+   * Defaults to 40 (4 API calls). Scheduled multi-sport syncs pass 10–20 so
+   * all 13 sports stay comfortably inside the 100/hr and 500/day budget.
+   */
+  watchlistLimit?: number;
 }
 
 /**
@@ -302,7 +308,9 @@ export class OddsSyncService {
       const live = await db
         .select({ providerEventId: events.providerEventId })
         .from(events)
-        .where(and(eq(events.status, "LIVE"), eq(events.provider, this.provider.name)));
+        .where(and(eq(events.status, "LIVE"), eq(events.provider, this.provider.name)))
+        .orderBy(asc(events.startsAt))
+        .limit(40);
 
       if (live.length === 0) return { events: 0 };
 
@@ -331,6 +339,7 @@ export class OddsSyncService {
 
   /** Fallback when the provider has no delta endpoint. */
   private async fullRefreshWatchlist(): Promise<{ events: number }> {
+    const limit = Math.max(10, Math.min(this.config.watchlistLimit ?? 40, 40));
     const watchlist = await db
       .select({ providerEventId: events.providerEventId })
       .from(events)
@@ -343,8 +352,17 @@ export class OddsSyncService {
           lte(events.startsAt, new Date(Date.now() + 72 * 60 * 60_000)),
         ),
       )
-      .orderBy(asc(events.startsAt))
-      .limit(40);
+      .orderBy(
+        // Price newly ingested / unpriced events first so fresh sports show
+        // clickable odds immediately on their first watchlist pass.
+        sql`CASE WHEN EXISTS (
+          SELECT 1 FROM markets m WHERE m.event_id = ${events.id} AND m.status = 'OPEN'
+        ) THEN 1 ELSE 0 END`,
+        asc(events.startsAt),
+      )
+      .limit(limit);
+
+    if (watchlist.length === 0) return { events: 0 };
 
     const snapshots = await this.provider.getOdds(
       watchlist.map((e) => e.providerEventId),

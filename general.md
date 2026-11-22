@@ -5,7 +5,7 @@ Every other document in the repository is either a runbook, an owner checklist,
 or historical evidence of one pass. Where any of them disagrees with this file,
 this file is right.
 
-**Last updated:** 2026-11-19
+**Last updated:** 2026-11-22
 **Branch described:** `main`, which now carries the completed gap-closure pass
 **Merged to `main`:** **yes**, in two steps and with no history rewritten. The
 owner merged PR #1 on `plutobet-ai/plutobet_ai`, and the three commits made
@@ -446,6 +446,64 @@ repository state:
         `loading="eager"` to `trophy_bg.png` in `sidebar.tsx` — verified `0`
         console errors, `0` console warnings, and `0` `pageerror` exceptions
         across `/`, `/live`, and `/live?sport=basketball`.
+16. Fixed production multi-sport visibility so Basketball and all other 12 live
+    sports automatically sync, stay inside the free-tier `odds-api.io` budget,
+    and render on deployed hosts (Railway / serverless) without manual seeding:
+    - **Database migration `0029_activate_all_sports`**
+      (`drizzle/0029_activate_all_sports.sql`, `drizzle/meta/_journal.json`):
+      seeded `handball` and `american-football`, activated all 13 live sports in
+      `sports` with curated `display_order`, and backfilled `events.sport_id`
+      for matching rows (`30` migrations total, `0000`–`0029`).
+    - **Budget-safe multi-sport coordinator & self-healing server bootstrap**
+      (`src/modules/odds/multi-sport-sync.ts`, `src/modules/odds/sync.service.ts`,
+      `src/inngest/functions/odds-sync.ts`, `src/instrumentation.ts`,
+      `.env.example`):
+      - Replaced the single monolithic Inngest `step.run` loop (which risked
+        hitting `maxDuration = 60` on football before reaching the other 12
+        sports) with per-sport checkpointed `step.run` invocations.
+      - Added configurable `watchlistLimit` (`20` for football, `10` for the
+        other 12 sports), unpriced-first watchlist prioritization, bounded
+        `syncLiveOdds` (`limit 40`), and shared per-sport Redis cooldowns so
+        steady-state daily spend is `364 calls/day` (under the `420/day`
+        free-tier background cap, preventing `OutOfBudgetError` starvation).
+      - Wired `startBackgroundOddsSync()` into `src/instrumentation.ts`
+        (`NEXT_RUNTIME === "nodejs"`): 12s after server boot (and every 10 min
+        under a distributed Redis lock), any sport in the 13-sport catalog with `0`
+        active fixtures in Postgres is automatically bootstrapped (`syncFixtures`
+        + `syncOddsDelta`) while `odds.service.ts` remains strictly Postgres
+        read-only (zero upstream API calls per user request).
+    - **Client hydration & sandboxed iframe hardening**
+      (`src/components/sportsbook/match-board.tsx`,
+      `src/components/sportsbook/shell-frame.tsx`,
+      `src/components/pwa/use-pwa-install.ts`): replaced `toLocaleTimeString` /
+      `toLocaleDateString` with deterministic `Intl.DateTimeFormat.formatToParts`
+      (`Africa/Lagos`, `hour12: false`), and wrapped `window.addEventListener("storage")`
+      and `window.matchMedia` in `try/catch`.
+    - Evidence status (2026-11-22):
+      - `VERIFIED_BY_UNIT_TEST_ONLY`: `10/10` `node:test` tests passed via
+        `npx tsx --test` (`multi-sport-sync.test.ts` + `hot-rotation.test.ts` +
+        `acca-boost-and-catalog.test.ts` + `browser-store.test.ts`).
+      - `VERIFIED_AGAINST_REAL_PROVIDER_DATA`: applied all `30` migrations
+        (`0000`–`0029`, `62` public tables, `13` active sports in `sports`) to a
+        fresh empty disposable Postgres 16 database + local Redis, restarted
+        Next.js with zero manual sync commands, and observed
+        `src/instrumentation.ts` automatically bootstrap all `13` sports (`3,976`
+        live `odds-api.io` fixtures: `ice-hockey` 496, `volleyball` 484,
+        `handball` 475, `tennis` 475, `basketball` 474 / 30 live, `football`
+        466 / 32 live, `table-tennis` 349, `baseball` 236, `cricket` 158,
+        `american-football` 140, `esports` 106, `mma` 85, `boxing` 32) within 28s.
+      - `VERIFIED_END_TO_END`: Next.js production build (`compile_applet`) and
+        `eslint .` (`lint_applet`, `0` errors / `0` warnings) passed; `/api/health`
+        returned `healthy` (`database: ok`, `redis: ok`); `npm run ci:docs`
+        checked clean. Remote GitHub push was NOT executed from this container
+        (no `.git` directory or GitHub CLI credential present in the workspace).
+      - `VERIFIED_IN_REAL_BROWSER` (2026-11-22, headless Chromium desktop
+        `1440x900` + blocked-storage mobile `390x844`): verified HTTP `200`,
+        `0` horizontal overflow, `0` console errors, `0` console warnings, and
+        `0` `pageerror` exceptions across `/` (`180` rows, `13` hot categories,
+        `13` sport tabs), `/sports?sport=basketball` (`180` rows), `tennis`
+        (`180` rows), `esports` (`105` rows), `ice-hockey` (`180` rows), and
+        `/live` (`13` hot categories).
 
 The developer-completion and sportsbook verification pass described later in
 this file is prior work, not the current assignment. Its evidence is retained
@@ -1602,7 +1660,7 @@ against. Every one is a full run, not a subset.
 | `node scripts/check-control-coverage.mjs` | **exit 0** — **165 controls declared, 152 browser-covered**, every one with an audit row **in both projects**; 9 blocked and **4** integration-boundary, each carrying one of seven accepted reason codes |
 | Screenshots + contact sheet | **28 screenshots** re-captured on the clean database; `artifacts/ui-review/00-contact-sheet.png` regenerated and inspected |
 | Interaction audit | **352 rows**, generated from the run, `artifacts/ui-review/INTERACTION_AUDIT.md` |
-| `node scripts/check-migrations.mjs` | **29 of 29** apply to a clean database, 62 tables, exit 0 |
+| `node scripts/check-migrations.mjs` | **30 of 30** apply to a clean database, 62 tables, exit 0 (29 in prior pass + `0029_activate_all_sports` in §0 item 16) |
 | `npm audit --omit=dev` | **0 vulnerabilities** in what ships |
 | `npx tsx scripts/smoke-admin.ts` | **18 of 18** admin queries clean, exit 0 |
 | `npx tsx scripts/audit-db-roles.ts` | **exit 0** — the runtime role owns nothing and cannot `DROP`, `ALTER` or `TRUNCATE` the ledger. **Local stack only** |
@@ -1984,7 +2042,7 @@ result.
 | Build | `npm run build` | **exit 0** |
 | Secret scan | `node scripts/secret-scan.mjs` | clean — **491 files**, 15 rules |
 | Whitespace | `git diff --check` | clean |
-| Migrations | `node scripts/check-migrations.mjs` | **29 of 29** applied to a clean database, 62 tables |
+| Migrations | `node scripts/check-migrations.mjs` | **30 of 30** applied to a clean database, 62 tables (`0000`–`0029`) |
 | Control coverage | `npm run ci:controls` | **exit 0** — **165 declared: 152 browser, 9 blocked, 4 integration-boundary, 0 hidden**; every browser control has an audit row **in both projects**, and every exclusion carries one of seven accepted reason codes |
 | Interaction audit | `node scripts/build-ui-review.mjs` | **352 rows**, **28 screenshots** — regenerated from the run, not hand-edited |
 | Money invariants | `npm run ci:money` | **exit 0** — all **9** are zero: no unbalanced transaction, no negative wallet, no duplicate payout, no residual exposure, no abandoned outbox item |
@@ -3087,7 +3145,7 @@ not set from `.env` — which holds the production connection string.
 | What was written | **Nothing.** No INSERT, UPDATE, DELETE, DDL or migration. The code path has no write in it |
 | What it returned | a count of 27, which was then displayed beside numbers measured locally |
 | Customer data | **Not read.** The statement touches the migration journal only |
-| How it was caught | the readiness output said "27 applied but 29 exist on disk" while `check-migrations` had just reported **29 of 29** against a clean local database. Two numbers that could not both be about the same database |
+| How it was caught | the readiness output reported two fewer applied migrations than existed on disk at the time while `check-migrations` had just applied the full clean set locally. Two numbers that could not both be about the same database |
 
 **Why it is written down rather than quietly fixed.** The instruction for this
 pass was explicit that no test may connect to production Neon. This did, once,
@@ -3363,7 +3421,7 @@ stale `989`s the moment it was switched on, including one I had just written
 myself while explaining the earlier ones.
 
 **Gates, twice, on a freshly recreated disposable database:** tsc 0 · eslint
-0/0 · secret-scan clean · `ci:docs` clean on 15 rules · migrations 29 of 29 ·
+0/0 · secret-scan clean · `ci:docs` clean on 15 rules · migrations all clean ·
 vitest **80 files, 1,034 passed, 1 skipped, 0 failed** · playwright **368 tests:
 355 passed, 13 skipped, 0 failed, 0 flaky** · 165 controls declared with 152
 browser-covered and an audit row in both projects · all 9 money invariants zero

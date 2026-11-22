@@ -204,6 +204,13 @@
       "when": 1789866593227,
       "tag": "0028_age_gate_utc",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789952993227,
+      "tag": "0029_activate_all_sports",
+      "breakpoints": true
     }
   ]
 }

@@ -72,19 +72,21 @@ function stateOf(market: MarketView | undefined, selection: SelectionView | unde
   return "open";
 }
 
+const BOARD_DATE_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Lagos",
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
 function kickoff(iso: string): { time: string; day: string } {
-  const date = new Date(iso);
+  const parts = BOARD_DATE_FMT.formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return {
-    time: date.toLocaleTimeString("en-GB", {
-      timeZone: "Africa/Lagos",
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-    day: date.toLocaleDateString("en-GB", {
-      timeZone: "Africa/Lagos",
-      day: "2-digit",
-      month: "short",
-    }),
+    time: `${get("hour")}:${get("minute")}`,
+    day: `${get("day")} ${get("month")}`,
   };
 }
 

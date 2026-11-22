@@ -33,16 +33,24 @@ export function useOnlineStatus() {
 }
 
 function subscribeDisplayMode(callback: () => void) {
-  const media = window.matchMedia("(display-mode: standalone)");
-  media.addEventListener("change", callback);
-  return () => media.removeEventListener("change", callback);
+  try {
+    const media = window.matchMedia("(display-mode: standalone)");
+    media.addEventListener("change", callback);
+    return () => media.removeEventListener("change", callback);
+  } catch {
+    return () => {};
+  }
 }
 
 function getStandaloneSnapshot() {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
+  try {
+    return (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+    );
+  } catch {
+    return false;
+  }
 }
 
 function subscribeNever() {

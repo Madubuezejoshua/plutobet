@@ -30,10 +30,18 @@ const THEME_STORAGE_KEY = "plutobet.theme";
 const THEME_EVENT = "plutobet-theme-change";
 
 function subscribeTheme(callback: () => void) {
-  window.addEventListener("storage", callback);
+  try {
+    window.addEventListener("storage", callback);
+  } catch {
+    // Restricted iframes may block storage listeners
+  }
   window.addEventListener(THEME_EVENT, callback);
   return () => {
-    window.removeEventListener("storage", callback);
+    try {
+      window.removeEventListener("storage", callback);
+    } catch {
+      // Ignore cleanup errors in restricted iframes
+    }
     window.removeEventListener(THEME_EVENT, callback);
   };
 }
